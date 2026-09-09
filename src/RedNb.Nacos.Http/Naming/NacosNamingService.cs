@@ -139,8 +139,12 @@ public class NacosNamingService : INamingService
 
         var parameters = BuildRegisterParameters(serviceName, groupName, instance);
 
-        await _httpClient.PostAsync(InstanceApiPath, parameters, null, 
+        await _httpClient.PostAsync(InstanceApiPath, parameters, null,
             _options.DefaultTimeout, cancellationToken);
+
+        // Invalidate cached ServiceInfo so subsequent GetAllInstancesAsync(refreshes
+        // from the server instead of returning a stale empty snapshot.
+        _serviceInfoHolder.RemoveServiceInfo(serviceName, groupName, "");
 
         // Start heartbeat for ephemeral instances
         if (instance.Ephemeral)
@@ -148,7 +152,7 @@ public class NacosNamingService : INamingService
             _beatReactor.AddBeatInfo(serviceName, groupName, instance);
         }
 
-        _logger?.LogInformation("Registered instance {Ip}:{Port} to service {Service}@{Group}", 
+        _logger?.LogInformation("Registered instance {Ip}:{Port} to service {Service}@{Group}",
             instance.Ip, instance.Port, serviceName, groupName);
     }
 
@@ -230,10 +234,13 @@ public class NacosNamingService : INamingService
             { "namespaceId", GetNamespace() }
         };
 
-        await _httpClient.DeleteAsync(InstanceApiPath, parameters, 
+        await _httpClient.DeleteAsync(InstanceApiPath, parameters,
             _options.DefaultTimeout, cancellationToken);
 
-        _logger?.LogInformation("Deregistered instance {Ip}:{Port} from service {Service}@{Group}", 
+        // Invalidate cached ServiceInfo after a successful deregistration.
+        _serviceInfoHolder.RemoveServiceInfo(serviceName, groupName, "");
+
+        _logger?.LogInformation("Deregistered instance {Ip}:{Port} from service {Service}@{Group}",
             instance.Ip, instance.Port, serviceName, groupName);
     }
 
