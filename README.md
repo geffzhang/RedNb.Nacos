@@ -35,7 +35,7 @@
 | 📦 **模块化设计** | 按需引用，灵活组合 |
 | 🔄 **Nacos 2.x/3.x 兼容** | 完整支持 Fuzzy Watch、AI Service、分布式锁等新特性 |
 | 🔒 **分布式锁** | 原生支持 Nacos 3.0 分布式锁功能 |
-| 🤖 **AI 服务** | 支持 MCP (Model Context Protocol) 和 A2A (Agent-to-Agent) 协议 |
+| 🤖 **AI 服务** | 支持 MCP、A2A、Prompt、Skill、AgentSpec 全量 AI Registry 资源 |
 | 🛠️ **运维管理** | 完整的 Maintainer API，支持命名空间、集群、客户端管理 |
 | 💉 **依赖注入** | 原生支持 Microsoft.Extensions.DependencyInjection |
 | 🏗️ **ASP.NET Core 集成** | 配置提供程序、健康检查、服务自动注册 |
@@ -185,7 +185,7 @@ if (acquired)
 var success = await lockService.TryLockAsync(lockInstance, TimeSpan.FromSeconds(10));
 ```
 
-#### 5. AI 服务 - MCP/A2A (Nacos 3.0)
+#### 5. AI 服务 - MCP/A2A/Prompt/Skill/AgentSpec (Nacos 3.x)
 
 ```csharp
 // === MCP 服务 ===
@@ -213,6 +213,47 @@ var agentCard = await aiService.GetAgentCardAsync("my-agent");
 
 // 列出所有 Agents
 var agents = await aiService.ListAgentCardsAsync(1, 20);
+
+// === Prompt 服务 ===
+// 获取 Prompt（支持版本与标签）
+var prompt = await aiService.GetPromptAsync("code-review");
+var stablePrompt = await aiService.GetPromptByLabelAsync("code-review", "stable");
+
+// 渲染模板变量
+var text = prompt!.Render(new Dictionary<string, string> { ["language"] = "C#" });
+
+// 订阅 Prompt 变更（md5 条件请求 + 轮询）
+await aiService.SubscribePromptAsync("code-review", new MyPromptListener());
+
+// 草稿 → 提交 → 发布 → 上线 全生命周期管理
+await aiService.CreatePromptDraftAsync("code-review", "1.1.0", "Review {{language}} code");
+await aiService.SubmitPromptReviewAsync("code-review", "1.1.0");
+await aiService.PublishPromptAsync("code-review", "1.1.0");
+await aiService.OnlinePromptAsync("code-review", "1.1.0");
+
+// === Skill 服务 ===
+// 下载 Skill ZIP 包（返回 md5 与解析版本）
+var package = await aiService.DownloadSkillZipByLabelAsync("doc-writer", "stable");
+
+// 订阅 Skill 变更
+await aiService.SubscribeSkillAsync("doc-writer", new MySkillListener());
+
+// 上传与生命周期管理
+await aiService.UploadSkillZipAsync(zipBytes, "doc-writer.zip");
+await aiService.PublishSkillAsync("doc-writer", "1.0.0");
+await aiService.OnlineSkillAsync("doc-writer", "1.0.0", scope: "public");
+
+// === AgentSpec 服务 ===
+// 获取 AgentSpec（支持版本与标签）
+var agentSpec = await aiService.GetAgentSpecByLabelAsync("travel-agent", "stable");
+
+// 订阅 AgentSpec 变更
+await aiService.SubscribeAgentSpecAsync("travel-agent", new MyAgentSpecListener());
+
+// 生命周期管理
+await aiService.CreateAgentSpecDraftAsync(agentSpecDetail, targetVersion: "1.1.0");
+await aiService.PublishAgentSpecAsync("travel-agent", "1.1.0");
+await aiService.OnlineAgentSpecAsync("travel-agent", "1.1.0");
 ```
 
 #### 6. 维护服务
@@ -307,6 +348,10 @@ builder.Services.AddNacosConfig(options => { /* ... */ });
 
 // 或只注册命名服务
 builder.Services.AddNacosNaming(options => { /* ... */ });
+
+// 注册 AI 服务（IAiService，含 MCP/A2A/Prompt/Skill/AgentSpec；
+// IPromptService、ISkillService、IAgentSpecService 解析为同一单例）
+builder.Services.AddNacosAi(options => { /* ... */ });
 
 // 添加健康检查
 builder.Services.AddHealthChecks()
@@ -469,6 +514,55 @@ var lock = LockInstance.Create("my-key")
 | 删除 Agent | `DeleteAgentAsync()` | 删除 Agent |
 | 列表 | `ListAgentCardsAsync()` | 分页列出 Agent Cards |
 | 版本列表 | `ListAgentVersionsAsync()` | 列出 Agent 版本 |
+
+#### Prompt 服务 (IPromptService) - Nacos 3.x
+
+| 功能 | 方法 | 描述 |
+|------|------|------|
+| 获取 Prompt | `GetPromptAsync()` | 按 key/版本获取 Prompt |
+| 按标签获取 | `GetPromptByLabelAsync()` | 获取标签绑定的版本 |
+| 搜索 | `SearchPromptsAsync()` | 客户端搜索 Prompt |
+| 订阅 | `SubscribePromptAsync()` | 订阅变更（md5 条件请求） |
+| 取消订阅 | `UnsubscribePromptAsync()` | 取消订阅 |
+| 列表/元数据 | `ListPromptsAsync()` / `GetPromptMetaAsync()` | 分页列表与元信息 |
+| 版本 | `ListPromptVersionsAsync()` / `GetPromptVersionDetailAsync()` | 版本列表与详情 |
+| 草稿 | `CreatePromptDraftAsync()` / `UpdatePromptDraftAsync()` / `DeletePromptDraftAsync()` | 草稿管理 |
+| 审核发布 | `SubmitPromptReviewAsync()` / `PublishPromptAsync()` / `ForcePublishPromptAsync()` / `RedraftPromptAsync()` | 提交、发布、强制发布、回草稿 |
+| 上下线 | `OnlinePromptAsync()` / `OfflinePromptAsync()` | 上线/下线 |
+| 标签与元数据 | `UpdatePromptLabelsAsync()` / `UpdatePromptDescriptionAsync()` / `UpdatePromptBizTagsAsync()` | 标签、描述、业务标签 |
+| 删除 | `DeletePromptAsync()` | 删除 Prompt |
+
+#### Skill 服务 (ISkillService) - Nacos 3.x
+
+| 功能 | 方法 | 描述 |
+|------|------|------|
+| 下载 ZIP | `DownloadSkillZipAsync()` / `DownloadSkillZipByVersionAsync()` / `DownloadSkillZipByLabelAsync()` | 下载 Skill 包（含 md5/版本头） |
+| 搜索 | `SearchSkillsAsync()` | 客户端搜索 Skill |
+| 订阅 | `SubscribeSkillAsync()` | 订阅变更（304 增量） |
+| 取消订阅 | `UnsubscribeSkillAsync()` | 取消订阅 |
+| 列表/元数据 | `ListSkillsAsync()` / `GetSkillMetaAsync()` / `GetSkillDetailAsync()` | 列表、元信息与详情 |
+| 上传 | `UploadSkillZipAsync()` | multipart 上传 ZIP 包 |
+| 草稿 | `CreateSkillDraftAsync()` / `UpdateSkillDraftAsync()` / `DeleteSkillDraftAsync()` | 草稿管理 |
+| 审核发布 | `SubmitSkillReviewAsync()` / `PublishSkillAsync()` / `ForcePublishSkillAsync()` / `RedraftSkillAsync()` | 提交、发布、强制发布、回草稿 |
+| 上下线与范围 | `OnlineSkillAsync()` / `OfflineSkillAsync()` / `UpdateSkillScopeAsync()` | 上线/下线/范围 |
+| 标签与业务标签 | `UpdateSkillLabelsAsync()` / `UpdateSkillBizTagsAsync()` | 标签管理 |
+| 删除 | `DeleteSkillAsync()` | 删除 Skill |
+
+#### AgentSpec 服务 (IAgentSpecService) - Nacos 3.x
+
+| 功能 | 方法 | 描述 |
+|------|------|------|
+| 获取 AgentSpec | `GetAgentSpecAsync()` / `GetAgentSpecByLabelAsync()` | 按版本或标签获取 |
+| 搜索 | `SearchAgentSpecsAsync()` | 客户端搜索 |
+| 订阅 | `SubscribeAgentSpecAsync()` | 订阅变更（304 增量） |
+| 取消订阅 | `UnsubscribeAgentSpecAsync()` | 取消订阅 |
+| 列表/元数据 | `ListAgentSpecsAsync()` / `GetAgentSpecMetaAsync()` / `GetAgentSpecDetailAsync()` | 列表、元信息与详情 |
+| 上传 | `UploadAgentSpecAsync()` | multipart 上传 |
+| 草稿 | `CreateAgentSpecDraftAsync()` / `UpdateAgentSpecDraftAsync()` / `DeleteAgentSpecDraftAsync()` | 草稿管理 |
+| 审核发布 | `SubmitAgentSpecReviewAsync()` / `PublishAgentSpecAsync()` / `ForcePublishAgentSpecAsync()` / `RedraftAgentSpecAsync()` | 提交、发布、强制发布、回草稿 |
+| 上下线与范围 | `OnlineAgentSpecAsync()` / `OfflineAgentSpecAsync()` / `UpdateAgentSpecScopeAsync()` | 上线/下线/范围 |
+| 标签与业务标签 | `UpdateAgentSpecLabelsAsync()` / `UpdateAgentSpecBizTagsAsync()` | 标签管理 |
+| 删除 | `DeleteAgentSpecAsync()` | 删除 AgentSpec |
 
 ### 🛠️ 维护服务 (IMaintainerService)
 
@@ -775,6 +869,9 @@ await configService.CancelFuzzyWatchAsync("app-*", "DEFAULT_GROUP", myWatcher);
 | ILockService | 7 | 分布式锁 |
 | IAiService (MCP) | 18 | MCP 服务 |
 | IA2aService (A2A) | 16 | A2A 服务 |
+| IPromptService | 20+ | Prompt 查询/订阅/生命周期 |
+| ISkillService | 20+ | Skill 下载/订阅/上传/生命周期 |
+| IAgentSpecService | 20+ | AgentSpec 查询/订阅/生命周期 |
 | IServiceMaintainer | 12 | 服务管理 |
 | IInstanceMaintainer | 11 | 实例管理 |
 | INamingMaintainer | 5 | 命名服务运维 |

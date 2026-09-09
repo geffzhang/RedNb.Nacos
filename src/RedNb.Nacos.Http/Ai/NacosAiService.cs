@@ -17,7 +17,7 @@ namespace RedNb.Nacos.Client.Ai;
 /// Nacos AI service implementation using HTTP.
 /// Provides both A2A (Agent-to-Agent) and MCP (Model Context Protocol) capabilities.
 /// </summary>
-public class NacosAiService : IAiService
+public partial class NacosAiService : IAiService
 {
     private readonly NacosClientOptions _options;
     private readonly NacosHttpClient _httpClient;
@@ -26,6 +26,9 @@ public class NacosAiService : IAiService
     private readonly AiCacheHolder _cacheHolder;
     private readonly CancellationTokenSource _cts;
     private readonly string _namespaceId;
+    private readonly NacosPromptService _promptService;
+    private readonly NacosSkillService _skillService;
+    private readonly NacosAgentSpecService _agentSpecService;
     private bool _disposed;
 
     // API paths
@@ -50,6 +53,11 @@ public class NacosAiService : IAiService
         _cacheHolder = new AiCacheHolder();
         _cts = new CancellationTokenSource();
         _namespaceId = options.Namespace ?? string.Empty;
+
+        // Prompt / Skill / AgentSpec services share the same HTTP client
+        _promptService = new NacosPromptService(_httpClient, options, logger);
+        _skillService = new NacosSkillService(_httpClient, options, logger);
+        _agentSpecService = new NacosAgentSpecService(_httpClient, options, logger);
 
         // Start background polling for subscriptions
         _ = StartPollingAsync(_cts.Token);
@@ -937,6 +945,9 @@ public class NacosAiService : IAiService
 
         await _cts.CancelAsync();
         _cts.Dispose();
+        await _promptService.DisposeAsync();
+        await _skillService.DisposeAsync();
+        await _agentSpecService.DisposeAsync();
         _listenerManager.Clear();
         _cacheHolder.Clear();
         _httpClient.Dispose();

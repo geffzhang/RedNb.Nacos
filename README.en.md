@@ -35,7 +35,7 @@ English | [简体中文](README.md)
 | 📦 **Modular Design** | Import on demand, flexible composition |
 | 🔄 **Nacos 2.x/3.x Compatible** | Full support for Fuzzy Watch, AI Service, Distributed Lock |
 | 🔒 **Distributed Lock** | Native Nacos 3.0 distributed lock support |
-| 🤖 **AI Service** | Supports MCP (Model Context Protocol) and A2A (Agent-to-Agent) protocols |
+| 🤖 **AI Service** | Supports MCP, A2A, Prompt, Skill and AgentSpec - the full AI Registry resource set |
 | 🛠️ **Operations Management** | Complete Maintainer API for namespace, cluster, client management |
 | 💉 **Dependency Injection** | Native support for Microsoft.Extensions.DependencyInjection |
 | 🏗️ **ASP.NET Core Integration** | Configuration provider, health checks, automatic service registration |
@@ -185,7 +185,7 @@ if (acquired)
 var success = await lockService.TryLockAsync(lockInstance, TimeSpan.FromSeconds(10));
 ```
 
-#### 5. AI Service - MCP/A2A (Nacos 3.0)
+#### 5. AI Service - MCP/A2A/Prompt/Skill/AgentSpec (Nacos 3.x)
 
 ```csharp
 // === MCP Service ===
@@ -799,7 +799,7 @@ await configService.CancelFuzzyWatchAsync("app-*", "DEFAULT_GROUP", myWatcher);
 - [x] Configuration Center (Config Service)
 - [x] Service Discovery (Naming Service)
 - [x] Fuzzy Watch - Nacos 3.0
-- [x] AI Service - MCP/A2A (Nacos 3.0)
+- [x] AI Service - MCP/A2A/Prompt/Skill/AgentSpec (Nacos 3.x)
 - [x] Distributed Lock (Lock Service) - Nacos 3.0
 - [x] Maintainer Service
 - [x] ASP.NET Core Integration

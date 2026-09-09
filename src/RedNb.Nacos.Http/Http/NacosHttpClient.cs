@@ -89,6 +89,27 @@ public class NacosHttpClient : IDisposable
     }
 
     /// <summary>
+    /// Sends a GET request and returns the raw response, including status code,
+    /// response headers and binary body. A 304 (Not Modified) status is returned
+    /// normally instead of throwing.
+    /// </summary>
+    public async Task<NacosRawResponse> GetRawAsync(string path, Dictionary<string, string?>? parameters = null,
+        Dictionary<string, string>? headers = null, long timeout = 0, CancellationToken cancellationToken = default)
+    {
+        return await RequestRawAsync(HttpMethod.Get, path, parameters, null, headers, timeout, cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends a POST request with multipart/form-data content.
+    /// </summary>
+    public async Task<string?> PostMultipartAsync(string path, MultipartFormDataContent content,
+        Dictionary<string, string?>? parameters = null, long timeout = 0, CancellationToken cancellationToken = default)
+    {
+        var raw = await RequestRawAsync(HttpMethod.Post, path, parameters, content, null, timeout, cancellationToken);
+        return raw.BodyString;
+    }
+
+    /// <summary>
     /// Sends an HTTP request with automatic retry and server failover.
     /// </summary>
     private async Task<string?> RequestAsync(HttpMethod method, string path, 
@@ -182,6 +203,134 @@ public class NacosHttpClient : IDisposable
             catch (NacosException ex) when (ex.ErrorCode is NacosException.NoRight or NacosException.NotFound or NacosException.InvalidParam)
             {
                 throw; // Don't retry for these errors
+            }
+            catch (Exception ex)
+            {
+                _serverListManager.MarkServerUnhealthy(server);
+                lastException = ex;
+                _logger?.LogWarning(ex, "Request to {Server} failed with unexpected error", server);
+            }
+        }
+
+        throw lastException ?? new NacosException(NacosException.ServerError, "All servers failed");
+    }
+
+    /// <summary>
+    /// Sends an HTTP request and returns the raw response with automatic retry and server failover.
+    /// Unlike <see cref="RequestAsync"/>, a 304 (Not Modified) status is returned normally,
+    /// and the response body is exposed as raw bytes together with the response headers.
+    /// </summary>
+    private async Task<NacosRawResponse> RequestRawAsync(HttpMethod method, string path,
+        Dictionary<string, string?>? parameters, HttpContent? content, Dictionary<string, string>? headers,
+        long timeout, CancellationToken cancellationToken)
+    {
+        var servers = _serverListManager.GetServerList();
+        if (servers.Count == 0)
+        {
+            throw new NacosException(NacosException.InvalidParam, "No available servers");
+        }
+
+        var effectiveTimeout = timeout > 0 ? timeout : _options.DefaultTimeout;
+
+        Exception? lastException = null;
+        var maxRetry = Math.Max(1, servers.Count);
+
+        // Buffer the content once so it can be reused across retries
+        byte[]? contentBytes = null;
+        string? contentType = null;
+        if (content != null)
+        {
+            contentBytes = await content.ReadAsByteArrayAsync(cancellationToken);
+            contentType = content.Headers.ContentType?.ToString();
+        }
+
+        for (var i = 0; i < maxRetry; i++)
+        {
+            var server = _serverListManager.GetNextServer();
+            var baseUrl = _options.GetBaseUrl(server);
+
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(effectiveTimeout));
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+            try
+            {
+                var url = BuildUrl(baseUrl, path, parameters);
+                _logger?.LogDebug("Sending raw {Method} request to {Url} with timeout {Timeout}ms", method, url, effectiveTimeout);
+
+                using var request = new HttpRequestMessage(method, url);
+
+                await AddAuthHeadersAsync(request, cancellationToken);
+
+                if (contentBytes != null && (method == HttpMethod.Post || method == HttpMethod.Put))
+                {
+                    request.Content = new ByteArrayContent(contentBytes);
+                    if (!string.IsNullOrEmpty(contentType))
+                    {
+                        request.Content.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(contentType);
+                    }
+                }
+
+                if (headers != null)
+                {
+                    foreach (var header in headers)
+                    {
+                        request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                    }
+                }
+
+                var response = await _httpClient.SendAsync(request, linkedCts.Token);
+                var body = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+
+                if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NotModified)
+                {
+                    _serverListManager.MarkServerHealthy(server);
+
+                    var responseHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var header in response.Headers)
+                    {
+                        responseHeaders[header.Key] = string.Join(",", header.Value);
+                    }
+                    foreach (var header in response.Content.Headers)
+                    {
+                        responseHeaders[header.Key] = string.Join(",", header.Value);
+                    }
+
+                    return new NacosRawResponse((int)response.StatusCode, responseHeaders, body);
+                }
+
+                var errorContent = Encoding.UTF8.GetString(body);
+
+                if (response.StatusCode == HttpStatusCode.Forbidden)
+                {
+                    throw new NacosException(NacosException.NoRight, $"Access denied: {errorContent}");
+                }
+
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                {
+                    throw new NacosException(NacosException.NotFound, $"Not found: {path}");
+                }
+
+                throw new NacosException((int)response.StatusCode, $"Request failed: {errorContent}");
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+            {
+                _serverListManager.MarkServerUnhealthy(server);
+                lastException = new NacosException(NacosException.ServerError, "Request timeout");
+                _logger?.LogWarning("Request to {Server} timed out after {Timeout}ms", server, effectiveTimeout);
+            }
+            catch (HttpRequestException ex)
+            {
+                _serverListManager.MarkServerUnhealthy(server);
+                lastException = new NacosException(NacosException.ServerError, ex.Message, ex);
+                _logger?.LogWarning(ex, "Request to {Server} failed", server);
+            }
+            catch (NacosException ex) when (ex.ErrorCode is NacosException.NoRight or NacosException.NotFound or NacosException.InvalidParam)
+            {
+                throw;
             }
             catch (Exception ex)
             {

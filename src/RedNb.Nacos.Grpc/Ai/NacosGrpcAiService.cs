@@ -16,12 +16,16 @@ namespace RedNb.Nacos.GrpcClient.Ai;
 /// Nacos AI service implementation using gRPC.
 /// Provides both A2A (Agent-to-Agent) and MCP (Model Context Protocol) capabilities.
 /// </summary>
-public class NacosGrpcAiService : IAiService
+public partial class NacosGrpcAiService : IAiService
 {
     private readonly NacosClientOptions _options;
     private readonly NacosGrpcClient _grpcClient;
     private readonly ILogger<NacosGrpcAiService>? _logger;
     private readonly string _namespaceId;
+    private readonly RedNb.Nacos.Client.Http.NacosHttpClient _registryHttpClient;
+    private readonly RedNb.Nacos.Client.Ai.NacosPromptService _promptService;
+    private readonly RedNb.Nacos.Client.Ai.NacosSkillService _skillService;
+    private readonly RedNb.Nacos.Client.Ai.NacosAgentSpecService _agentSpecService;
     
     private readonly ConcurrentDictionary<string, McpServerDetailInfo?> _mcpCache = new();
     private readonly ConcurrentDictionary<string, AgentCardDetailInfo?> _agentCache = new();
@@ -45,6 +49,13 @@ public class NacosGrpcAiService : IAiService
         _logger = logger;
         _grpcClient = new NacosGrpcClient(options, logger);
         _namespaceId = options.Namespace ?? string.Empty;
+
+        // Prompt / Skill / AgentSpec APIs are HTTP-only on the Nacos server side,
+        // so they are served by dedicated HTTP services sharing one client.
+        _registryHttpClient = new RedNb.Nacos.Client.Http.NacosHttpClient(options, logger);
+        _promptService = new RedNb.Nacos.Client.Ai.NacosPromptService(_registryHttpClient, options, logger);
+        _skillService = new RedNb.Nacos.Client.Ai.NacosSkillService(_registryHttpClient, options, logger);
+        _agentSpecService = new RedNb.Nacos.Client.Ai.NacosAgentSpecService(_registryHttpClient, options, logger);
 
         // Register push handler
         _grpcClient.RegisterPushHandler(HandlePushMessage);
@@ -826,7 +837,11 @@ public class NacosGrpcAiService : IAiService
         _agentListeners.Clear();
         _mcpCache.Clear();
         _agentCache.Clear();
-        
+
+        await _promptService.DisposeAsync();
+        await _skillService.DisposeAsync();
+        await _agentSpecService.DisposeAsync();
+        _registryHttpClient.Dispose();
         await _grpcClient.DisposeAsync();
         _disposed = true;
     }

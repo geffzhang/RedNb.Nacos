@@ -8,9 +8,9 @@ namespace RedNb.Nacos.Core.Ai;
 
 /// <summary>
 /// Nacos AI client service interface.
-/// Extends A2A service with MCP (Model Context Protocol) capabilities.
+/// Extends A2A service with MCP (Model Context Protocol), Prompt, Skill and AgentSpec capabilities.
 /// </summary>
-public interface IAiService : IA2aService, IAsyncDisposable
+public interface IAiService : IA2aService, IPromptService, ISkillService, IAgentSpecService, IAsyncDisposable
 {
     #region MCP Server Operations
 

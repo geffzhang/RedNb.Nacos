@@ -2,9 +2,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using RedNb.Nacos.Core;
+using RedNb.Nacos.Core.Ai;
 using RedNb.Nacos.Core.Config;
 using RedNb.Nacos.Core.Naming;
 using RedNb.Nacos.Client;
+using RedNb.Nacos.Client.Ai;
 using RedNb.Nacos.Client.Config;
 using RedNb.Nacos.Client.Naming;
 
@@ -95,6 +97,36 @@ public static class NacosServiceCollectionExtensions
             var logger = loggerFactory?.CreateLogger<NacosNamingService>();
             return new NacosNamingService(options, logger);
         });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the Nacos AI registry service to the service collection.
+    /// The registered <see cref="IAiService"/> covers MCP, A2A, Prompt, Skill and AgentSpec
+    /// operations; the narrower interfaces resolve to the same singleton instance.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configureOptions">Action to configure Nacos client options.</param>
+    /// <returns>The service collection for chaining.</returns>
+    public static IServiceCollection AddNacosAi(
+        this IServiceCollection services,
+        Action<NacosClientOptions> configureOptions)
+    {
+        services.Configure(configureOptions);
+
+        services.TryAddSingleton<IAiService>(sp =>
+        {
+            var options = new NacosClientOptions();
+            configureOptions(options);
+            var loggerFactory = sp.GetService<ILoggerFactory>();
+            var logger = loggerFactory?.CreateLogger<NacosAiService>();
+            return new NacosAiService(options, logger);
+        });
+
+        services.TryAddSingleton<IPromptService>(sp => sp.GetRequiredService<IAiService>());
+        services.TryAddSingleton<ISkillService>(sp => sp.GetRequiredService<IAiService>());
+        services.TryAddSingleton<IAgentSpecService>(sp => sp.GetRequiredService<IAiService>());
 
         return services;
     }
