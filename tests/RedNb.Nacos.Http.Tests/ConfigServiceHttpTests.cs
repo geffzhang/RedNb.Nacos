@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentAssertions;
 using RedNb.Nacos.Client;
 using RedNb.Nacos.Core;
@@ -36,7 +37,7 @@ public class ConfigServiceHttpTests : IDisposable
     {
         _server
             .Given(Request.Create()
-                .WithPath("/nacos/v1/auth/login")
+                .WithPath("/nacos/v3/auth/user/login")
                 .UsingPost())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
@@ -48,16 +49,27 @@ public class ConfigServiceHttpTests : IDisposable
     {
         // Arrange
         var expectedContent = "key=value\nname=test";
+        var envelope = JsonSerializer.Serialize(new
+        {
+            code = 0,
+            message = "success",
+            data = new
+            {
+                content = expectedContent,
+                md5 = "d41d8cd98f00b204e9800998ecf8427e",
+                contentType = "text"
+            }
+        });
 
         _server
             .Given(Request.Create()
-                .WithPath("/nacos/v1/cs/configs")
+                .WithPath("/nacos/v3/client/cs/config")
                 .WithParam("dataId", "test-config")
-                .WithParam("group", "DEFAULT_GROUP")
+                .WithParam("groupName", "DEFAULT_GROUP")
                 .UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
-                .WithBody(expectedContent));
+                .WithBody(envelope));
 
         var configService = _factory.CreateConfigService(_options);
 
@@ -72,13 +84,15 @@ public class ConfigServiceHttpTests : IDisposable
     public async Task GetConfigAsync_NotFound_ShouldReturnNull()
     {
         // Arrange
+        // Nacos 3.x reports a missing config as HTTP 200 with code 20004.
         _server
             .Given(Request.Create()
-                .WithPath("/nacos/v1/cs/configs")
+                .WithPath("/nacos/v3/client/cs/config")
                 .WithParam("dataId", "non-existent")
                 .UsingGet())
             .RespondWith(Response.Create()
-                .WithStatusCode(404));
+                .WithStatusCode(200)
+                .WithBody("{\"code\":20004,\"message\":\"config data not exist\",\"data\":null}"));
 
         var configService = _factory.CreateConfigService(_options);
 
@@ -95,11 +109,16 @@ public class ConfigServiceHttpTests : IDisposable
         // Arrange
         _server
             .Given(Request.Create()
-                .WithPath("/nacos/v1/cs/configs")
-                .UsingPost())
+                .WithPath("/nacos/v3/admin/cs/config")
+                .UsingPost()
+                .WithBody(body => body != null
+                    && body.Contains("dataId=test-config")
+                    && body.Contains("groupName=DEFAULT_GROUP")
+                    && body.Contains($"content={Uri.EscapeDataString("new content")}")
+                    && body.Contains("type=text")))
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
-                .WithBody("true"));
+                .WithBody("{\"code\":0,\"message\":\"success\",\"data\":true}"));
 
         var configService = _factory.CreateConfigService(_options);
 
@@ -116,11 +135,13 @@ public class ConfigServiceHttpTests : IDisposable
         // Arrange
         _server
             .Given(Request.Create()
-                .WithPath("/nacos/v1/cs/configs")
+                .WithPath("/nacos/v3/admin/cs/config")
+                .WithParam("dataId", "test-config")
+                .WithParam("groupName", "DEFAULT_GROUP")
                 .UsingDelete())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
-                .WithBody("true"));
+                .WithBody("{\"code\":0,\"message\":\"success\",\"data\":true}"));
 
         var configService = _factory.CreateConfigService(_options);
 

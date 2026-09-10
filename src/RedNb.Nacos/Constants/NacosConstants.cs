@@ -136,6 +136,16 @@ public static class NacosConstants
     public const string ProtocolV3 = "v3";
 
     /// <summary>
+    /// Success code of the Nacos v3 response envelope.
+    /// </summary>
+    public const int SuccessCode = 0;
+
+    /// <summary>
+    /// Nacos v3 response code indicating the requested config does not exist.
+    /// </summary>
+    public const int ConfigNotFoundCode = 20004;
+
+    /// <summary>
     /// HTTP header used to pass <c>namespaceId</c> in Nacos 3.x v3 API requests.
     /// In Nacos v3 the namespace identifier is transported as an HTTP header rather
     /// than as a query parameter or multipart form part.

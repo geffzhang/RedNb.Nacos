@@ -28,8 +28,11 @@ public class NacosConfigService : IConfigService
     private bool _disposed;
     private bool _isHealthy = true;
 
-    private const string ConfigApiPath = "v1/cs/configs";
-    private const string ListenerApiPath = "v1/cs/configs/listener";
+    // Nacos v3 splits the config API by caller: reads use the client API (no auth
+    // required), writes use the admin API (token auto-attached by NacosHttpClient).
+    // See https://nacos.io/en/docs/v3/open-api
+    private const string ConfigClientApiPath = "v3/client/cs/config";
+    private const string ConfigAdminApiPath = "v3/admin/cs/config";
 
     public NacosConfigService(NacosClientOptions options, ILogger<NacosConfigService>? logger = null)
     {
@@ -45,9 +48,6 @@ public class NacosConfigService : IConfigService
 
         // Update connection status
         _metricsMonitor.SetConnectionStatus(true);
-
-        // Start long polling for config changes
-        _ = StartLongPollingAsync(_cts.Token);
     }
 
     public async Task<string?> GetConfigAsync(string dataId, string group, long timeoutMs, 
@@ -61,12 +61,13 @@ public class NacosConfigService : IConfigService
             var parameters = new Dictionary<string, string?>
             {
                 { "dataId", dataId },
-                { "group", group },
-                { "tenant", GetTenant() }
+                { "groupName", group },
+                { "namespaceId", GetTenant() }
             };
 
-            var content = await _httpClient.GetAsync(ConfigApiPath, parameters, timeoutMs, cancellationToken);
-            
+            var response = await _httpClient.GetAsync(ConfigClientApiPath, parameters, timeoutMs, cancellationToken);
+            var content = ExtractConfigContent(response);
+
             if (content != null)
             {
                 _localCache.SaveSnapshot(dataId, group, content);
@@ -164,8 +165,8 @@ public class NacosConfigService : IConfigService
         var parameters = new Dictionary<string, string?>
         {
             { "dataId", dataId },
-            { "group", group },
-            { "tenant", GetTenant() },
+            { "groupName", group },
+            { "namespaceId", GetTenant() },
             { "content", processedContent },
             { "type", type }
         };
@@ -176,14 +177,14 @@ public class NacosConfigService : IConfigService
         }
 
         var body = NacosUtils.BuildQueryString(parameters);
-        
+
         try
         {
-            var response = await _httpClient.PostAsync(ConfigApiPath, null, body, 
+            var response = await _httpClient.PostAsync(ConfigAdminApiPath, null, body,
                 _options.DefaultTimeout, cancellationToken);
 
-            var result = response?.Equals("true", StringComparison.OrdinalIgnoreCase) ?? false;
-            
+            var result = IsSuccessEnvelope(response);
+
             if (result)
             {
                 _metricsMonitor.RecordConfigRequestSuccess();
@@ -218,18 +219,18 @@ public class NacosConfigService : IConfigService
         var parameters = new Dictionary<string, string?>
         {
             { "dataId", dataId },
-            { "group", group },
-            { "tenant", GetTenant() },
+            { "groupName", group },
+            { "namespaceId", GetTenant() },
             { "content", content },
             { "type", type },
             { "casMd5", casMd5 }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        var response = await _httpClient.PostAsync(ConfigApiPath, null, body, 
+        var response = await _httpClient.PostAsync(ConfigAdminApiPath, null, body,
             _options.DefaultTimeout, cancellationToken);
 
-        return response?.Equals("true", StringComparison.OrdinalIgnoreCase) ?? false;
+        return IsSuccessEnvelope(response);
     }
 
     public async Task<bool> RemoveConfigAsync(string dataId, string group, 
@@ -241,17 +242,17 @@ public class NacosConfigService : IConfigService
         var parameters = new Dictionary<string, string?>
         {
             { "dataId", dataId },
-            { "group", group },
-            { "tenant", GetTenant() }
+            { "groupName", group },
+            { "namespaceId", GetTenant() }
         };
 
         try
         {
-            var response = await _httpClient.DeleteAsync(ConfigApiPath, parameters, 
+            var response = await _httpClient.DeleteAsync(ConfigAdminApiPath, parameters,
                 _options.DefaultTimeout, cancellationToken);
 
-            var result = response?.Equals("true", StringComparison.OrdinalIgnoreCase) ?? false;
-            
+            var result = IsSuccessEnvelope(response);
+
             if (result)
             {
                 _localCache.RemoveSnapshot(dataId, group);
@@ -338,178 +339,92 @@ public class NacosConfigService : IConfigService
         await DisposeAsync();
     }
 
-    private async Task StartLongPollingAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Unwraps the v3 config read envelope and returns the config content.
+    /// A non-zero code (e.g. 20004 — config not found) or a missing data payload
+    /// both yield <c>null</c>.
+    /// </summary>
+    private static string? ExtractConfigContent(string? response)
     {
-        _logger?.LogInformation("Starting config long polling");
-
-        // Wait a bit for initial setup
-        await Task.Delay(100, cancellationToken);
-
-        while (!cancellationToken.IsCancellationRequested)
+        if (string.IsNullOrEmpty(response) || !TryParseEnvelope(response, out var root, out _))
         {
-            try
-            {
-                var listeningConfigs = _listenerManager.GetListeningConfigs();
-                if (listeningConfigs.Count == 0)
-                {
-                    _logger?.LogDebug("No configs to listen, waiting...");
-                    await Task.Delay(1000, cancellationToken);
-                    continue;
-                }
-
-                _logger?.LogDebug("Long polling for {Count} configs: {Configs}", 
-                    listeningConfigs.Count,
-                    string.Join(", ", listeningConfigs.Select(c => $"{c.DataId}@{c.Group}(md5={c.Md5})")));
-
-                var changedConfigs = await CheckConfigChangesAsync(listeningConfigs, cancellationToken);
-                
-                if (changedConfigs.Count > 0)
-                {
-                    _logger?.LogInformation("Detected {Count} config changes", changedConfigs.Count);
-                    foreach (var config in changedConfigs)
-                    {
-                        await NotifyListenersAsync(config.DataId, config.Group, config.Tenant, cancellationToken);
-                    }
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Error in config long polling");
-                await Task.Delay(5000, cancellationToken);
-            }
+            return null;
         }
 
-        _logger?.LogInformation("Config long polling stopped");
+        if (GetEnvelopeCode(root) != NacosConstants.SuccessCode)
+        {
+            return null;
+        }
+
+        if (root.TryGetProperty("data", out var data) &&
+            data.ValueKind == JsonValueKind.Object &&
+            data.TryGetProperty("content", out var content))
+        {
+            return content.GetString();
+        }
+
+        return null;
     }
 
-    private async Task<List<ListeningConfig>> CheckConfigChangesAsync(
-        List<ListeningConfig> listeningConfigs, CancellationToken cancellationToken)
+    /// <summary>
+    /// Checks whether a v3 write envelope reports success (code 0 and, when
+    /// present, a truthy <c>data</c> flag).
+    /// </summary>
+    private static bool IsSuccessEnvelope(string? response)
     {
-        var changedConfigs = new List<ListeningConfig>();
-
-        // Build listening configs string
-        // Format (without tenant): dataId\x02group\x02md5\x01
-        // Format (with tenant): dataId\x02group\x02md5\x02tenant\x01
-        var listeningConfigsStr = string.Join("", listeningConfigs.Select(c =>
+        if (string.IsNullOrEmpty(response) || !TryParseEnvelope(response, out var root, out _))
         {
-            if (string.IsNullOrEmpty(c.Tenant))
-            {
-                // Without tenant
-                return $"{c.DataId}\x02{c.Group}\x02{c.Md5 ?? ""}\x01";
-            }
-            else
-            {
-                // With tenant
-                return $"{c.DataId}\x02{c.Group}\x02{c.Md5 ?? ""}\x02{c.Tenant}\x01";
-            }
-        }));
+            return false;
+        }
 
-        // Long polling requires the Listening-Configs parameter in the request body
-        var body = $"Listening-Configs={Uri.EscapeDataString(listeningConfigsStr)}";
-
-        // Set the Long-Pulling-Timeout header (required by Nacos server for long polling)
-        var headers = new Dictionary<string, string>
+        if (GetEnvelopeCode(root) != NacosConstants.SuccessCode)
         {
-            { "Long-Pulling-Timeout", _options.LongPollTimeout.ToString() }
-        };
+            return false;
+        }
+
+        if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.False)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Parses a v3 response envelope into its root element.
+    /// </summary>
+    private static bool TryParseEnvelope(string response, out JsonElement root, out int code)
+    {
+        root = default;
+        code = NacosConstants.SuccessCode;
 
         try
         {
-            _logger?.LogDebug("Checking config changes, body: {Body}", body);
-            
-            var response = await _httpClient.PostWithHeadersAsync(
-                ListenerApiPath, 
-                null, 
-                body, 
-                headers,
-                _options.LongPollTimeout + 5000, // Add buffer to HTTP timeout
-                cancellationToken);
-
-            _logger?.LogDebug("Long polling response: '{Response}'", response ?? "(empty)");
-
-            if (!string.IsNullOrEmpty(response))
+            using var document = JsonDocument.Parse(response);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
             {
-                _logger?.LogInformation("Config change detected in response");
-                
-                // The response may be URL-encoded, decode it first
-                var decodedResponse = Uri.UnescapeDataString(response);
-                _logger?.LogDebug("Decoded response: '{DecodedResponse}'", decodedResponse);
-                
-                // Parse changed config keys
-                // Response format (without tenant): dataId\x02group\x01
-                // Response format (with tenant): dataId\x02group\x02tenant\x01
-                var parts = decodedResponse.Split('\x01', StringSplitOptions.RemoveEmptyEntries);
-                foreach (var part in parts)
-                {
-                    var fields = part.Split('\x02');
-                    if (fields.Length >= 2)
-                    {
-                        changedConfigs.Add(new ListeningConfig
-                        {
-                            DataId = fields[0],
-                            Group = fields[1],
-                            Tenant = fields.Length > 2 && !string.IsNullOrEmpty(fields[2]) ? fields[2] : null
-                        });
-                        _logger?.LogInformation("Config changed: {DataId}@{Group}", fields[0], fields[1]);
-                    }
-                }
+                return false;
             }
-        }
-        catch (OperationCanceledException)
-        {
-            // Cancellation requested - propagate
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogWarning(ex, "Failed to check config changes");
-        }
 
-        return changedConfigs;
+            // Clone so the element outlives the JsonDocument.
+            root = document.RootElement.Clone();
+            code = GetEnvelopeCode(root);
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
-    private async Task NotifyListenersAsync(string dataId, string group, string? tenant, 
-        CancellationToken cancellationToken)
+    private static int GetEnvelopeCode(JsonElement root)
     {
-        try
+        if (root.TryGetProperty("code", out var code) && code.TryGetInt32(out var value))
         {
-            var content = await GetConfigAsync(dataId, group, _options.DefaultTimeout, cancellationToken);
-            var md5 = content != null ? NacosUtils.GetMd5(content) : null;
-
-            var configInfo = new ConfigInfo
-            {
-                DataId = dataId,
-                Group = group,
-                Tenant = tenant,
-                Content = content,
-                Md5 = md5
-            };
-
-            var listeners = _listenerManager.GetListeners(dataId, group, tenant);
-            foreach (var listener in listeners)
-            {
-                try
-                {
-                    listener.OnReceiveConfigInfo(configInfo);
-                    _metricsMonitor.RecordConfigChangePush();
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogError(ex, "Error notifying listener for {DataId}@{Group}", dataId, group);
-                }
-            }
-
-            // Update cached MD5
-            _listenerManager.UpdateMd5(dataId, group, tenant, md5);
+            return value;
         }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, "Failed to notify listeners for {DataId}@{Group}", dataId, group);
-        }
+
+        return NacosConstants.SuccessCode;
     }
 
     private string GetGroupOrDefault(string? group)
