@@ -334,6 +334,65 @@ cd E:/GitHub/RedNb.Nacos
 git tag phase2-auth
 ```
 
+> **Amendment (2026-09-10):** Task 2.2's validation discovered that `NACOS_AUTH_ENABLE: "true"` is hardcoded (literal string) in all 3 compose files — inconsistent with sibling env vars (`NACOS_AUTH_TOKEN`, `NACOS_AUTH_IDENTITY_KEY`, `NACOS_AUTH_IDENTITY_VALUE`) which use `${VAR:-default}` interpolation. As a result, the brief's "default config has NACOS_AUTH_ENABLE=false" assumption is wrong: `docker-compose up -d` always starts with auth on. Phase 3 (Config) and Phase 4 (Naming) would inherit this and have all their HTTP calls 403 instead of fail-forward on v1 endpoints. Task 2.3 added to make the env var overridable, matching the sibling env var pattern. Ledger entry: "Task 2.2 ruling" in `.superpowers/sdd/2026-09-10-nacos-v3-migration/progress.md`.
+
+### Task 2.3: Make NACOS_AUTH_ENABLE env-overridable in all compose files
+
+**Files:**
+- Modify: `deploy/docker-compose/docker-compose.yml:17`
+- Modify: `deploy/docker-compose/docker-compose.mysql.yml:52`
+- Modify: `deploy/docker-compose/docker-compose.cluster.yml` (lines 55, 99, 143)
+
+**Step 1:** In each file, replace the literal line:
+```
+NACOS_AUTH_ENABLE: "true"
+```
+with the env-interpolated form (consistent with `NACOS_AUTH_TOKEN` etc.):
+```
+NACOS_AUTH_ENABLE: ${NACOS_AUTH_ENABLE:-false}
+```
+Use `Edit` with `replace_all: true` per file. Cluster file has 3 occurrences; the others have 1 each. Total: 5 substitutions across 3 files.
+
+**Step 2:** Verify the interpolation:
+```bash
+cd E:/GitHub/RedNb.Nacos && git grep -n "NACOS_AUTH_ENABLE" deploy/
+```
+Expected: 5 lines, all matching `NACOS_AUTH_ENABLE: \${NACOS_AUTH_ENABLE:-false}`.
+
+And confirm zero literal hardcoded lines:
+```bash
+cd E:/GitHub/RedNb.Nacos && git grep -n 'NACOS_AUTH_ENABLE: "true"' deploy/
+```
+Expected: zero matches.
+
+**Step 3:** Bring up the container with auth explicitly disabled (to verify the env override works) and check the readiness + that an unauthenticated v1 endpoint returns 404 (not 403):
+```bash
+cd E:/GitHub/RedNb.Nacos/deploy/docker-compose
+docker-compose down -v
+docker-compose up -d
+# wait ~90s for startup
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/v3/console/health/readiness
+# expect: 200
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8848/nacos/v1/cs/configs
+# expect: 404 (v1 not found), NOT 403 (auth required)
+```
+
+If both are correct, leave the container running without auth for Phase 3.
+
+**Step 4:** Commit:
+```bash
+cd E:/GitHub/RedNb.Nacos
+git add deploy/docker-compose/docker-compose.yml deploy/docker-compose/docker-compose.mysql.yml deploy/docker-compose/docker-compose.cluster.yml
+git commit -m "fix(deploy): make NACOS_AUTH_ENABLE env-overridable (was hardcoded true)"
+```
+
+**Step 5:** Update the existing `phase2-auth` tag to point at the new commit (since this is a Phase 2 fix that Phase 3 depends on):
+```bash
+cd E:/GitHub/RedNb.Nacos
+git tag -d phase2-auth
+git tag phase2-auth
+```
+
 ---
 
 ## Phase 3 — Config Service (PR3)
