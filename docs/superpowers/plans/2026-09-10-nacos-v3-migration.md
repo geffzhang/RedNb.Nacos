@@ -90,6 +90,11 @@ git commit -m "chore(deploy): update cluster healthcheck to Nacos 3.x endpoint"
 - Modify: `deploy/docker-compose/start.bat`
 - Modify: `deploy/docker-compose/README.md`
 - Modify: `CONTRIBUTING.md`
+- Modify: `deploy/docker-compose/docker-compose.yml` (line 3 `# Version: 3.1.1` header comment)
+- Modify: `deploy/docker-compose/docker-compose.mysql.yml` (line 3 `# Version: 3.1.1` header comment)
+- Modify: `deploy/docker-compose/docker-compose.cluster.yml` (line 3 `# Version: 3.1.1` header comment)
+
+> **Amendment (2026-09-10):** The 3 YAML header comments above are part of Task 1.3's scope. They were originally missed by the pre-flight scan and are added here as a plan defect fix. Ledger entry: "Task 1.1 ruling" in `.superpowers/sdd/2026-09-10-nacos-v3-migration/progress.md`.
 
 **Step 1:** In each file, replace `3.1.1` with `3.2.4` in version references only. **Be careful with `start.sh` and `start.bat`** — they are GBK-encoded; use `Read` first to inspect, then `Edit` with the exact bytes you saw. If `Edit` corrupts encoding, run:
 
