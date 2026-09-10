@@ -38,11 +38,25 @@ public class NamingServiceHttpTests : IDisposable
     {
         _server
             .Given(Request.Create()
-                .WithPath("/nacos/v1/auth/login")
+                .WithPath("/nacos/v3/auth/user/login")
                 .UsingPost())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
                 .WithBody("{\"accessToken\":\"test-token\",\"tokenTtl\":18000}"));
+    }
+
+    /// <summary>
+    /// Builds a v3 instance-list response envelope whose <c>data</c> is the flat
+    /// instance array returned by <c>/v3/client/ns/instance/list</c>.
+    /// </summary>
+    private static string BuildInstanceListEnvelope(params object[] instances)
+    {
+        return JsonSerializer.Serialize(new
+        {
+            code = 0,
+            message = "success",
+            data = instances
+        });
     }
 
     [Fact]
@@ -51,11 +65,13 @@ public class NamingServiceHttpTests : IDisposable
         // Arrange
         _server
             .Given(Request.Create()
-                .WithPath("/nacos/v1/ns/instance")
+                .WithPath("/nacos/v3/client/ns/instance")
+                .WithParam("serviceName", "test-service")
+                .WithParam("groupName", "DEFAULT_GROUP")
                 .UsingPost())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
-                .WithBody("ok"));
+                .WithBody("{\"code\":0,\"message\":\"success\",\"data\":\"ok\"}"));
 
         var namingService = _factory.CreateNamingService(_options);
         var instance = new Instance
@@ -79,11 +95,15 @@ public class NamingServiceHttpTests : IDisposable
         // Arrange
         _server
             .Given(Request.Create()
-                .WithPath("/nacos/v1/ns/instance")
+                .WithPath("/nacos/v3/client/ns/instance")
+                .WithParam("serviceName", "test-service")
+                .WithParam("groupName", "DEFAULT_GROUP")
+                .WithParam("ip", "192.168.1.100")
+                .WithParam("port", "8080")
                 .UsingDelete())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
-                .WithBody("ok"));
+                .WithBody("{\"code\":0,\"message\":\"success\",\"data\":\"ok\"}"));
 
         var namingService = _factory.CreateNamingService(_options);
 
@@ -99,25 +119,39 @@ public class NamingServiceHttpTests : IDisposable
     public async Task GetAllInstancesAsync_Success_ShouldReturnInstances()
     {
         // Arrange
-        var serviceInfo = new
-        {
-            name = "test-service",
-            groupName = "DEFAULT_GROUP",
-            hosts = new[]
+        var envelope = BuildInstanceListEnvelope(
+            new
             {
-                new { ip = "192.168.1.100", port = 8080, weight = 1.0, healthy = true, enabled = true, ephemeral = true },
-                new { ip = "192.168.1.101", port = 8080, weight = 1.0, healthy = true, enabled = true, ephemeral = true }
-            }
-        };
+                ip = "192.168.1.100",
+                port = 8080,
+                weight = 1.0,
+                healthy = true,
+                enabled = true,
+                ephemeral = true,
+                clusterName = "DEFAULT",
+                serviceName = "DEFAULT_GROUP@@test-service"
+            },
+            new
+            {
+                ip = "192.168.1.101",
+                port = 8080,
+                weight = 1.0,
+                healthy = true,
+                enabled = true,
+                ephemeral = true,
+                clusterName = "DEFAULT",
+                serviceName = "DEFAULT_GROUP@@test-service"
+            });
 
         _server
             .Given(Request.Create()
-                .WithPath("/nacos/v1/ns/instance/list")
+                .WithPath("/nacos/v3/client/ns/instance/list")
                 .WithParam("serviceName", "test-service")
+                .WithParam("groupName", "DEFAULT_GROUP")
                 .UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
-                .WithBody(JsonSerializer.Serialize(serviceInfo)));
+                .WithBody(envelope));
 
         var namingService = _factory.CreateNamingService(_options);
 
@@ -134,21 +168,14 @@ public class NamingServiceHttpTests : IDisposable
     public async Task GetAllInstancesAsync_EmptyService_ShouldReturnEmptyList()
     {
         // Arrange
-        var serviceInfo = new
-        {
-            name = "empty-service",
-            groupName = "DEFAULT_GROUP",
-            hosts = Array.Empty<object>()
-        };
-
         _server
             .Given(Request.Create()
-                .WithPath("/nacos/v1/ns/instance/list")
+                .WithPath("/nacos/v3/client/ns/instance/list")
                 .WithParam("serviceName", "empty-service")
                 .UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
-                .WithBody(JsonSerializer.Serialize(serviceInfo)));
+                .WithBody(BuildInstanceListEnvelope()));
 
         var namingService = _factory.CreateNamingService(_options);
 
@@ -163,24 +190,37 @@ public class NamingServiceHttpTests : IDisposable
     public async Task SelectInstancesAsync_HealthyOnly_ShouldFilterUnhealthy()
     {
         // Arrange
-        var serviceInfo = new
-        {
-            name = "test-service",
-            groupName = "DEFAULT_GROUP",
-            hosts = new[]
+        var envelope = BuildInstanceListEnvelope(
+            new
             {
-                new { ip = "192.168.1.100", port = 8080, weight = 1.0, healthy = true, enabled = true, ephemeral = true },
-                new { ip = "192.168.1.101", port = 8080, weight = 1.0, healthy = false, enabled = true, ephemeral = true }
-            }
-        };
+                ip = "192.168.1.100",
+                port = 8080,
+                weight = 1.0,
+                healthy = true,
+                enabled = true,
+                ephemeral = true,
+                clusterName = "DEFAULT",
+                serviceName = "DEFAULT_GROUP@@test-service"
+            },
+            new
+            {
+                ip = "192.168.1.101",
+                port = 8080,
+                weight = 1.0,
+                healthy = false,
+                enabled = true,
+                ephemeral = true,
+                clusterName = "DEFAULT",
+                serviceName = "DEFAULT_GROUP@@test-service"
+            });
 
         _server
             .Given(Request.Create()
-                .WithPath("/nacos/v1/ns/instance/list")
+                .WithPath("/nacos/v3/client/ns/instance/list")
                 .UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
-                .WithBody(JsonSerializer.Serialize(serviceInfo)));
+                .WithBody(envelope));
 
         var namingService = _factory.CreateNamingService(_options);
 

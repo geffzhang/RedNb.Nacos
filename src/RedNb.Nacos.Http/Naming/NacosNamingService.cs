@@ -35,8 +35,11 @@ public class NacosNamingService : INamingService
     private static readonly string InstanceApiPath = NamingApiPaths.Instance;
     private static readonly string InstanceListApiPath = NamingApiPaths.InstanceList;
     private static readonly string ServiceApiPath = NamingApiPaths.ServiceList;
-    private static readonly string HealthApiPath = NamingApiPaths.Health;
-    private static readonly string BeatApiPath = NamingApiPaths.Beat;
+
+    /// <summary>
+    /// Cache duration of a ServiceInfo built from a v3 instance-list response.
+    /// </summary>
+    private const long QueryCacheMillis = 3000;
 
     public NacosNamingService(NacosClientOptions options, ILogger<NacosNamingService>? logger = null)
         : this(options, null, logger)
@@ -140,13 +143,8 @@ public class NacosNamingService : INamingService
         groupName = GetGroupOrDefault(groupName);
 
         var parameters = BuildRegisterParameters(serviceName, groupName, instance);
-        var headers = new Dictionary<string, string>();
-        if (!string.IsNullOrEmpty(GetNamespace()))
-        {
-            headers[NamingApiPaths.NamespaceHeader] = GetNamespace()!;
-        }
 
-        await _httpClient.PostWithHeadersAsync(InstanceApiPath, parameters, null, headers,
+        await _httpClient.PostWithHeadersAsync(InstanceApiPath, parameters, null, null,
             _options.DefaultTimeout, cancellationToken);
 
         // Invalidate cached ServiceInfo so subsequent GetAllInstancesAsync(refreshes
@@ -234,19 +232,14 @@ public class NacosNamingService : INamingService
         {
             { "serviceName", serviceName },
             { "groupName", groupName },
+            { "namespaceId", GetNamespace() },
             { "ip", instance.Ip },
             { "port", instance.Port.ToString() },
             { "clusterName", instance.ClusterName },
             { "ephemeral", instance.Ephemeral.ToString().ToLower() }
         };
 
-        var headers = new Dictionary<string, string>();
-        if (!string.IsNullOrEmpty(GetNamespace()))
-        {
-            headers[NamingApiPaths.NamespaceHeader] = GetNamespace()!;
-        }
-
-        await _httpClient.DeleteWithHeadersAsync(InstanceApiPath, parameters, headers,
+        await _httpClient.DeleteWithHeadersAsync(InstanceApiPath, parameters, null,
             _options.DefaultTimeout, cancellationToken);
 
         // Invalidate cached ServiceInfo after a successful deregistration.
@@ -608,25 +601,14 @@ public class NacosNamingService : INamingService
         {
             { "pageNo", pageNo.ToString() },
             { "pageSize", pageSize.ToString() },
+            { "namespaceId", GetNamespace() },
             { "groupName", groupName }
         };
 
-        var headers = new Dictionary<string, string>();
-        if (!string.IsNullOrEmpty(GetNamespace()))
-        {
-            headers[NamingApiPaths.NamespaceHeader] = GetNamespace()!;
-        }
-
-        var response = await _httpClient.GetWithHeadersAsync(ServiceApiPath, parameters, headers,
+        var response = await _httpClient.GetWithHeadersAsync(ServiceApiPath, parameters, null,
             _options.DefaultTimeout, cancellationToken);
 
-        if (string.IsNullOrEmpty(response))
-        {
-            return new ListView<string>();
-        }
-
-        var result = JsonSerializer.Deserialize<ServiceListResponse>(response);
-        return new ListView<string>(result?.Count ?? 0, result?.Doms ?? new List<string>());
+        return ParseServiceList(response);
     }
 
     public Task<ListView<string>> GetServicesOfServerAsync(int pageNo, int pageSize, INamingSelector selector, 
@@ -644,6 +626,7 @@ public class NacosNamingService : INamingService
         {
             { "pageNo", pageNo.ToString() },
             { "pageSize", pageSize.ToString() },
+            { "namespaceId", GetNamespace() },
             { "groupName", groupName }
         };
 
@@ -657,22 +640,10 @@ public class NacosNamingService : INamingService
             });
         }
 
-        var headers = new Dictionary<string, string>();
-        if (!string.IsNullOrEmpty(GetNamespace()))
-        {
-            headers[NamingApiPaths.NamespaceHeader] = GetNamespace()!;
-        }
-
-        var response = await _httpClient.GetWithHeadersAsync(ServiceApiPath, parameters, headers,
+        var response = await _httpClient.GetWithHeadersAsync(ServiceApiPath, parameters, null,
             _options.DefaultTimeout, cancellationToken);
 
-        if (string.IsNullOrEmpty(response))
-        {
-            return new ListView<string>();
-        }
-
-        var result = JsonSerializer.Deserialize<ServiceListResponse>(response);
-        return new ListView<string>(result?.Count ?? 0, result?.Doms ?? new List<string>());
+        return ParseServiceList(response);
     }
 
     public Task<List<ServiceInfo>> GetSubscribeServicesAsync(CancellationToken cancellationToken = default)
@@ -761,31 +732,13 @@ public class NacosNamingService : INamingService
     {
         try
         {
-            var beatInfo = new
-            {
-                serviceName = NacosUtils.GetGroupedServiceName(serviceName, groupName),
-                ip = instance.Ip,
-                port = instance.Port,
-                weight = instance.Weight,
-                cluster = instance.ClusterName,
-                metadata = instance.Metadata
-            };
-
-            var parameters = new Dictionary<string, string?>
-            {
-                { "serviceName", serviceName },
-                { "groupName", groupName },
-                { "beat", JsonSerializer.Serialize(beatInfo) }
-            };
+            // v3 heartbeats reuse the instance endpoint: the instance fields plus beat=true.
+            var parameters = BuildRegisterParameters(serviceName, groupName, instance);
+            parameters["beat"] = "true";
 
             var body = NacosUtils.BuildQueryString(parameters);
-            var headers = new Dictionary<string, string>();
-            if (!string.IsNullOrEmpty(GetNamespace()))
-            {
-                headers[NamingApiPaths.NamespaceHeader] = GetNamespace()!;
-            }
 
-            var response = await _httpClient.PutWithHeadersAsync(BeatApiPath, null, body, headers,
+            var response = await _httpClient.PostWithHeadersAsync(InstanceApiPath, null, body, null,
                 _options.DefaultTimeout, cancellationToken);
 
             _isHealthy = true;
@@ -798,7 +751,7 @@ public class NacosNamingService : INamingService
         }
     }
 
-    private async Task<ServiceInfo?> QueryServiceAsync(string serviceName, string groupName, 
+    private async Task<ServiceInfo?> QueryServiceAsync(string serviceName, string groupName,
         string clusters, CancellationToken cancellationToken)
     {
         try
@@ -807,17 +760,15 @@ public class NacosNamingService : INamingService
             {
                 { "serviceName", serviceName },
                 { "groupName", groupName },
-                { "clusters", clusters },
+                { "namespaceId", GetNamespace() },
+                // NOTE: the v3 client API names this parameter `clusterName` (singular,
+                // comma-separated values). Sending `clusters` is silently ignored by
+                // Nacos 3.2.4 and returns every cluster — verified against the live server.
+                { "clusterName", clusters },
                 { "healthyOnly", "false" }
             };
 
-            var headers = new Dictionary<string, string>();
-            if (!string.IsNullOrEmpty(GetNamespace()))
-            {
-                headers[NamingApiPaths.NamespaceHeader] = GetNamespace()!;
-            }
-
-            var response = await _httpClient.GetWithHeadersAsync(InstanceListApiPath, parameters, headers,
+            var response = await _httpClient.GetWithHeadersAsync(InstanceListApiPath, parameters, null,
                 _options.DefaultTimeout, cancellationToken);
 
             if (string.IsNullOrEmpty(response))
@@ -829,7 +780,19 @@ public class NacosNamingService : INamingService
             _isHealthy = true;
             _metricsMonitor.SetConnectionStatus(true);
             _metricsMonitor.RecordNamingRequestSuccess();
-            return JsonSerializer.Deserialize<ServiceInfo>(response);
+
+            // The v3 client API returns a flat JSON array of instances in `data`;
+            // rebuild the ServiceInfo the rest of the client works with.
+            var hosts = ParseInstanceList(response);
+            return new ServiceInfo
+            {
+                Name = serviceName,
+                GroupName = groupName,
+                Clusters = clusters,
+                CacheMillis = QueryCacheMillis,
+                LastRefTime = NacosUtils.GetCurrentTimeMillis(),
+                Hosts = hosts
+            };
         }
         catch (Exception ex)
         {
@@ -958,6 +921,7 @@ public class NacosNamingService : INamingService
         {
             { "serviceName", serviceName },
             { "groupName", groupName },
+            { "namespaceId", GetNamespace() },
             { "ip", instance.Ip },
             { "port", instance.Port.ToString() },
             { "weight", instance.Weight.ToString() },
@@ -965,7 +929,6 @@ public class NacosNamingService : INamingService
             { "healthy", instance.Healthy.ToString().ToLower() },
             { "ephemeral", instance.Ephemeral.ToString().ToLower() },
             { "clusterName", instance.ClusterName }
-            // namespaceId removed — moved to X-Nacos-Namespace-Id header
         };
 
         if (instance.Metadata.Count > 0)
@@ -1014,9 +977,67 @@ public class NacosNamingService : INamingService
         _disposed = true;
     }
 
-    private class ServiceListResponse
+    /// <summary>
+    /// Parses the flat instance array returned in the <c>data</c> field of a v3
+    /// instance-list response. A malformed or absent payload yields an empty list.
+    /// </summary>
+    private static List<Instance> ParseInstanceList(string response)
     {
-        public int Count { get; set; }
-        public List<string> Doms { get; set; } = new();
+        try
+        {
+            using var document = JsonDocument.Parse(response);
+            if (!document.RootElement.TryGetProperty("data", out var data) ||
+                data.ValueKind != JsonValueKind.Array)
+            {
+                return new List<Instance>();
+            }
+
+            return data.Deserialize<List<Instance>>() ?? new List<Instance>();
+        }
+        catch (JsonException)
+        {
+            return new List<Instance>();
+        }
+    }
+
+    /// <summary>
+    /// Parses a v3 admin service-list envelope into the paged view model.
+    /// </summary>
+    private static ListView<string> ParseServiceList(string? response)
+    {
+        if (string.IsNullOrEmpty(response))
+        {
+            return new ListView<string>();
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(response);
+            if (!document.RootElement.TryGetProperty("data", out var data) ||
+                data.ValueKind != JsonValueKind.Object)
+            {
+                return new ListView<string>();
+            }
+
+            var count = data.TryGetProperty("totalCount", out var totalCount) ? totalCount.GetInt32() : 0;
+            var names = new List<string>();
+
+            if (data.TryGetProperty("pageItems", out var pageItems) && pageItems.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in pageItems.EnumerateArray())
+                {
+                    if (item.TryGetProperty("name", out var name) && name.GetString() is { } serviceName)
+                    {
+                        names.Add(serviceName);
+                    }
+                }
+            }
+
+            return new ListView<string>(count, names);
+        }
+        catch (JsonException)
+        {
+            return new ListView<string>();
+        }
     }
 }
