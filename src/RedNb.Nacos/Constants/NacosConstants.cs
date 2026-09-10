@@ -134,4 +134,12 @@ public static class NacosConstants
     /// Nacos server protocol version 3.
     /// </summary>
     public const string ProtocolV3 = "v3";
+
+    /// <summary>
+    /// HTTP header used to pass <c>namespaceId</c> in Nacos 3.x v3 API requests.
+    /// In Nacos v3 the namespace identifier is transported as an HTTP header rather
+    /// than as a query parameter or multipart form part.
+    /// See https://nacos.io/en/docs/v3/open-api for the v3 spec.
+    /// </summary>
+    public const string NamespaceHeader = "X-Nacos-Namespace-Id";
 }

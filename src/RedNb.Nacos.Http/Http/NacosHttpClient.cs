@@ -140,6 +140,19 @@ public class NacosHttpClient : IDisposable
     }
 
     /// <summary>
+    /// Sends a POST request with multipart/form-data content and custom headers.
+    /// Required for v3 multipart uploads that need to transmit <c>namespaceId</c> as
+    /// the <c>X-Nacos-Namespace-Id</c> HTTP header instead of a form part.
+    /// </summary>
+    public async Task<string?> PostMultipartWithHeadersAsync(string path, MultipartFormDataContent content,
+        Dictionary<string, string?>? parameters = null, Dictionary<string, string>? headers = null,
+        long timeout = 0, CancellationToken cancellationToken = default)
+    {
+        var raw = await RequestRawAsync(HttpMethod.Post, path, parameters, content, headers, timeout, cancellationToken);
+        return raw.BodyString;
+    }
+
+    /// <summary>
     /// Sends an HTTP request with automatic retry and server failover.
     /// </summary>
     private async Task<string?> RequestAsync(HttpMethod method, string path, 
