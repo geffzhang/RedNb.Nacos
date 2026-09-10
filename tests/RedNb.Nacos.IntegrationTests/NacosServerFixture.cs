@@ -20,38 +20,47 @@ public class NacosServerFixture : IAsyncLifetime
     public const string Username = "nacos";
     public const string Password = "nacos";
 
+    // Nacos 3.2.4 boots slower than 3.1.x due to dist module initialization,
+    // so the readiness probe is given a generous start_period budget (matches
+    // the compose healthcheck start_period in deploy/docker-compose/*.yml).
+    private const int StartPeriodSeconds = 90;
+    private const int PollIntervalSeconds = 3;
+
     public async Task InitializeAsync()
     {
-        // Check if Nacos server is available
+        // Poll the Nacos 3.x readiness endpoint until it succeeds or the
+        // start_period budget elapses.
         using var httpClient = new HttpClient();
-        httpClient.Timeout = TimeSpan.FromSeconds(5);
+        httpClient.Timeout = TimeSpan.FromSeconds(10);
 
-        var maxRetries = 3;
-        for (int i = 0; i < maxRetries; i++)
+        var maxAttempts = StartPeriodSeconds / PollIntervalSeconds;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {
             try
             {
-                // Use the main Nacos page as health check (works with Nacos 3.x)
-                var response = await httpClient.GetAsync($"http://{ServerAddress}/nacos/");
+                var response = await httpClient.GetAsync(
+                    $"http://{ServerAddress}/nacos/v3/health/readiness");
                 if (response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine("Nacos server is available");
+                    Console.WriteLine($"Nacos server is ready (attempt {attempt})");
                     return;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Attempt {i + 1}: Failed to connect to Nacos - {ex.Message}");
-                if (i < maxRetries - 1)
-                {
-                    await Task.Delay(1000);
-                }
+                Console.WriteLine($"Attempt {attempt}: Failed to connect to Nacos - {ex.Message}");
+            }
+
+            if (attempt < maxAttempts)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(PollIntervalSeconds));
             }
         }
 
         throw new InvalidOperationException(
-            $"Nacos server is not available at {ServerAddress}. " +
-            "Please ensure Nacos is running before executing integration tests.");
+            $"Nacos server did not become ready within {StartPeriodSeconds}s at {ServerAddress}. " +
+            "Please ensure Nacos 3.x is running before executing integration tests.");
     }
 
     public Task DisposeAsync()
