@@ -90,11 +90,11 @@ git commit -m "chore(deploy): update cluster healthcheck to Nacos 3.x endpoint"
 - Modify: `deploy/docker-compose/start.bat`
 - Modify: `deploy/docker-compose/README.md`
 - Modify: `CONTRIBUTING.md`
-- Modify: `deploy/docker-compose/docker-compose.yml` (line 3 `# Version: 3.1.1` header comment)
-- Modify: `deploy/docker-compose/docker-compose.mysql.yml` (line 3 `# Version: 3.1.1` header comment)
+- Modify: `deploy/docker-compose/docker-compose.yml` (line 3 `# Version: 3.1.1` header comment AND any stale `v1/console/health` URL)
+- Modify: `deploy/docker-compose/docker-compose.mysql.yml` (line 3 `# Version: 3.1.1` header comment AND any stale `v1/console/health` URL)
 - Modify: `deploy/docker-compose/docker-compose.cluster.yml` (line 3 `# Version: 3.1.1` header comment)
 
-> **Amendment (2026-09-10):** The 3 YAML header comments above are part of Task 1.3's scope. They were originally missed by the pre-flight scan and are added here as a plan defect fix. Ledger entry: "Task 1.1 ruling" in `.superpowers/sdd/2026-09-10-nacos-v3-migration/progress.md`.
+> **Amendment (2026-09-10):** The 3 YAML header comments above are part of Task 1.3's scope. They were originally missed by the pre-flight scan and are added here as a plan defect fix. **Second amendment:** Task 1.2's brief left `docker-compose.yml:31` and `docker-compose.mysql.yml:69` with stale `v1/console/health` URLs (cluster.yml is the only file Task 1.2's brief updated). These are added to Task 1.3's scope so the post-Task-1.3 grep target of zero matches is achievable. Ledger entries: "Task 1.1 ruling" and "Task 1.2 ruling" in `.superpowers/sdd/2026-09-10-nacos-v3-migration/progress.md`.
 
 **Step 1:** In each file, replace `3.1.1` with `3.2.4` in version references only. **Be careful with `start.sh` and `start.bat`** — they are GBK-encoded; use `Read` first to inspect, then `Edit` with the exact bytes you saw. If `Edit` corrupts encoding, run:
 
