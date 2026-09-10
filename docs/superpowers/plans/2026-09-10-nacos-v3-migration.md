@@ -205,6 +205,68 @@ cd E:/GitHub/RedNb.Nacos
 git tag phase1-foundation
 ```
 
+> **Amendment (2026-09-10):** Task 1.5's validation revealed the readiness URL `/nacos/v3/health/readiness` (port 8848) does not exist on Nacos 3.2.4. The correct path is `http://localhost:8080/v3/console/health/readiness` (Console port). This was a spec/plan defect that propagated through Tasks 1.2, 1.3, 1.4. The `phase1-foundation` tag was deleted because validation failed. Task 1.6 added below to fix all 4 affected files in one bundle. Ledger entry: "Task 1.5 ruling" in `.superpowers/sdd/2026-09-10-nacos-v3-migration/progress.md`.
+
+### Task 1.6: Fix readiness URL (port + path) and NacosServerFixture HttpClient misuse
+
+**Files:**
+- Modify: `deploy/docker-compose/docker-compose.yml` (line 31 healthcheck)
+- Modify: `deploy/docker-compose/docker-compose.mysql.yml` (line 69 healthcheck)
+- Modify: `deploy/docker-compose/docker-compose.cluster.yml` (3 healthchecks, ~lines 72/116/160)
+- Modify: `tests/RedNb.Nacos.IntegrationTests/NacosServerFixture.cs` (line 59 URL, lines 54/61 HttpClient lifecycle)
+
+**Step 1 — Fix compose healthchecks** in all 3 files. Replace:
+```
+http://localhost:8848/nacos/v3/health/readiness
+```
+with:
+```
+http://localhost:8080/v3/console/health/readiness
+```
+Use `Edit` with `replace_all: true` per file. Port changes from 8848 (API) to 8080 (Console); path gains `/console/` segment.
+
+**Step 2 — Fix NacosServerFixture** in two places:
+- Line 59 (URL): change `http://{ServerAddress}/nacos/v3/health/readiness` to `http://{ServerAddress}:8080/v3/console/health/readiness` (assuming default Nacos port; document the port-derivation in a comment if `ServerAddress` is non-default). For the integration-test default of `localhost:8848`, the console is at `localhost:8080`.
+- Line 54 (HttpClient): move `httpClient.Timeout = ...` OUT of the loop, OR use a fresh `HttpClient` per iteration. The cleanest fix is to instantiate a fresh `HttpClient` (with `using` or `try/finally`) inside each iteration of the polling loop. The deadline-bounded `CancellationToken` can be set via the request ctor or a `CancellationTokenSource` with `remaining` as the deadline.
+
+**Step 3 — Verify** the readiness URL change in tracked files:
+```bash
+cd E:/GitHub/RedNb.Nacos && git grep -n "nacos/v3/health/readiness" deploy/ tests/
+```
+Expected: zero matches.
+
+And the new URL appears in all 4 locations:
+```bash
+cd E:/GitHub/RedNb.Nacos && git grep -n "v3/console/health/readiness" deploy/ tests/
+```
+Expected: 4 matches (3 compose files × 1 line, 1 fixture × 1 line).
+
+**Step 4 — Re-run Task 1.5 validation** (container up → curl readiness → tests fail forward on v1 endpoints specifically → tear down). Once validation passes, **then** apply the tag:
+
+```bash
+cd E:/GitHub/RedNb.Nacos
+git tag phase1-foundation
+```
+
+**Step 5 — Commit** (split into two commits by concern):
+```bash
+cd E:/GitHub/RedNb.Nacos
+
+# (a) Compose healthcheck URL: port + path correction
+git add deploy/docker-compose/docker-compose.yml deploy/docker-compose/docker-compose.mysql.yml deploy/docker-compose/docker-compose.cluster.yml
+git commit -m "fix(deploy): point compose healthcheck at Nacos 3.x console readiness port 8080"
+
+# (b) Fixture: URL + HttpClient lifecycle
+git add tests/RedNb.Nacos.IntegrationTests/NacosServerFixture.cs
+git commit -m "test(fixture): correct v3 readiness URL and fix HttpClient.Timeout reassignment"
+```
+
+**Step 6 — Tag** (only if Step 4's validation passed):
+```bash
+cd E:/GitHub/RedNb.Nacos
+git tag phase1-foundation
+```
+
 ---
 
 ## Phase 2 — Auth (PR2)
