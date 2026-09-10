@@ -4,6 +4,11 @@ namespace RedNb.Nacos.Core.Lock;
 /// Nacos distributed lock service interface.
 /// Provides distributed lock capabilities for microservices.
 /// </summary>
+[Obsolete(
+    "ILockService is preserved as a marker for the legacy lock API on Nacos 3.x. " +
+    "The underlying /nacos/v3/lock endpoints still function but the interface is " +
+    "scheduled for removal. Use a dedicated lock library or a custom integration instead.",
+    error: false)]
 public interface ILockService : IAsyncDisposable
 {
     /// <summary>
