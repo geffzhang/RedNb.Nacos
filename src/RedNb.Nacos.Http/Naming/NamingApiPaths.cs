@@ -25,6 +25,12 @@ internal static class NamingApiPaths
     /// <summary>Send a heartbeat (BeatReactor).</summary>
     public const string Beat = "/v3/ns/instance/beat";
 
+    /// <summary>
+    /// Nacos v3 sends namespaceId as an HTTP header, not a query parameter.
+    /// See https://nacos.io/en/docs/v3/open-api for the v3 spec.
+    /// </summary>
+    public const string NamespaceHeader = "X-Nacos-Namespace-Id";
+
     // Aliases preserved for v1 paths still referenced elsewhere in the codebase
     // (e.g., legacy failover paths). Phase 5 cleanup will remove these.
     internal const string LegacyInstance = "v1/ns/instance";
