@@ -90,7 +90,7 @@ public class NacosGrpcClient : IAsyncDisposable
     /// <summary>
     /// Connects to the Nacos server.
     /// </summary>
-    public async Task ConnectAsync(CancellationToken cancellationToken = default)
+    public virtual async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         if (_connected) return;
 
@@ -280,7 +280,7 @@ public class NacosGrpcClient : IAsyncDisposable
     /// <summary>
     /// Unregisters a push handler.
     /// </summary>
-    public void UnregisterPushHandler(string handlerId)
+    public virtual void UnregisterPushHandler(string handlerId)
     {
         _pushHandlers.TryRemove(handlerId, out _);
     }
