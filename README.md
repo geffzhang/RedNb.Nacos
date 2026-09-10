@@ -8,7 +8,7 @@
 [![NuGet Downloads](https://img.shields.io/nuget/dt/RedNb.Nacos.svg?style=flat-square)](https://www.nuget.org/packages/RedNb.Nacos)
 [![.NET](https://img.shields.io/badge/.NET-8.0%20|%2010.0-512BD4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg?style=flat-square)](LICENSE)
-[![Nacos](https://img.shields.io/badge/Nacos-2.x%20|%203.x-00C7B7.svg?style=flat-square)](https://nacos.io/)
+[![Nacos](https://img.shields.io/badge/Nacos-3.2%2B-00C7B7.svg?style=flat-square)](https://nacos.io/)
 [![GitHub stars](https://img.shields.io/github/stars/redNb/RedNb.Nacos?style=flat-square)](https://github.com/redNb/RedNb.Nacos/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/redNb/RedNb.Nacos?style=flat-square)](https://github.com/redNb/RedNb.Nacos/issues)
 
@@ -26,6 +26,13 @@
 > - 🔄 完整支持 **Nacos 3.x** 新功能（Fuzzy Watch、AI Service、分布式锁）
 > - 🛠️ 独有 **维护服务 API** - 命名空间、集群、客户端连接管理
 > - 📦 模块化设计，按需引用，减少依赖
+
+## ⚠️ Breaking: Nacos 3.2.0+ Required
+
+This client (post-v1.x release) targets Nacos 3.2.0+ exclusively. v1/v2 HTTP
+endpoints are no longer used; `Maintainer` and `Lock` interfaces are marked
+`[Obsolete]` and will be removed in the next major version. See
+`docs/MIGRATION.md` for upgrade details.
 
 ## ✨ 特性
 
