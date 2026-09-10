@@ -24,10 +24,13 @@ public class NacosPromptServiceTests : IDisposable
         _server = WireMockServer.Start();
         _options = new NacosClientOptions
         {
-            ServerAddresses = $"localhost:{_server.Port}"
+            ServerAddresses = $"localhost:{_server.Port}",
+            Namespace = TestNamespace
         };
         _factory = new NacosFactory();
     }
+
+    private const string TestNamespace = "test-ns";
 
     public void Dispose()
     {
@@ -42,6 +45,7 @@ public class NacosPromptServiceTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/client/ai/prompt")
+                .WithHeader("X-Nacos-Namespace-Id", TestNamespace)
                 .WithParam("promptKey", "code-review")
                 .UsingGet())
             .RespondWith(Response.Create()
@@ -82,6 +86,7 @@ public class NacosPromptServiceTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/client/ai/prompt")
+                .WithHeader("X-Nacos-Namespace-Id", TestNamespace)
                 .UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(404)
@@ -104,6 +109,7 @@ public class NacosPromptServiceTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/client/ai/prompt")
+                .WithHeader("X-Nacos-Namespace-Id", TestNamespace)
                 .WithParam("promptKey", "assistant")
                 .WithParam("label", "stable")
                 .UsingGet())
@@ -131,6 +137,7 @@ public class NacosPromptServiceTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/client/ai/prompt")
+                .WithHeader("X-Nacos-Namespace-Id", TestNamespace)
                 .WithParam("promptKey", "assistant")
                 .UsingGet())
             .RespondWith(Response.Create()
@@ -161,6 +168,7 @@ public class NacosPromptServiceTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/admin/ai/prompt/list")
+                .WithHeader("X-Nacos-Namespace-Id", TestNamespace)
                 .UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
@@ -192,6 +200,7 @@ public class NacosPromptServiceTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/admin/ai/prompt/publish")
+                .WithHeader("X-Nacos-Namespace-Id", TestNamespace)
                 .UsingPost())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)

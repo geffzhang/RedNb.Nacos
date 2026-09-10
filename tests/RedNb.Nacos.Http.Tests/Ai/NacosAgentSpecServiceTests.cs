@@ -23,10 +23,13 @@ public class NacosAgentSpecServiceTests : IDisposable
         _server = WireMockServer.Start();
         _options = new NacosClientOptions
         {
-            ServerAddresses = $"localhost:{_server.Port}"
+            ServerAddresses = $"localhost:{_server.Port}",
+            Namespace = TestNamespace
         };
         _factory = new NacosFactory();
     }
+
+    private const string TestNamespace = "test-ns";
 
     public void Dispose()
     {
@@ -41,6 +44,7 @@ public class NacosAgentSpecServiceTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/client/ai/agentspecs")
+                .WithHeader("X-Nacos-Namespace-Id", TestNamespace)
                 .WithParam("name", "travel-agent")
                 .UsingGet())
             .RespondWith(Response.Create()
@@ -78,6 +82,7 @@ public class NacosAgentSpecServiceTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/client/ai/agentspecs")
+                .WithHeader("X-Nacos-Namespace-Id", TestNamespace)
                 .UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(404)
@@ -100,6 +105,7 @@ public class NacosAgentSpecServiceTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/client/ai/agentspecs")
+                .WithHeader("X-Nacos-Namespace-Id", TestNamespace)
                 .WithParam("name", "travel-agent")
                 .UsingGet())
             .RespondWith(Response.Create()
@@ -129,6 +135,7 @@ public class NacosAgentSpecServiceTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/admin/ai/agentspecs/list")
+                .WithHeader("X-Nacos-Namespace-Id", TestNamespace)
                 .UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
@@ -160,6 +167,7 @@ public class NacosAgentSpecServiceTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/admin/ai/agentspecs/online")
+                .WithHeader("X-Nacos-Namespace-Id", TestNamespace)
                 .UsingPost())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)

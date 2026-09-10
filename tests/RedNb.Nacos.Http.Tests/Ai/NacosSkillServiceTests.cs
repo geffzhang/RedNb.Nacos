@@ -23,10 +23,13 @@ public class NacosSkillServiceTests : IDisposable
         _server = WireMockServer.Start();
         _options = new NacosClientOptions
         {
-            ServerAddresses = $"localhost:{_server.Port}"
+            ServerAddresses = $"localhost:{_server.Port}",
+            Namespace = TestNamespace
         };
         _factory = new NacosFactory();
     }
+
+    private const string TestNamespace = "test-ns";
 
     public void Dispose()
     {
@@ -43,6 +46,7 @@ public class NacosSkillServiceTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/client/ai/skills")
+                .WithHeader("X-Nacos-Namespace-Id", TestNamespace)
                 .WithParam("name", "doc-writer")
                 .UsingGet())
             .RespondWith(Response.Create()
@@ -71,6 +75,7 @@ public class NacosSkillServiceTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/client/ai/skills")
+                .WithHeader("X-Nacos-Namespace-Id", TestNamespace)
                 .UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(304));
@@ -92,6 +97,7 @@ public class NacosSkillServiceTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/client/ai/skills")
+                .WithHeader("X-Nacos-Namespace-Id", TestNamespace)
                 .UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(404)
@@ -116,6 +122,7 @@ public class NacosSkillServiceTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/client/ai/skills")
+                .WithHeader("X-Nacos-Namespace-Id", TestNamespace)
                 .WithParam("name", "doc-writer")
                 .UsingGet())
             .RespondWith(Response.Create()
@@ -147,6 +154,7 @@ public class NacosSkillServiceTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/client/ai/skills/search")
+                .WithHeader("X-Nacos-Namespace-Id", TestNamespace)
                 .UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
@@ -181,6 +189,7 @@ public class NacosSkillServiceTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/admin/ai/skills/upload")
+                .WithHeader("X-Nacos-Namespace-Id", TestNamespace)
                 .UsingPost())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)

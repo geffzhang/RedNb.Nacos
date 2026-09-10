@@ -82,13 +82,13 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
     {
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "keyword", keyword },
             { "pageNo", pageNo.ToString() },
             { "pageSize", pageSize.ToString() }
         };
+        var headers = BuildNamespaceHeaders();
 
-        var response = await _httpClient.GetAsync($"{ClientBasePath}/search", parameters, _options.DefaultTimeout, cancellationToken);
+        var response = await _httpClient.GetWithHeadersAsync($"{ClientBasePath}/search", parameters, headers, _options.DefaultTimeout, cancellationToken);
         var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<NacosPromptService.PagedData<AgentSpecSummary>>>(response ?? "{}", JsonOptions);
         return ToPageResult(result?.Data, pageNo, pageSize);
     }
@@ -183,14 +183,14 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
     {
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentSpecName", agentSpecName },
             { "search", search },
             { "pageNo", pageNo.ToString() },
             { "pageSize", pageSize.ToString() }
         };
+        var headers = BuildNamespaceHeaders();
 
-        var response = await _httpClient.GetAsync($"{AdminBasePath}/list", parameters, _options.DefaultTimeout, cancellationToken);
+        var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/list", parameters, headers, _options.DefaultTimeout, cancellationToken);
         var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<NacosPromptService.PagedData<AgentSpecSummary>>>(response ?? "{}", JsonOptions);
         return ToPageResult(result?.Data, pageNo, pageSize);
     }
@@ -202,13 +202,13 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentSpecName", agentSpecName }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync($"{AdminBasePath}/version", parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/version", parameters, headers, _options.DefaultTimeout, cancellationToken);
             var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<AgentSpecMeta>>(response ?? "{}", JsonOptions);
             return result?.Data;
         }
@@ -225,14 +225,14 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentSpecName", agentSpecName },
             { "version", version }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync(AdminBasePath, parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync(AdminBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
             var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<AgentSpecModel>>(response ?? "{}", JsonOptions);
             return result?.Data;
         }
@@ -252,14 +252,15 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
         }
 
         using var multipart = new MultipartFormDataContent();
-        multipart.Add(new StringContent(_namespaceId), "namespaceId");
+        // namespaceId is sent via the X-Nacos-Namespace-Id HTTP header (v3 spec), not as a form part.
         multipart.Add(new StringContent(overwrite.ToString().ToLowerInvariant()), "overwrite");
 
         var fileContent = new ByteArrayContent(content);
         fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
         multipart.Add(fileContent, "file", fileName);
 
-        await _httpClient.PostMultipartAsync($"{AdminBasePath}/upload", multipart, null, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PostMultipartWithHeadersAsync($"{AdminBasePath}/upload", multipart, null, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -271,7 +272,6 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentSpecName", agentSpec.Name },
             { "agentSpecCard", JsonSerializer.Serialize(agentSpec, JsonOptions) },
             { "basedOnVersion", basedOnVersion },
@@ -279,7 +279,8 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PostAsync($"{AdminBasePath}/draft", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PostWithHeadersAsync($"{AdminBasePath}/draft", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -291,7 +292,6 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentSpecName", agentSpec.Name },
             { "version", version },
             { "agentSpecCard", JsonSerializer.Serialize(agentSpec, JsonOptions) },
@@ -299,7 +299,8 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PutAsync($"{AdminBasePath}/draft", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PutWithHeadersAsync($"{AdminBasePath}/draft", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -309,12 +310,12 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentSpecName", agentSpecName },
             { "version", version }
         };
+        var headers = BuildNamespaceHeaders();
 
-        await _httpClient.DeleteAsync($"{AdminBasePath}/draft", parameters, _options.DefaultTimeout, cancellationToken);
+        await _httpClient.DeleteWithHeadersAsync($"{AdminBasePath}/draft", parameters, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -362,13 +363,13 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentSpecName", agentSpecName },
             { "scope", scope }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PutAsync($"{AdminBasePath}/scope", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PutWithHeadersAsync($"{AdminBasePath}/scope", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -378,13 +379,13 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentSpecName", agentSpecName },
             { "labels", JsonSerializer.Serialize(labels, JsonOptions) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PutAsync($"{AdminBasePath}/labels", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PutWithHeadersAsync($"{AdminBasePath}/labels", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -394,13 +395,13 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentSpecName", agentSpecName },
             { "bizTags", JsonSerializer.Serialize(bizTags, JsonOptions) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PutAsync($"{AdminBasePath}/biz-tags", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PutWithHeadersAsync($"{AdminBasePath}/biz-tags", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -410,12 +411,12 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentSpecName", agentSpecName },
             { "version", version }
         };
+        var headers = BuildNamespaceHeaders();
 
-        await _httpClient.DeleteAsync(AdminBasePath, parameters, _options.DefaultTimeout, cancellationToken);
+        await _httpClient.DeleteWithHeadersAsync(AdminBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     #endregion
@@ -449,16 +450,16 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "name", agentSpecName },
             { "version", version },
             { "label", label },
             { "md5", md5 }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync(ClientBasePath, parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync(ClientBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 return null;
@@ -481,7 +482,6 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentSpecName", agentSpecName },
             { "version", version }
         };
@@ -492,7 +492,8 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
         }
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PostAsync($"{AdminBasePath}/{action}", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PostWithHeadersAsync($"{AdminBasePath}/{action}", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     private async Task StartPollingAsync(CancellationToken cancellationToken)
@@ -541,17 +542,17 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "name", agentSpecName },
             { "version", version },
             { "label", label },
             { "md5", cachedMd5 }
         };
+        var headers = BuildNamespaceHeaders();
 
         NacosRawResponse raw;
         try
         {
-            raw = await _httpClient.GetRawAsync(ClientBasePath, parameters, null, _options.DefaultTimeout, cancellationToken);
+            raw = await _httpClient.GetRawAsync(ClientBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
         }
         catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
         {
@@ -626,6 +627,20 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
         {
             throw new NacosException(NacosException.InvalidParam, "agentSpec.Name is required");
         }
+    }
+
+    /// <summary>
+    /// Builds a header dictionary carrying <c>namespaceId</c> as the v3
+    /// <c>X-Nacos-Namespace-Id</c> HTTP header (omitted when empty).
+    /// </summary>
+    private Dictionary<string, string> BuildNamespaceHeaders()
+    {
+        var headers = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(_namespaceId))
+        {
+            headers[NacosConstants.NamespaceHeader] = _namespaceId;
+        }
+        return headers;
     }
 
     private static PageResult<T> ToPageResult<T>(NacosPromptService.PagedData<T>? data, int pageNo, int pageSize)

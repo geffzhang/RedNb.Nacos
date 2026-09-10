@@ -81,13 +81,13 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
     {
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "query", query },
             { "pageNo", pageNo.ToString() },
             { "pageSize", pageSize.ToString() }
         };
+        var headers = BuildNamespaceHeaders();
 
-        var response = await _httpClient.GetAsync($"{ClientBasePath}/search", parameters, _options.DefaultTimeout, cancellationToken);
+        var response = await _httpClient.GetWithHeadersAsync($"{ClientBasePath}/search", parameters, headers, _options.DefaultTimeout, cancellationToken);
         var result = JsonSerializer.Deserialize<ApiResult<PagedData<PromptMetaSummary>>>(response ?? "{}", JsonOptions);
         return ToPageResult(result?.Data, pageNo, pageSize);
     }
@@ -181,15 +181,15 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
     {
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "promptKey", promptKey },
             { "search", search },
             { "bizTags", bizTags },
             { "pageNo", pageNo.ToString() },
             { "pageSize", pageSize.ToString() }
         };
+        var headers = BuildNamespaceHeaders();
 
-        var response = await _httpClient.GetAsync($"{AdminBasePath}/list", parameters, _options.DefaultTimeout, cancellationToken);
+        var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/list", parameters, headers, _options.DefaultTimeout, cancellationToken);
         var result = JsonSerializer.Deserialize<ApiResult<PagedData<PromptMetaSummary>>>(response ?? "{}", JsonOptions);
         return ToPageResult(result?.Data, pageNo, pageSize);
     }
@@ -201,13 +201,13 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "promptKey", promptKey }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync($"{AdminBasePath}/metadata", parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/metadata", parameters, headers, _options.DefaultTimeout, cancellationToken);
             var result = JsonSerializer.Deserialize<ApiResult<PromptMetaInfo>>(response ?? "{}", JsonOptions);
             return result?.Data;
         }
@@ -224,11 +224,11 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "promptKey", promptKey }
         };
+        var headers = BuildNamespaceHeaders();
 
-        var response = await _httpClient.GetAsync($"{AdminBasePath}/versions", parameters, _options.DefaultTimeout, cancellationToken);
+        var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/versions", parameters, headers, _options.DefaultTimeout, cancellationToken);
         var result = JsonSerializer.Deserialize<ApiResult<List<PromptVersionSummary>>>(response ?? "{}", JsonOptions);
         return result?.Data ?? new List<PromptVersionSummary>();
     }
@@ -240,14 +240,14 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "promptKey", promptKey },
             { "version", version }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync($"{AdminBasePath}/version", parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/version", parameters, headers, _options.DefaultTimeout, cancellationToken);
             var result = JsonSerializer.Deserialize<ApiResult<PromptVersionInfo>>(response ?? "{}", JsonOptions);
             return result?.Data;
         }
@@ -267,7 +267,6 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "promptKey", promptKey },
             { "basedOnVersion", basedOnVersion },
             { "targetVersion", targetVersion },
@@ -279,7 +278,8 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PostAsync($"{AdminBasePath}/draft", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PostWithHeadersAsync($"{AdminBasePath}/draft", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -291,7 +291,6 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "promptKey", promptKey },
             { "version", version },
             { "template", template },
@@ -300,7 +299,8 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PutAsync($"{AdminBasePath}/draft", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PutWithHeadersAsync($"{AdminBasePath}/draft", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -310,12 +310,12 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "promptKey", promptKey },
             { "version", version }
         };
+        var headers = BuildNamespaceHeaders();
 
-        await _httpClient.DeleteAsync($"{AdminBasePath}/draft", parameters, _options.DefaultTimeout, cancellationToken);
+        await _httpClient.DeleteWithHeadersAsync($"{AdminBasePath}/draft", parameters, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -341,7 +341,6 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "promptKey", promptKey },
             { "version", version },
             { "template", template },
@@ -352,7 +351,8 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PostAsync($"{AdminBasePath}/publish", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PostWithHeadersAsync($"{AdminBasePath}/publish", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -387,13 +387,13 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "promptKey", promptKey },
             { "labels", JsonSerializer.Serialize(labels, JsonOptions) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PutAsync($"{AdminBasePath}/labels", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PutWithHeadersAsync($"{AdminBasePath}/labels", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -403,13 +403,13 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "promptKey", promptKey },
             { "description", description }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PutAsync($"{AdminBasePath}/description", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PutWithHeadersAsync($"{AdminBasePath}/description", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -419,13 +419,13 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "promptKey", promptKey },
             { "bizTags", JsonSerializer.Serialize(bizTags, JsonOptions) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PutAsync($"{AdminBasePath}/biz-tags", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PutWithHeadersAsync($"{AdminBasePath}/biz-tags", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -435,12 +435,12 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "promptKey", promptKey },
             { "version", version }
         };
+        var headers = BuildNamespaceHeaders();
 
-        await _httpClient.DeleteAsync(AdminBasePath, parameters, _options.DefaultTimeout, cancellationToken);
+        await _httpClient.DeleteWithHeadersAsync(AdminBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     #endregion
@@ -473,16 +473,20 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "promptKey", promptKey },
             { "version", version },
             { "label", label },
             { "md5", md5 }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync(ClientBasePath, parameters, _options.DefaultTimeout, cancellationToken);
+            // TODO: confirm response shape — design spec hypothesizes raw Prompt JSON
+            // (live Nacos 3.x verification needed; defer to CI). Currently parsed as
+            // ApiResult<Prompt> envelope; switch to JsonSerializer.Deserialize<Prompt>(...)
+            // if/when the live server confirms the unwrapped shape.
+            var response = await _httpClient.GetWithHeadersAsync(ClientBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 return null;
@@ -505,7 +509,6 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "promptKey", promptKey },
             { "version", version }
         };
@@ -516,7 +519,8 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
         }
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PostAsync($"{AdminBasePath}/{action}", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PostWithHeadersAsync($"{AdminBasePath}/{action}", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     private async Task StartPollingAsync(CancellationToken cancellationToken)
@@ -565,17 +569,17 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "promptKey", promptKey },
             { "version", version },
             { "label", label },
             { "md5", cached?.Md5 }
         };
+        var headers = BuildNamespaceHeaders();
 
         NacosRawResponse raw;
         try
         {
-            raw = await _httpClient.GetRawAsync(ClientBasePath, parameters, null, _options.DefaultTimeout, cancellationToken);
+            raw = await _httpClient.GetRawAsync(ClientBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
         }
         catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
         {
@@ -640,6 +644,20 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
         {
             throw new NacosException(NacosException.InvalidParam, "promptKey is required");
         }
+    }
+
+    /// <summary>
+    /// Builds a header dictionary carrying <c>namespaceId</c> as the v3
+    /// <c>X-Nacos-Namespace-Id</c> HTTP header (omitted when empty).
+    /// </summary>
+    private Dictionary<string, string> BuildNamespaceHeaders()
+    {
+        var headers = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(_namespaceId))
+        {
+            headers[NacosConstants.NamespaceHeader] = _namespaceId;
+        }
+        return headers;
     }
 
     private static PageResult<T> ToPageResult<T>(PagedData<T>? data, int pageNo, int pageSize)

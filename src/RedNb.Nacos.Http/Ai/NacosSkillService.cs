@@ -82,14 +82,14 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
     {
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "query", query },
             { "tagsAll", tagsAll == null ? null : string.Join(",", tagsAll) },
             { "pageNo", pageNo.ToString() },
             { "pageSize", pageSize.ToString() }
         };
+        var headers = BuildNamespaceHeaders();
 
-        var response = await _httpClient.GetAsync($"{ClientBasePath}/search", parameters, _options.DefaultTimeout, cancellationToken);
+        var response = await _httpClient.GetWithHeadersAsync($"{ClientBasePath}/search", parameters, headers, _options.DefaultTimeout, cancellationToken);
         var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<NacosPromptService.PagedData<SkillSummary>>>(response ?? "{}", JsonOptions);
         return ToPageResult(result?.Data, pageNo, pageSize);
     }
@@ -183,15 +183,15 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
     {
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "skillName", skillName },
             { "search", search },
             { "orderBy", orderBy },
             { "pageNo", pageNo.ToString() },
             { "pageSize", pageSize.ToString() }
         };
+        var headers = BuildNamespaceHeaders();
 
-        var response = await _httpClient.GetAsync($"{AdminBasePath}/list", parameters, _options.DefaultTimeout, cancellationToken);
+        var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/list", parameters, headers, _options.DefaultTimeout, cancellationToken);
         var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<NacosPromptService.PagedData<SkillSummary>>>(response ?? "{}", JsonOptions);
         return ToPageResult(result?.Data, pageNo, pageSize);
     }
@@ -203,13 +203,13 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "skillName", skillName }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync($"{AdminBasePath}/version", parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/version", parameters, headers, _options.DefaultTimeout, cancellationToken);
             var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<SkillMeta>>(response ?? "{}", JsonOptions);
             return result?.Data;
         }
@@ -226,14 +226,14 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "skillName", skillName },
             { "version", version }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync(AdminBasePath, parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync(AdminBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
             var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<Skill>>(response ?? "{}", JsonOptions);
             return result?.Data;
         }
@@ -255,7 +255,7 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
         }
 
         using var content = new MultipartFormDataContent();
-        content.Add(new StringContent(_namespaceId), "namespaceId");
+        // namespaceId is sent via the X-Nacos-Namespace-Id HTTP header (v3 spec), not as a form part.
         content.Add(new StringContent(overwrite.ToString().ToLowerInvariant()), "overwrite");
         content.Add(new StringContent(autoPublishIfNew.ToString().ToLowerInvariant()), "autoPublishIfNew");
 
@@ -276,7 +276,8 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
         fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/zip");
         content.Add(fileContent, "file", fileName);
 
-        await _httpClient.PostMultipartAsync($"{AdminBasePath}/upload", content, null, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PostMultipartWithHeadersAsync($"{AdminBasePath}/upload", content, null, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -288,7 +289,6 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "skillName", skill.Name },
             { "skillCard", JsonSerializer.Serialize(skill, JsonOptions) },
             { "basedOnVersion", basedOnVersion },
@@ -297,7 +297,8 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PostAsync($"{AdminBasePath}/draft", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PostWithHeadersAsync($"{AdminBasePath}/draft", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -309,7 +310,6 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "skillName", skill.Name },
             { "version", version },
             { "skillCard", JsonSerializer.Serialize(skill, JsonOptions) },
@@ -318,7 +318,8 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PutAsync($"{AdminBasePath}/draft", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PutWithHeadersAsync($"{AdminBasePath}/draft", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -328,12 +329,12 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "skillName", skillName },
             { "version", version }
         };
+        var headers = BuildNamespaceHeaders();
 
-        await _httpClient.DeleteAsync($"{AdminBasePath}/draft", parameters, _options.DefaultTimeout, cancellationToken);
+        await _httpClient.DeleteWithHeadersAsync($"{AdminBasePath}/draft", parameters, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -381,13 +382,13 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "skillName", skillName },
             { "scope", scope }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PutAsync($"{AdminBasePath}/scope", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PutWithHeadersAsync($"{AdminBasePath}/scope", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -397,13 +398,13 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "skillName", skillName },
             { "labels", JsonSerializer.Serialize(labels, JsonOptions) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PutAsync($"{AdminBasePath}/labels", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PutWithHeadersAsync($"{AdminBasePath}/labels", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -413,13 +414,13 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "skillName", skillName },
             { "bizTags", JsonSerializer.Serialize(bizTags, JsonOptions) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PutAsync($"{AdminBasePath}/biz-tags", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PutWithHeadersAsync($"{AdminBasePath}/biz-tags", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -429,12 +430,12 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "skillName", skillName },
             { "version", version }
         };
+        var headers = BuildNamespaceHeaders();
 
-        await _httpClient.DeleteAsync(AdminBasePath, parameters, _options.DefaultTimeout, cancellationToken);
+        await _httpClient.DeleteWithHeadersAsync(AdminBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     #endregion
@@ -467,17 +468,17 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "name", skillName },
             { "version", version },
             { "label", label },
             { "md5", md5 }
         };
+        var headers = BuildNamespaceHeaders();
 
         NacosRawResponse raw;
         try
         {
-            raw = await _httpClient.GetRawAsync(ClientBasePath, parameters, null, _options.DefaultTimeout, cancellationToken);
+            raw = await _httpClient.GetRawAsync(ClientBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
         }
         catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
         {
@@ -506,7 +507,6 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "skillName", skillName },
             { "version", version }
         };
@@ -517,7 +517,8 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
         }
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PostAsync($"{AdminBasePath}/{action}", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PostWithHeadersAsync($"{AdminBasePath}/{action}", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     private async Task StartPollingAsync(CancellationToken cancellationToken)
@@ -625,6 +626,20 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
         {
             throw new NacosException(NacosException.InvalidParam, "skill.Name is required");
         }
+    }
+
+    /// <summary>
+    /// Builds a header dictionary carrying <c>namespaceId</c> as the v3
+    /// <c>X-Nacos-Namespace-Id</c> HTTP header (omitted when empty).
+    /// </summary>
+    private Dictionary<string, string> BuildNamespaceHeaders()
+    {
+        var headers = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(_namespaceId))
+        {
+            headers[NacosConstants.NamespaceHeader] = _namespaceId;
+        }
+        return headers;
     }
 
     private static PageResult<T> ToPageResult<T>(NacosPromptService.PagedData<T>? data, int pageNo, int pageSize)

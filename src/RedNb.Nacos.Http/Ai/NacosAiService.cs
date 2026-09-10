@@ -78,14 +78,14 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "mcpName", mcpName },
             { "version", version }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync(McpBasePath, parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync(McpBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 return null;
@@ -126,7 +126,6 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "mcpName", serverSpecification.Name },
             { "serverSpec", JsonSerializer.Serialize(serverSpecification, JsonOptions) }
         };
@@ -142,7 +141,8 @@ public partial class NacosAiService : IAiService
         }
 
         var body = NacosUtils.BuildQueryString(parameters);
-        var response = await _httpClient.PostAsync(McpBasePath, null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        var response = await _httpClient.PostWithHeadersAsync(McpBasePath, null, body, headers, _options.DefaultTimeout, cancellationToken);
 
         var result = JsonSerializer.Deserialize<ApiResult<string>>(response ?? "{}", JsonOptions);
         return result?.Data ?? string.Empty;
@@ -164,7 +164,6 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "mcpName", mcpName },
             { "address", address },
             { "port", port.ToString() },
@@ -173,7 +172,8 @@ public partial class NacosAiService : IAiService
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PostAsync($"{McpBasePath}/endpoint", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PostWithHeadersAsync($"{McpBasePath}/endpoint", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -186,14 +186,14 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "mcpName", mcpName },
             { "address", address },
             { "port", port.ToString() },
             { "type", "deregister" }
         };
+        var headers = BuildNamespaceHeaders();
 
-        await _httpClient.DeleteAsync($"{McpBasePath}/endpoint", parameters, _options.DefaultTimeout, cancellationToken);
+        await _httpClient.DeleteWithHeadersAsync($"{McpBasePath}/endpoint", parameters, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -274,12 +274,12 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "mcpName", mcpName },
             { "version", version }
         };
+        var headers = BuildNamespaceHeaders();
 
-        await _httpClient.DeleteAsync(McpBasePath, parameters, _options.DefaultTimeout, cancellationToken);
+        await _httpClient.DeleteWithHeadersAsync(McpBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
 
         // Remove from cache
         _cacheHolder.RemoveMcpServer(mcpName, version);
@@ -301,16 +301,16 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "mcpName", mcpName },
             { "search", search },
             { "pageNo", pageNo.ToString() },
             { "pageSize", pageSize.ToString() }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync($"{McpBasePath}/list", parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync($"{McpBasePath}/list", parameters, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 return PageResult<McpServerBasicInfo>.Empty(pageNo, pageSize);
@@ -350,17 +350,17 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "importType", request.ImportType.ToString().ToLowerInvariant() },
             { "importData", request.ImportData },
             { "overrideExisting", request.OverrideExisting.ToString().ToLowerInvariant() }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.PostAsync($"{McpBasePath}/import/validate", null, body, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.PostWithHeadersAsync($"{McpBasePath}/import/validate", null, body, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 return McpServerImportValidationResult.Failed(new List<string> { "Failed to get validation response from server" });
@@ -388,7 +388,6 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "importType", request.ImportType.ToString().ToLowerInvariant() },
             { "importData", request.ImportData },
             { "overrideExisting", request.OverrideExisting.ToString().ToLowerInvariant() },
@@ -402,10 +401,11 @@ public partial class NacosAiService : IAiService
         }
 
         var body = NacosUtils.BuildQueryString(parameters);
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.PostAsync($"{McpBasePath}/import", null, body, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.PostWithHeadersAsync($"{McpBasePath}/import", null, body, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 return McpServerImportResponse.Error("Failed to get import response from server");
@@ -437,17 +437,17 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "mcpName", mcpName },
             { "toolName", toolName },
             { "version", version }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.PostAsync($"{McpBasePath}/tool/refresh", null, body, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.PostWithHeadersAsync($"{McpBasePath}/tool/refresh", null, body, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 return null;
@@ -474,15 +474,15 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "mcpName", mcpName },
             { "toolName", toolName },
             { "version", version }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync($"{McpBasePath}/tool", parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync($"{McpBasePath}/tool", parameters, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 return null;
@@ -511,13 +511,13 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "mcpName", mcpName },
             { "toolName", toolName },
             { "version", version }
         };
+        var headers = BuildNamespaceHeaders();
 
-        await _httpClient.DeleteAsync($"{McpBasePath}/tool", parameters, _options.DefaultTimeout, cancellationToken);
+        await _httpClient.DeleteWithHeadersAsync($"{McpBasePath}/tool", parameters, headers, _options.DefaultTimeout, cancellationToken);
 
         _logger?.LogInformation("Deleted MCP tool {ToolName} from {McpName}@{Version}", toolName, mcpName, version ?? "latest");
     }
@@ -540,14 +540,14 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "mcpName", mcpName },
             { "version", version },
             { "toolSpec", JsonSerializer.Serialize(toolSpec, JsonOptions) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PutAsync($"{McpBasePath}/tool", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PutWithHeadersAsync($"{McpBasePath}/tool", null, body, headers, _options.DefaultTimeout, cancellationToken);
 
         _logger?.LogInformation("Updated MCP tool {ToolName} in {McpName}@{Version}", toolSpec.Name, mcpName, version ?? "latest");
     }
@@ -583,15 +583,15 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentName", agentName },
             { "version", version },
             { "registrationType", registrationType }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync(A2aBasePath, parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync(A2aBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 return null;
@@ -637,7 +637,6 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentName", agentCard.Name },
             { "registrationType", registrationType },
             { "setAsLatest", setAsLatest.ToString().ToLowerInvariant() },
@@ -645,7 +644,8 @@ public partial class NacosAiService : IAiService
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PostAsync(A2aBasePath, null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PostWithHeadersAsync(A2aBasePath, null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     #endregion
@@ -681,14 +681,14 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentName", agentName },
             { "type", "register" },
             { "endpoint", JsonSerializer.Serialize(endpoint, JsonOptions) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PostAsync($"{A2aBasePath}/endpoint", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PostWithHeadersAsync($"{A2aBasePath}/endpoint", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -718,13 +718,13 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentName", agentName },
             { "endpoints", JsonSerializer.Serialize(endpointList, JsonOptions) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PostAsync($"{A2aBasePath}/endpoints", null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PostWithHeadersAsync($"{A2aBasePath}/endpoints", null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -749,13 +749,13 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentName", agentName },
             { "type", "deregister" },
             { "endpoint", JsonSerializer.Serialize(endpoint, JsonOptions) }
         };
+        var headers = BuildNamespaceHeaders();
 
-        await _httpClient.DeleteAsync($"{A2aBasePath}/endpoint", parameters, _options.DefaultTimeout, cancellationToken);
+        await _httpClient.DeleteWithHeadersAsync($"{A2aBasePath}/endpoint", parameters, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     #endregion
@@ -840,12 +840,12 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentName", agentName },
             { "version", version }
         };
+        var headers = BuildNamespaceHeaders();
 
-        await _httpClient.DeleteAsync(A2aBasePath, parameters, _options.DefaultTimeout, cancellationToken);
+        await _httpClient.DeleteWithHeadersAsync(A2aBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
 
         // Remove from cache
         _cacheHolder.RemoveAgentCard(agentName, version);
@@ -867,16 +867,16 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentName", agentName },
             { "search", search },
             { "pageNo", pageNo.ToString() },
             { "pageSize", pageSize.ToString() }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync($"{A2aBasePath}/list", parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync($"{A2aBasePath}/list", parameters, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 return PageResult<AgentCardBasicInfo>.Empty(pageNo, pageSize);
@@ -907,13 +907,13 @@ public partial class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentName", agentName }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync($"{A2aBasePath}/versions", parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync($"{A2aBasePath}/versions", parameters, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 return new List<string>();
@@ -1051,6 +1051,20 @@ public partial class NacosAiService : IAiService
         {
             throw new NacosException(NacosException.InvalidParam, "mcpName is required");
         }
+    }
+
+    /// <summary>
+    /// Builds a header dictionary carrying <c>namespaceId</c> as the v3
+    /// <c>X-Nacos-Namespace-Id</c> HTTP header (omitted when empty).
+    /// </summary>
+    private Dictionary<string, string> BuildNamespaceHeaders()
+    {
+        var headers = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(_namespaceId))
+        {
+            headers[NacosConstants.NamespaceHeader] = _namespaceId;
+        }
+        return headers;
     }
 
     private static void ValidateAgentName(string agentName)
