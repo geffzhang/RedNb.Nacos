@@ -133,15 +133,20 @@ public class NacosNamingService : INamingService
         return RegisterInstanceAsync(serviceName, NacosConstants.DefaultGroup, instance, cancellationToken);
     }
 
-    public async Task RegisterInstanceAsync(string serviceName, string groupName, Instance instance, 
+    public async Task RegisterInstanceAsync(string serviceName, string groupName, Instance instance,
         CancellationToken cancellationToken = default)
     {
         instance.Validate();
         groupName = GetGroupOrDefault(groupName);
 
         var parameters = BuildRegisterParameters(serviceName, groupName, instance);
+        var headers = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(GetNamespace()))
+        {
+            headers[NamingApiPaths.NamespaceHeader] = GetNamespace()!;
+        }
 
-        await _httpClient.PostAsync(InstanceApiPath, parameters, null,
+        await _httpClient.PostWithHeadersAsync(InstanceApiPath, parameters, null, headers,
             _options.DefaultTimeout, cancellationToken);
 
         // Invalidate cached ServiceInfo so subsequent GetAllInstancesAsync(refreshes
@@ -232,11 +237,16 @@ public class NacosNamingService : INamingService
             { "ip", instance.Ip },
             { "port", instance.Port.ToString() },
             { "clusterName", instance.ClusterName },
-            { "ephemeral", instance.Ephemeral.ToString().ToLower() },
-            { "namespaceId", GetNamespace() }
+            { "ephemeral", instance.Ephemeral.ToString().ToLower() }
         };
 
-        await _httpClient.DeleteAsync(InstanceApiPath, parameters,
+        var headers = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(GetNamespace()))
+        {
+            headers[NamingApiPaths.NamespaceHeader] = GetNamespace()!;
+        }
+
+        await _httpClient.DeleteWithHeadersAsync(InstanceApiPath, parameters, headers,
             _options.DefaultTimeout, cancellationToken);
 
         // Invalidate cached ServiceInfo after a successful deregistration.
@@ -589,7 +599,7 @@ public class NacosNamingService : INamingService
         return GetServicesOfServerAsync(pageNo, pageSize, NacosConstants.DefaultGroup, cancellationToken);
     }
 
-    public async Task<ListView<string>> GetServicesOfServerAsync(int pageNo, int pageSize, string groupName, 
+    public async Task<ListView<string>> GetServicesOfServerAsync(int pageNo, int pageSize, string groupName,
         CancellationToken cancellationToken = default)
     {
         groupName = GetGroupOrDefault(groupName);
@@ -598,11 +608,16 @@ public class NacosNamingService : INamingService
         {
             { "pageNo", pageNo.ToString() },
             { "pageSize", pageSize.ToString() },
-            { "groupName", groupName },
-            { "namespaceId", GetNamespace() }
+            { "groupName", groupName }
         };
 
-        var response = await _httpClient.GetAsync(ServiceApiPath, parameters, 
+        var headers = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(GetNamespace()))
+        {
+            headers[NamingApiPaths.NamespaceHeader] = GetNamespace()!;
+        }
+
+        var response = await _httpClient.GetWithHeadersAsync(ServiceApiPath, parameters, headers,
             _options.DefaultTimeout, cancellationToken);
 
         if (string.IsNullOrEmpty(response))
@@ -620,7 +635,7 @@ public class NacosNamingService : INamingService
         return GetServicesOfServerAsync(pageNo, pageSize, NacosConstants.DefaultGroup, selector, cancellationToken);
     }
 
-    public async Task<ListView<string>> GetServicesOfServerAsync(int pageNo, int pageSize, string groupName, 
+    public async Task<ListView<string>> GetServicesOfServerAsync(int pageNo, int pageSize, string groupName,
         INamingSelector selector, CancellationToken cancellationToken = default)
     {
         groupName = GetGroupOrDefault(groupName);
@@ -629,8 +644,7 @@ public class NacosNamingService : INamingService
         {
             { "pageNo", pageNo.ToString() },
             { "pageSize", pageSize.ToString() },
-            { "groupName", groupName },
-            { "namespaceId", GetNamespace() }
+            { "groupName", groupName }
         };
 
         // Add selector parameters if provided
@@ -643,7 +657,13 @@ public class NacosNamingService : INamingService
             });
         }
 
-        var response = await _httpClient.GetAsync(ServiceApiPath, parameters, 
+        var headers = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(GetNamespace()))
+        {
+            headers[NamingApiPaths.NamespaceHeader] = GetNamespace()!;
+        }
+
+        var response = await _httpClient.GetWithHeadersAsync(ServiceApiPath, parameters, headers,
             _options.DefaultTimeout, cancellationToken);
 
         if (string.IsNullOrEmpty(response))
@@ -755,12 +775,17 @@ public class NacosNamingService : INamingService
             {
                 { "serviceName", serviceName },
                 { "groupName", groupName },
-                { "beat", JsonSerializer.Serialize(beatInfo) },
-                { "namespaceId", GetNamespace() }
+                { "beat", JsonSerializer.Serialize(beatInfo) }
             };
 
             var body = NacosUtils.BuildQueryString(parameters);
-            var response = await _httpClient.PutAsync(BeatApiPath, null, body, 
+            var headers = new Dictionary<string, string>();
+            if (!string.IsNullOrEmpty(GetNamespace()))
+            {
+                headers[NamingApiPaths.NamespaceHeader] = GetNamespace()!;
+            }
+
+            var response = await _httpClient.PutWithHeadersAsync(BeatApiPath, null, body, headers,
                 _options.DefaultTimeout, cancellationToken);
 
             _isHealthy = true;
@@ -783,11 +808,16 @@ public class NacosNamingService : INamingService
                 { "serviceName", serviceName },
                 { "groupName", groupName },
                 { "clusters", clusters },
-                { "healthyOnly", "false" },
-                { "namespaceId", GetNamespace() }
+                { "healthyOnly", "false" }
             };
 
-            var response = await _httpClient.GetAsync(InstanceListApiPath, parameters, 
+            var headers = new Dictionary<string, string>();
+            if (!string.IsNullOrEmpty(GetNamespace()))
+            {
+                headers[NamingApiPaths.NamespaceHeader] = GetNamespace()!;
+            }
+
+            var response = await _httpClient.GetWithHeadersAsync(InstanceListApiPath, parameters, headers,
                 _options.DefaultTimeout, cancellationToken);
 
             if (string.IsNullOrEmpty(response))
@@ -934,8 +964,8 @@ public class NacosNamingService : INamingService
             { "enabled", instance.Enabled.ToString().ToLower() },
             { "healthy", instance.Healthy.ToString().ToLower() },
             { "ephemeral", instance.Ephemeral.ToString().ToLower() },
-            { "clusterName", instance.ClusterName },
-            { "namespaceId", GetNamespace() }
+            { "clusterName", instance.ClusterName }
+            // namespaceId removed — moved to X-Nacos-Namespace-Id header
         };
 
         if (instance.Metadata.Count > 0)
