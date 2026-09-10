@@ -46,10 +46,21 @@ public class NacosGrpcConfigService : IConfigService
     private const int ListenCheckIntervalMs = 30000;
 
     public NacosGrpcConfigService(NacosClientOptions options, ILogger<NacosGrpcConfigService>? logger = null)
+        : this(options, new NacosGrpcClient(options, logger), logger)
+    {
+    }
+
+    /// <summary>
+    /// Test-friendly constructor that accepts an already-constructed
+    /// <see cref="NacosGrpcClient"/> (e.g. a FakeNacosGrpcClient) instead
+    /// of constructing one internally. The public constructor delegates here.
+    /// </summary>
+    internal NacosGrpcConfigService(NacosClientOptions options, NacosGrpcClient grpcClient,
+        ILogger<NacosGrpcConfigService>? logger = null)
     {
         _options = options;
         _logger = logger;
-        _grpcClient = new NacosGrpcClient(options, logger);
+        _grpcClient = grpcClient;
         _transportClient = new ConfigRpcTransportClient(_grpcClient, options, logger);
         _localCache = new LocalConfigCache(options);
         _filterChainManager = new ConfigFilterChainManager();
