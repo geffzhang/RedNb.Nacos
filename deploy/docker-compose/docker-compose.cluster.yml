@@ -1,6 +1,6 @@
 # Nacos Docker Compose
 # Cluster mode (3 nodes) with MySQL storage
-# Version: 3.1.1
+# Version: 3.2.4
 # Usage: docker-compose -f docker-compose.cluster.yml up -d
 
 services:
