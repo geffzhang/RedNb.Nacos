@@ -34,7 +34,13 @@ public class NacosServerFixture : IAsyncLifetime
     {
         // Deadline-based wait: elapsed time is bounded by StartPeriodSeconds
         // regardless of per-attempt timeouts.
-        using var httpClient = new HttpClient();
+        // The readiness endpoint lives on the Nacos Console (port 8080 by
+        // default), not on the API port (8848). It is bound to
+        // com/alibaba/nacos/console/controller/v3/ConsoleHealthController
+        // in nacos-console-3.2.4.jar.
+        // We construct a fresh HttpClient per iteration: HttpClient.Timeout
+        // is immutable after the first request, so reusing a single instance
+        // across iterations throws once the cap is reapplied.
 
         var deadline = DateTime.UtcNow.AddSeconds(StartPeriodSeconds);
         var attempt = 0;
@@ -51,12 +57,13 @@ public class NacosServerFixture : IAsyncLifetime
 
             // Cap the per-attempt HTTP timeout so a single probe can never
             // blow past the deadline by itself.
-            httpClient.Timeout = remaining < MaxProbeTimeout ? remaining : MaxProbeTimeout;
+            var probeTimeout = remaining < MaxProbeTimeout ? remaining : MaxProbeTimeout;
 
             try
             {
+                using var httpClient = new HttpClient { Timeout = probeTimeout };
                 var response = await httpClient.GetAsync(
-                    $"http://{ServerAddress}/nacos/v3/health/readiness");
+                    $"http://localhost:8080/v3/console/health/readiness");
                 if (response.IsSuccessStatusCode)
                 {
                     Console.WriteLine($"Nacos server is ready (attempt {attempt})");
