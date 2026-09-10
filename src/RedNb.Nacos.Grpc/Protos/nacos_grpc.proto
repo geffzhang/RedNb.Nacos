@@ -1,35 +1,50 @@
 syntax = "proto3";
 
-package nacos.grpc;
+import "google/protobuf/any.proto";
+
+// This file mirrors `api/src/main/proto/nacos_grpc_service.proto` of Nacos 3.2.4
+// exactly (messages, field numbers and service/method names). Two details are
+// load-bearing and were verified against the live server:
+//
+//   * NO `package` directive. Nacos registers its gRPC services under the bare
+//     names `Request` and `BiRequestStream` — the full method names on the wire
+//     are `Request/request` and `BiRequestStream/requestBiStream`. Adding a
+//     package would prefix them and the server answers UNIMPLEMENTED
+//     "Method not found".
+//   * `Payload.body` is a `google.protobuf.Any` at field 3 and `Payload.metadata`
+//     is at field 2 (Metadata: type = 3, clientIp = 8, headers = 7). A payload
+//     with mismatched field numbers is decoded by the server as an empty type
+//     and dropped ("Unknown payload type: ").
 
 option csharp_namespace = "RedNb.Nacos.GrpcClient.Protos";
 
-// The common payload message
-message Payload {
-  Metadata metadata = 1;
-  Body body = 2;
-}
-
-// The metadata
+// The metadata.
 message Metadata {
-  string type = 1;
-  string clientIp = 2;
-  map<string, string> headers = 3;
+  // The request type name, e.g. ConfigQueryRequest.
+  string type = 3;
+  // The client IP.
+  string clientIp = 8;
+  // The headers.
+  map<string, string> headers = 7;
 }
 
-// The body content
-message Body {
-  bytes value = 1;
+// The common payload.
+message Payload {
+  // The metadata.
+  Metadata metadata = 2;
+  // The body, whose value holds the JSON serialization of the request.
+  google.protobuf.Any body = 3;
 }
 
-// Bi-directional streaming service
+// Bi-directional streaming service. All request/response traffic other than
+// ServerCheck rides this stream (server side: GrpcBiStreamRequestAcceptor).
 service BiRequestStream {
   // Bi-directional streaming RPC
-  rpc RequestBiStream(stream Payload) returns (stream Payload);
+  rpc requestBiStream(stream Payload) returns (stream Payload);
 }
 
-// Request service for simple request-response
-service RequestService {
-  // Simple request-response
-  rpc SendRequest(Payload) returns (Payload);
-}
+// The unary service `Request/request` (ServerCheck only) is declared
+// manually in NacosGrpcClient. Grpc.Tools emits an uncompilable stub for it: the
+// generated blocking overload keeps the proto method name verbatim, producing
+// `Payload request(Payload request, ...)` whose body `request(request, options)`
+// does not resolve (CS0149).

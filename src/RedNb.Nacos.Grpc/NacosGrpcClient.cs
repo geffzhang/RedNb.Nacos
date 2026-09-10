@@ -2,11 +2,13 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Google.Protobuf;
+using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.Extensions.Logging;
 using RedNb.Nacos.Core;
 using RedNb.Nacos.GrpcClient.Config;
+using RedNb.Nacos.GrpcClient.Naming;
 using RedNb.Nacos.GrpcClient.Protos;
 using ProtoMetadata = RedNb.Nacos.GrpcClient.Protos.Metadata;
 
@@ -21,18 +23,40 @@ public class NacosGrpcClient : IAsyncDisposable
     private readonly NacosClientOptions _options;
     private readonly ILogger? _logger;
     private readonly string _clientId;
+    private readonly string _module;
     private readonly JsonSerializerOptions _jsonOptions;
     
+    /// <summary>
+    /// The Nacos 3.x unary request method (<c>Request/request</c>, no proto package —
+    /// the server registers the bare service name). Every client-to-server request,
+    /// ServerCheck included, travels over this method: Nacos 3.2.4's bi-stream
+    /// acceptor only accepts ConnectionSetup and client push acknowledgements and
+    /// drops anything else ("unknown payload receive", server-side remote log).
+    /// Declared by hand because Grpc.Tools generates an uncompilable stub for a
+    /// proto method whose name starts with a lowercase letter — see the note in
+    /// <c>Protos/nacos_grpc.proto</c>.
+    /// </summary>
+    private static readonly Method<Payload, Payload> RequestMethod = new(
+        MethodType.Unary,
+        "Request",
+        "request",
+        Marshallers.Create<Payload>(payload => payload.ToByteArray(), bytes => Payload.Parser.ParseFrom(bytes)),
+        Marshallers.Create<Payload>(payload => payload.ToByteArray(), bytes => Payload.Parser.ParseFrom(bytes)));
+
     private GrpcChannel? _channel;
-    private RequestService.RequestServiceClient? _requestClient;
     private BiRequestStream.BiRequestStreamClient? _biStreamClient;
     private AsyncDuplexStreamingCall<Payload, Payload>? _biStream;
     
     private readonly CancellationTokenSource _cts;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly ConcurrentDictionary<string, Action<string, string>> _pushHandlers = new();
-    private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _pendingRequests = new();
     
+    /// <summary>
+    /// Completed when the server answers the ConnectionSetup with a
+    /// <c>SetupAckRequest</c>, i.e. when the connection is registered server-side.
+    /// </summary>
+    private volatile TaskCompletionSource<bool>? _setupAck;
+
     private volatile bool _connected;
     private volatile bool _disposed;
     private string? _currentServer;
@@ -56,10 +80,23 @@ public class NacosGrpcClient : IAsyncDisposable
     /// </summary>
     private const int ReconnectDelayMs = 3000;
 
-    public NacosGrpcClient(NacosClientOptions options, ILogger? logger = null)
+    /// <summary>
+    /// Creates a gRPC client.
+    /// </summary>
+    /// <param name="options">The client options.</param>
+    /// <param name="logger">The optional logger.</param>
+    /// <param name="module">
+    /// The module announced to the server in the ConnectionSetup labels. Nacos 3.2.4
+    /// only tracks a connection in the naming <c>ConnectionBasedClientManager</c> when
+    /// the label is <c>naming</c> — an instance registration over a connection labelled
+    /// <c>config</c> is rejected with "Client [id] connection already disconnect".
+    /// Config traffic keeps the <c>config</c> label, like the Java SDK.
+    /// </param>
+    public NacosGrpcClient(NacosClientOptions options, ILogger? logger = null, string module = "config")
     {
         _options = options;
         _logger = logger;
+        _module = module;
         _clientId = Guid.NewGuid().ToString("N");
         _cts = new CancellationTokenSource();
         _lastActiveTime = DateTime.UtcNow;
@@ -126,21 +163,21 @@ public class NacosGrpcClient : IAsyncDisposable
                 {
                     HttpHandler = new SocketsHttpHandler
                     {
-                        EnableMultipleHttp2Connections = true,
+                        // The bi-stream carries the ConnectionSetup that registers
+                        // this client, so every unary request must travel over the
+                        // very same HTTP/2 connection. A second connection would be
+                        // unregistered and answer "Invalid connection Id".
+                        EnableMultipleHttp2Connections = false,
                         KeepAlivePingDelay = TimeSpan.FromSeconds(60),
                         KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
                         ConnectTimeout = TimeSpan.FromMilliseconds(ConnectionTimeoutMs)
                     }
                 });
 
-                _requestClient = new RequestService.RequestServiceClient(_channel);
                 _biStreamClient = new BiRequestStream.BiRequestStreamClient(_channel);
 
                 // Server check to get connection ID
                 await ServerCheckAsync(cancellationToken);
-
-                // Send connection setup request
-                await SendConnectionSetupAsync(cancellationToken);
 
                 // Start bi-directional stream
                 await StartBiStreamAsync(cancellationToken);
@@ -176,96 +213,78 @@ public class NacosGrpcClient : IAsyncDisposable
     {
         await EnsureConnectedAsync(cancellationToken);
 
-        var payload = CreatePayload(type, request);
-        
-        try
-        {
-            var response = await _requestClient!.SendRequestAsync(payload, 
-                deadline: DateTime.UtcNow.AddMilliseconds(_options.DefaultTimeout),
-                cancellationToken: cancellationToken);
-
-            _lastActiveTime = DateTime.UtcNow;
-
-            if (response.Body == null || response.Body.Value.IsEmpty)
-            {
-                return null;
-            }
-
-            var json = response.Body.Value.ToStringUtf8();
-            _logger?.LogDebug("Received response for {Type}: {Response}", type, json);
-            
-            return JsonSerializer.Deserialize<TResponse>(json, _jsonOptions);
-        }
-        catch (RpcException ex) when (ex.StatusCode == StatusCode.Unavailable)
-        {
-            _connected = false;
-            _logger?.LogWarning(ex, "gRPC connection lost, will reconnect");
-            throw new NacosException(NacosException.ServerError, "Connection lost", ex);
-        }
+        return await SendStreamRequestWithResponseAsync<TResponse>(
+            type, request, TimeSpan.FromMilliseconds(_options.DefaultTimeout), cancellationToken);
     }
 
     /// <summary>
-    /// Sends a request through the bi-directional stream.
+    /// Sends a request and does not deserialize the response. Despite the historical
+    /// name, Nacos 3.x serves every client request over the unary <c>Request/request</c>
+    /// method — the bi-stream carries ConnectionSetup and server push only.
     /// </summary>
     public virtual async Task SendStreamRequestAsync(string type, object request,
         CancellationToken cancellationToken = default)
     {
         await EnsureConnectedAsync(cancellationToken);
 
-        var payload = CreatePayload(type, request);
-        
-        try
-        {
-            await _biStream!.RequestStream.WriteAsync(payload, cancellationToken);
-            _lastActiveTime = DateTime.UtcNow;
-            _logger?.LogDebug("Sent stream request of type {Type}", type);
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, "Failed to send stream request of type {Type}", type);
-            throw;
-        }
+        await SendUnaryRequestAsync(type, request,
+            TimeSpan.FromMilliseconds(_options.DefaultTimeout), cancellationToken);
+
+        _logger?.LogDebug("Sent request of type {Type}", type);
     }
 
     /// <summary>
-    /// Sends a request through stream and waits for response.
+    /// Sends a request over the unary <c>Request/request</c> method and deserializes
+    /// the response. The historical name is kept because the transport clients use it
+    /// for the requests whose responses the caller inspects.
     /// </summary>
     public virtual async Task<TResponse?> SendStreamRequestWithResponseAsync<TResponse>(string type, object request,
         TimeSpan timeout, CancellationToken cancellationToken = default) where TResponse : class
     {
         await EnsureConnectedAsync(cancellationToken);
 
-        var requestId = Guid.NewGuid().ToString("N");
-        var tcs = new TaskCompletionSource<string>();
-        
-        _pendingRequests.TryAdd(requestId, tcs);
-        
+        var responseJson = await SendUnaryRequestAsync(type, request, timeout, cancellationToken);
+        return string.IsNullOrEmpty(responseJson)
+            ? null
+            : JsonSerializer.Deserialize<TResponse>(responseJson, _jsonOptions);
+    }
+
+    /// <summary>
+    /// Sends a payload over the unary <c>Request/request</c> method and returns the
+    /// raw JSON of the response body.
+    /// </summary>
+    private async Task<string?> SendUnaryRequestAsync(string type, object request, TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        // Set the request ID if the request carries one; Nacos echoes it in the response.
+        switch (request)
+        {
+            case ConfigRpcRequest configRpcRequest:
+                configRpcRequest.RequestId = Guid.NewGuid().ToString("N");
+                break;
+            case NamingRpcRequest namingRpcRequest:
+                namingRpcRequest.RequestId = Guid.NewGuid().ToString("N");
+                break;
+        }
+
+        var payload = CreatePayload(type, request);
+        var deadline = DateTime.UtcNow.Add(timeout);
+
         try
         {
-            // Set request ID if the request has it
-            if (request is ConfigRpcRequest configRpcRequest)
-            {
-                configRpcRequest.RequestId = requestId;
-            }
+            var call = _channel!.CreateCallInvoker().AsyncUnaryCall(RequestMethod, null,
+                new CallOptions(deadline: deadline, cancellationToken: cancellationToken), payload);
 
-            var payload = CreatePayload(type, request);
-            await _biStream!.RequestStream.WriteAsync(payload, cancellationToken);
+            var response = await call.ResponseAsync;
             _lastActiveTime = DateTime.UtcNow;
 
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(timeout);
-
-            var responseJson = await tcs.Task.WaitAsync(cts.Token);
-            return JsonSerializer.Deserialize<TResponse>(responseJson, _jsonOptions);
+            return response.Body?.Value.ToStringUtf8();
         }
-        catch (OperationCanceledException)
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.Unavailable)
         {
-            _logger?.LogWarning("Request {RequestId} of type {Type} timed out", requestId, type);
-            throw;
-        }
-        finally
-        {
-            _pendingRequests.TryRemove(requestId, out _);
+            _connected = false;
+            _logger?.LogWarning(ex, "gRPC connection lost, will reconnect");
+            throw new NacosException(NacosException.ServerError, "Connection lost", ex);
         }
     }
 
@@ -297,10 +316,14 @@ public class NacosGrpcClient : IAsyncDisposable
     {
         var request = new ServerCheckRequest();
         var payload = CreatePayload(ServerCheckRequest.TYPE, request);
-        
-        var response = await _requestClient!.SendRequestAsync(payload, 
-            deadline: DateTime.UtcNow.AddMilliseconds(ConnectionTimeoutMs),
-            cancellationToken: cancellationToken);
+
+        var call = _channel!.CreateCallInvoker().AsyncUnaryCall(
+            RequestMethod,
+            null,
+            new CallOptions(deadline: DateTime.UtcNow.AddMilliseconds(ConnectionTimeoutMs), cancellationToken: cancellationToken),
+            payload);
+
+        var response = await call.ResponseAsync;
 
         if (response.Body != null && !response.Body.Value.IsEmpty)
         {
@@ -310,35 +333,21 @@ public class NacosGrpcClient : IAsyncDisposable
         }
     }
 
-    private async Task SendConnectionSetupAsync(CancellationToken cancellationToken)
-    {
-        var setupRequest = new ConnectionSetupRequest
-        {
-            ClientVersion = "RedNb.Nacos/2.0.0",
-            Tenant = _options.Namespace,
-            Labels = new Dictionary<string, string>
-            {
-                { "source", "sdk" },
-                { "AppName", _options.AppName ?? "unknown" },
-                { "module", "config" }
-            },
-            Abilities = new ClientAbilities
-            {
-                RemoteAbility = new RemoteAbility { SupportRemoteConnection = true },
-                ConfigAbility = new ConfigAbility { SupportRemoteMetrics = false },
-                NamingAbility = new NamingAbility { SupportDeltaPush = false, SupportRemoteMetric = false }
-            }
-        };
-
-        var payload = CreatePayload(ConnectionSetupRequest.TYPE, setupRequest);
-        await _requestClient!.SendRequestAsync(payload, cancellationToken: cancellationToken);
-    }
-
     private async Task StartBiStreamAsync(CancellationToken cancellationToken)
     {
-        _biStream = _biStreamClient!.RequestBiStream(cancellationToken: _cts.Token);
+        var setupAck = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _setupAck = setupAck;
 
-        // Send initial setup through stream
+        _biStream = _biStreamClient!.requestBiStream(cancellationToken: _cts.Token);
+
+        // Receive before writing the setup so the server's SetupAckRequest cannot
+        // be missed.
+        _receiveTask = ReceiveStreamMessagesAsync(_cts.Token);
+
+        // Send initial setup through stream. An explicit ability table makes the
+        // server answer with SetupAckRequest once the connection is registered;
+        // without it the server registers silently and a request racing the setup
+        // is rejected ("Invalid connection Id ... is unregistered").
         var setupRequest = new ConnectionSetupRequest
         {
             ClientVersion = "RedNb.Nacos/2.0.0",
@@ -346,15 +355,23 @@ public class NacosGrpcClient : IAsyncDisposable
             Labels = new Dictionary<string, string>
             {
                 { "source", "sdk" },
-                { "module", "config" }
-            }
+                { "module", _module }
+            },
+            AbilityTable = new Dictionary<string, bool>()
         };
-        
+
         var payload = CreatePayload(ConnectionSetupRequest.TYPE, setupRequest);
         await _biStream.RequestStream.WriteAsync(payload, cancellationToken);
 
-        // Start receiving messages
-        _receiveTask = ReceiveStreamMessagesAsync(_cts.Token);
+        // Wait for the registration acknowledgement before reporting the client as
+        // connected: requests sent earlier are dropped by the server as coming
+        // from an unknown connection.
+        var completed = await Task.WhenAny(setupAck.Task, Task.Delay(ConnectionTimeoutMs, cancellationToken));
+        if (completed != setupAck.Task)
+        {
+            _logger?.LogWarning(
+                "Nacos did not acknowledge the gRPC connection setup within {Timeout}ms", ConnectionTimeoutMs);
+        }
     }
 
     private async Task ReceiveStreamMessagesAsync(CancellationToken cancellationToken)
@@ -371,13 +388,8 @@ public class NacosGrpcClient : IAsyncDisposable
                     _lastActiveTime = DateTime.UtcNow;
                     _logger?.LogDebug("Received push message of type {Type}", type);
 
-                    // Check if this is a response to a pending request
-                    if (TryHandlePendingResponse(type, body))
-                    {
-                        continue;
-                    }
-
-                    // Handle server push
+                    // Everything the server writes to the bi-stream is a push:
+                    // request responses travel over the unary Request/request call.
                     await HandleServerPushAsync(type, body, cancellationToken);
                 }
                 catch (Exception ex)
@@ -401,36 +413,28 @@ public class NacosGrpcClient : IAsyncDisposable
         }
     }
 
-    private bool TryHandlePendingResponse(string type, string body)
-    {
-        // Try to extract requestId from response
-        try
-        {
-            using var doc = JsonDocument.Parse(body);
-            if (doc.RootElement.TryGetProperty("requestId", out var requestIdElement))
-            {
-                var requestId = requestIdElement.GetString();
-                if (!string.IsNullOrEmpty(requestId) && _pendingRequests.TryRemove(requestId, out var tcs))
-                {
-                    tcs.TrySetResult(body);
-                    return true;
-                }
-            }
-        }
-        catch
-        {
-            // Ignore parsing errors
-        }
-        
-        return false;
-    }
-
     private async Task HandleServerPushAsync(string type, string body, CancellationToken cancellationToken)
     {
+        // The connection setup acknowledgement is the readiness signal awaited by
+        // StartBiStreamAsync. It is sent without expecting an ack (sendRequestNoAck).
+        if (type == SetupAckRequestType)
+        {
+            _logger?.LogDebug("Server acknowledged the gRPC connection setup");
+            _setupAck?.TrySetResult(true);
+            return;
+        }
+
         // Handle client detection (health check from server)
         if (type == ClientDetectionRequest.TYPE)
         {
-            await SendPushAckAsync(ClientDetectionResponse.TYPE, new ClientDetectionResponse { Success = true }, cancellationToken);
+            var detectionResponse = new ClientDetectionResponse { Success = true };
+
+            if (TryGetRequestId(body, out var detectionRequestId))
+            {
+                detectionResponse.RequestId = detectionRequestId;
+            }
+
+            await SendPushAckAsync(ClientDetectionResponse.TYPE, detectionResponse, cancellationToken);
             return;
         }
 
@@ -451,8 +455,51 @@ public class NacosGrpcClient : IAsyncDisposable
         if (type.EndsWith("Request"))
         {
             var responseType = type.Replace("Request", "Response");
-            await SendPushAckAsync(responseType, new { success = true }, cancellationToken);
+            await SendPushAckAsync(responseType, BuildPushAck(body), cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// The payload type of the push Nacos answers a ConnectionSetup with when the
+    /// setup carries an ability table (server: <c>SetupAckRequest</c>, sent through
+    /// <c>sendRequestNoAck</c>).
+    /// </summary>
+    private const string SetupAckRequestType = "SetupAckRequest";
+
+    /// <summary>
+    /// Builds a push acknowledgement echoing the push's <c>requestId</c>: the server
+    /// correlates an ack with its request through that id and logs "Ack receive on a
+    /// outdated request" for an ack whose id is missing.
+    /// </summary>
+    private static object BuildPushAck(string body)
+    {
+        return TryGetRequestId(body, out var requestId)
+            ? new { success = true, requestId }
+            : new { success = true };
+    }
+
+    private static bool TryGetRequestId(string body, out string? requestId)
+    {
+        requestId = null;
+
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+
+            if (document.RootElement.ValueKind == JsonValueKind.Object &&
+                document.RootElement.TryGetProperty("requestId", out var element) &&
+                element.ValueKind == JsonValueKind.String)
+            {
+                requestId = element.GetString();
+                return requestId != null;
+            }
+        }
+        catch (JsonException)
+        {
+            // Not JSON: send the ack without an id.
+        }
+
+        return false;
     }
 
     private async Task SendPushAckAsync(string type, object response, CancellationToken cancellationToken)
@@ -532,7 +579,7 @@ public class NacosGrpcClient : IAsyncDisposable
                     { "clientId", _clientId }
                 }
             },
-            Body = new Body
+            Body = new Any
             {
                 Value = body
             }
@@ -555,7 +602,8 @@ public class NacosGrpcClient : IAsyncDisposable
     private async Task CleanupConnectionAsync()
     {
         _connected = false;
-        
+        _setupAck = null;
+
         try
         {
             if (_biStream != null)
@@ -574,7 +622,6 @@ public class NacosGrpcClient : IAsyncDisposable
         }
         catch { /* Ignore */ }
 
-        _requestClient = null;
         _biStreamClient = null;
         _connectionId = null;
     }
