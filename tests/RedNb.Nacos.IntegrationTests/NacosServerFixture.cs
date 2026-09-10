@@ -23,20 +23,36 @@ public class NacosServerFixture : IAsyncLifetime
     // Nacos 3.2.4 boots slower than 3.1.x due to dist module initialization,
     // so the readiness probe is given a generous start_period budget (matches
     // the compose healthcheck start_period in deploy/docker-compose/*.yml).
+    // The wait is implemented as a deadline so the actual elapsed time on a
+    // fully unresponsive server is bounded by this value plus one in-flight
+    // probe (the per-attempt HTTP timeout is capped at min(10s, remaining)).
     private const int StartPeriodSeconds = 90;
     private const int PollIntervalSeconds = 3;
+    private static readonly TimeSpan MaxProbeTimeout = TimeSpan.FromSeconds(10);
 
     public async Task InitializeAsync()
     {
-        // Poll the Nacos 3.x readiness endpoint until it succeeds or the
-        // start_period budget elapses.
+        // Deadline-based wait: elapsed time is bounded by StartPeriodSeconds
+        // regardless of per-attempt timeouts.
         using var httpClient = new HttpClient();
-        httpClient.Timeout = TimeSpan.FromSeconds(10);
 
-        var maxAttempts = StartPeriodSeconds / PollIntervalSeconds;
+        var deadline = DateTime.UtcNow.AddSeconds(StartPeriodSeconds);
+        var attempt = 0;
 
-        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        while (true)
         {
+            attempt++;
+
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                break;
+            }
+
+            // Cap the per-attempt HTTP timeout so a single probe can never
+            // blow past the deadline by itself.
+            httpClient.Timeout = remaining < MaxProbeTimeout ? remaining : MaxProbeTimeout;
+
             try
             {
                 var response = await httpClient.GetAsync(
@@ -52,9 +68,22 @@ public class NacosServerFixture : IAsyncLifetime
                 Console.WriteLine($"Attempt {attempt}: Failed to connect to Nacos - {ex.Message}");
             }
 
-            if (attempt < maxAttempts)
+            // Bail out before sleeping if we have no budget left, and bound
+            // the sleep so it cannot run past the deadline either.
+            if (DateTime.UtcNow >= deadline)
             {
-                await Task.Delay(TimeSpan.FromSeconds(PollIntervalSeconds));
+                break;
+            }
+
+            var sleep = TimeSpan.FromSeconds(PollIntervalSeconds);
+            var remainingAfterProbe = deadline - DateTime.UtcNow;
+            if (sleep > remainingAfterProbe)
+            {
+                sleep = remainingAfterProbe;
+            }
+            if (sleep > TimeSpan.Zero)
+            {
+                await Task.Delay(sleep);
             }
         }
 
