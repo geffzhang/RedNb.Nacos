@@ -171,7 +171,7 @@ public class NacosGrpcClient : IAsyncDisposable
     /// <summary>
     /// Sends a request and waits for response.
     /// </summary>
-    public async Task<TResponse?> RequestAsync<TResponse>(string type, object request, 
+    public virtual async Task<TResponse?> RequestAsync<TResponse>(string type, object request,
         CancellationToken cancellationToken = default) where TResponse : class
     {
         await EnsureConnectedAsync(cancellationToken);
