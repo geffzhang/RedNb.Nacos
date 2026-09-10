@@ -87,7 +87,7 @@ public class SecurityProxy : IDisposable
             try
             {
                 var baseUrl = _options.GetBaseUrl(server);
-                var loginUrl = $"{baseUrl}/v1/auth/login";
+                var loginUrl = $"{baseUrl}/v3/auth/user/login";
 
                 var content = new FormUrlEncodedContent(new Dictionary<string, string>
                 {
