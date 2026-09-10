@@ -6,6 +6,11 @@ namespace RedNb.Nacos.Client.Naming;
 /// <summary>
 /// Notifies listeners of instance changes.
 /// </summary>
+[Obsolete(
+    "InstancesChangeNotifier is the legacy v1 HTTP naming listener registry. " +
+    "It is internal plumbing for NacosNamingService and is not part of the " +
+    "public API contract. Tracked for removal in the next major version.",
+    error: false)]
 public class InstancesChangeNotifier
 {
     private readonly ConcurrentDictionary<string, List<Action<IInstancesChangeEvent>>> _listeners = new();
