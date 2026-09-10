@@ -66,7 +66,7 @@ docker run -d --name nacos \
   -e MODE=standalone \
   -p 8848:8848 \
   -p 9848:9848 \
-  nacos/nacos-server:v3.1.1
+  nacos/nacos-server:v3.2.4
 ```
 
 ### 构建项目
@@ -275,7 +275,7 @@ Closes #xxx
 **环境**
 - OS: [e.g., Windows 11]
 - .NET: [e.g., 10.0]
-- Nacos: [e.g., 3.1.1]
+- Nacos: [e.g., 3.2.4]
 - SDK 版本: [e.g., 1.0.0]
 
 **附加信息**

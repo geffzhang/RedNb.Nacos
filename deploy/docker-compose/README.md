@@ -2,7 +2,7 @@
 
 基于 Nacos 官方文档，提供 Docker Compose 一键部署方案。
 
-- **Nacos 版本**: 3.1.1 (最新稳定版)
+- **Nacos 版本**: 3.2.4 (最新稳定版)
 - **官方文档**: https://nacos.io/docs/latest/quickstart/quick-start/
 
 ## 部署模式
