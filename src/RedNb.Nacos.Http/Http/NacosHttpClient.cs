@@ -45,10 +45,20 @@ public class NacosHttpClient : IDisposable
     /// <summary>
     /// Sends a GET request.
     /// </summary>
-    public async Task<string?> GetAsync(string path, Dictionary<string, string?>? parameters = null, 
+    public async Task<string?> GetAsync(string path, Dictionary<string, string?>? parameters = null,
         long timeout = 0, CancellationToken cancellationToken = default)
     {
         return await RequestAsync(HttpMethod.Get, path, parameters, null, null, timeout, cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends a GET request with custom headers.
+    /// </summary>
+    public async Task<string?> GetWithHeadersAsync(string path, Dictionary<string, string?>? parameters = null,
+        Dictionary<string, string>? headers = null, long timeout = 0,
+        CancellationToken cancellationToken = default)
+    {
+        return await RequestAsync(HttpMethod.Get, path, parameters, null, headers, timeout, cancellationToken);
     }
 
     /// <summary>
@@ -80,12 +90,32 @@ public class NacosHttpClient : IDisposable
     }
 
     /// <summary>
+    /// Sends a PUT request with custom headers.
+    /// </summary>
+    public async Task<string?> PutWithHeadersAsync(string path, Dictionary<string, string?>? parameters = null,
+        string? body = null, Dictionary<string, string>? headers = null, long timeout = 0,
+        CancellationToken cancellationToken = default)
+    {
+        return await RequestAsync(HttpMethod.Put, path, parameters, body, headers, timeout, cancellationToken);
+    }
+
+    /// <summary>
     /// Sends a DELETE request.
     /// </summary>
     public async Task<string?> DeleteAsync(string path, Dictionary<string, string?>? parameters = null,
         long timeout = 0, CancellationToken cancellationToken = default)
     {
         return await RequestAsync(HttpMethod.Delete, path, parameters, null, null, timeout, cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends a DELETE request with custom headers.
+    /// </summary>
+    public async Task<string?> DeleteWithHeadersAsync(string path, Dictionary<string, string?>? parameters = null,
+        Dictionary<string, string>? headers = null, long timeout = 0,
+        CancellationToken cancellationToken = default)
+    {
+        return await RequestAsync(HttpMethod.Delete, path, parameters, null, headers, timeout, cancellationToken);
     }
 
     /// <summary>
