@@ -207,7 +207,7 @@ public class NacosGrpcClient : IAsyncDisposable
     /// <summary>
     /// Sends a request through the bi-directional stream.
     /// </summary>
-    public async Task SendStreamRequestAsync(string type, object request, 
+    public virtual async Task SendStreamRequestAsync(string type, object request,
         CancellationToken cancellationToken = default)
     {
         await EnsureConnectedAsync(cancellationToken);
@@ -230,7 +230,7 @@ public class NacosGrpcClient : IAsyncDisposable
     /// <summary>
     /// Sends a request through stream and waits for response.
     /// </summary>
-    public async Task<TResponse?> SendStreamRequestWithResponseAsync<TResponse>(string type, object request,
+    public virtual async Task<TResponse?> SendStreamRequestWithResponseAsync<TResponse>(string type, object request,
         TimeSpan timeout, CancellationToken cancellationToken = default) where TResponse : class
     {
         await EnsureConnectedAsync(cancellationToken);
@@ -272,7 +272,7 @@ public class NacosGrpcClient : IAsyncDisposable
     /// <summary>
     /// Registers a handler for push messages.
     /// </summary>
-    public void RegisterPushHandler(string handlerId, Action<string, string> handler)
+    public virtual void RegisterPushHandler(string handlerId, Action<string, string> handler)
     {
         _pushHandlers.TryAdd(handlerId, handler);
     }
