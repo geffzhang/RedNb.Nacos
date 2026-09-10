@@ -6,6 +6,7 @@ using RedNb.Nacos.Core.Naming;
 using RedNb.Nacos.Core.Naming.FuzzyWatch;
 using RedNb.Nacos.Core.Naming.Selector;
 using RedNb.Nacos.Failover;
+using RedNb.Nacos.Http.Naming;
 using RedNb.Nacos.Monitor;
 using RedNb.Nacos.Utils;
 
@@ -30,11 +31,12 @@ public class NacosNamingService : INamingService
     private bool _disposed;
     private bool _isHealthy = true;
 
-    private const string InstanceApiPath = "v1/ns/instance";
-    private const string InstanceListApiPath = "v1/ns/instance/list";
-    private const string ServiceApiPath = "v1/ns/service/list";
-    private const string HealthApiPath = "v1/ns/health/instance";
-    private const string BeatApiPath = "v1/ns/instance/beat";
+    // HTTP v3 path constants — see src/RedNb.Nacos.Http/Naming/NamingApiPaths.cs
+    private static readonly string InstanceApiPath = NamingApiPaths.Instance;
+    private static readonly string InstanceListApiPath = NamingApiPaths.InstanceList;
+    private static readonly string ServiceApiPath = NamingApiPaths.ServiceList;
+    private static readonly string HealthApiPath = NamingApiPaths.Health;
+    private static readonly string BeatApiPath = NamingApiPaths.Beat;
 
     public NacosNamingService(NacosClientOptions options, ILogger<NacosNamingService>? logger = null)
         : this(options, null, logger)
