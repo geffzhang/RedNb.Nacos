@@ -24,16 +24,22 @@ curl -fsS http://localhost:8080/v3/console/health/readiness
 Nacos 2.2.2+ does not auto-create a default user, and 3.2.4 has no
 user-management API or UI. Insert directly into Derby.
 
-The container is JRE-only; build the bootstrap JARs on the host:
+The container is JRE-only; build the bootstrap JARs on the host. The two
+Spring jars come out of the `nacos-server` fat jar, but the Derby engine does
+**not** live in the fat jar — it ships as a server plugin, so copy it from the
+running container:
 
 ```bash
-# From the nacos-server fat jar copied to a working dir:
+# Derby engine — from the container's plugins directory:
+docker cp nacos-server:/home/nacos/plugins/derby-10.14.2.0.jar .
+
+# spring-security-crypto + spring-jcl — from the nacos-server fat jar:
 python -c "
 import zipfile, os
 outer = zipfile.ZipFile('nacos-server.jar')
 for n in outer.namelist():
     if not n.endswith('.jar'): continue
-    if not any(x in n for x in ('spring-security-crypto', 'spring-jcl', 'derby')): continue
+    if not any(x in n for x in ('spring-security-crypto', 'spring-jcl')): continue
     with open(os.path.join('.', os.path.basename(n)), 'wb') as out:
         out.write(outer.read(n))
 "
@@ -54,10 +60,12 @@ public class InsertNacosUser {
                     "INSERT INTO NACOS.users (username, password, enabled) VALUES (?, ?, true)")) {
                 p.setString(1, user); p.setString(2, hash); p.executeUpdate();
             }
+            System.out.println("inserted user " + user);
             try (PreparedStatement p = c.prepareStatement(
                     "INSERT INTO NACOS.roles (username, role) VALUES (?, 'ROLE_ADMIN')")) {
                 p.setString(1, user); p.executeUpdate();
             }
+            System.out.println("granted ROLE_ADMIN to " + user);
             c.commit();
         } finally {
             try { DriverManager.getConnection("jdbc:derby:;shutdown=true"); } catch (SQLException ignored) {}
@@ -71,10 +79,18 @@ Build and run against the container's Derby directory (mounted to
 
 ```bash
 javac InsertNacosUser.java
-java -cp "spring-security-crypto-*.jar;spring-jcl-*.jar;derby-*.jar;." \
+java -cp "spring-security-crypto-6.5.10.jar;spring-jcl-6.2.18.jar;derby-10.14.2.0.jar;." \
   InsertNacosUser "deploy/docker-compose/nacos/data/derby-data" nacos nacos
-# → "inserted user nacos"
+# → inserted user nacos
+#    granted ROLE_ADMIN to nacos
 ```
+
+> Working directory and platform: the `javac`/`java` commands assume the three
+> jars are in the current directory (where the `docker cp` / `python` steps
+> above put them); the Derby path argument is relative to the repo root, so
+> pass an absolute path if you run from elsewhere. The classpath separator
+> shown is `;` (Windows) — use `:` on Linux/macOS. `mv`/`$(date)` in §4 assume
+> a bash-style shell.
 
 Restart the container so the in-memory user cache picks up the new row:
 
@@ -138,6 +154,5 @@ The instance form `new NacosGrpcFactory().CreateAiService(options)` does *not*
 initialize the channel; call `InitializeAsync()` on the returned
 `NacosGrpcAiService` yourself if you use it.
 
-Note: in `NacosClientOptions` the gRPC toggle is the C# property `EnableGrpc`;
-the `"UseGrpc": true` seen in JSON configuration samples is a different,
-config-binding name — not a property on this class.
+Note: the JSON sample in `deploy/docker-compose/README.md` uses `"UseGrpc"`,
+but the C# property is `EnableGrpc` — use the C# name in code.
