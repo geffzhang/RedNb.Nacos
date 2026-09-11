@@ -104,6 +104,49 @@ public class ConfigServiceHttpTests : IDisposable
     }
 
     [Fact]
+    public async Task GetConfigAsync_ErrorCodeOtherThanNotFound_ShouldThrow()
+    {
+        // Arrange
+        // A non-zero, non-20004 code is a server-side failure, not a missing config.
+        _server
+            .Given(Request.Create()
+                .WithPath("/nacos/v3/client/cs/config")
+                .WithParam("dataId", "denied-config")
+                .UsingGet())
+            .RespondWith(Response.Create()
+                .WithStatusCode(200)
+                .WithBody("{\"code\":10001,\"message\":\"access denied\",\"data\":null}"));
+
+        var configService = _factory.CreateConfigService(_options);
+
+        // Act
+        var action = async () => await configService.GetConfigAsync("denied-config", "DEFAULT_GROUP", 5000);
+
+        // Assert
+        await action.Should().ThrowAsync<NacosException>()
+            .WithMessage("*10001*");
+    }
+
+#pragma warning disable CS0618 // CAS publish over HTTP is obsolete by design
+    [Fact]
+    public async Task PublishConfigCasAsync_WithCasMd5_ShouldThrowNotSupported()
+    {
+        // Arrange
+        // The v3 admin endpoint ignores casMd5 (a stale overwrite would otherwise
+        // look successful), so the HTTP service must refuse the call outright.
+        var configService = _factory.CreateConfigService(_options);
+
+        // Act
+        var action = async () => await configService.PublishConfigCasAsync(
+            "test-config", "DEFAULT_GROUP", "new content", "deadbeefdeadbeefdeadbeefdeadbeef");
+
+        // Assert
+        await action.Should().ThrowAsync<NotSupportedException>();
+        _server.LogEntries.Should().BeEmpty("CAS publish must fail before any request is sent");
+    }
+#pragma warning restore CS0618
+
+    [Fact]
     public async Task PublishConfigAsync_Success_ShouldReturnTrue()
     {
         // Arrange

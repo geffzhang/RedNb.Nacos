@@ -204,33 +204,38 @@ public class NacosConfigService : IConfigService
         }
     }
 
-    public async Task<bool> PublishConfigCasAsync(string dataId, string group, string content, string casMd5, 
+    /// <summary>
+    /// Not supported over HTTP: the v3 admin endpoint ignores <c>casMd5</c>, so a
+    /// stale MD5 would silently overwrite newer content. Use the gRPC config service
+    /// (<c>NacosGrpcConfigService</c>), which carries the CAS MD5 on the wire.
+    /// </summary>
+    [Obsolete("CAS is not supported over the v3 admin HTTP endpoint; use the gRPC config service. " +
+        "This overload throws NotSupportedException when casMd5 is non-empty.")]
+    public Task<bool> PublishConfigCasAsync(string dataId, string group, string content, string casMd5,
         CancellationToken cancellationToken = default)
     {
-        return await PublishConfigCasAsync(dataId, group, content, casMd5, ConfigType.Default, cancellationToken);
+        return PublishConfigCasAsync(dataId, group, content, casMd5, ConfigType.Default, cancellationToken);
     }
 
-    public async Task<bool> PublishConfigCasAsync(string dataId, string group, string content, string casMd5, 
+    /// <inheritdoc cref="PublishConfigCasAsync(string, string, string, string, CancellationToken)"/>
+    [Obsolete("CAS is not supported over the v3 admin HTTP endpoint; use the gRPC config service. " +
+        "This overload throws NotSupportedException when casMd5 is non-empty.")]
+    public async Task<bool> PublishConfigCasAsync(string dataId, string group, string content, string casMd5,
         string type, CancellationToken cancellationToken = default)
     {
-        group = GetGroupOrDefault(group);
-        ValidateParams(dataId, group, content);
-
-        var parameters = new Dictionary<string, string?>
+        // Nacos 3.2.4 ignores `casMd5` on the admin publish endpoint (verified live:
+        // a wrong MD5 still returns code 0 and overwrites the content), so a CAS
+        // publish cannot be honored here. Fail loudly instead of silently
+        // downgrading to an unconditional overwrite; an empty MD5 degrades to a
+        // plain publish, which is what the server would do anyway.
+        if (!string.IsNullOrEmpty(casMd5))
         {
-            { "dataId", dataId },
-            { "groupName", group },
-            { "namespaceId", GetTenant() },
-            { "content", content },
-            { "type", type },
-            { "casMd5", casMd5 }
-        };
+            throw new NotSupportedException(
+                "CAS publish is not supported over the v3 admin HTTP endpoint (casMd5 is ignored by " +
+                "the server); use the gRPC config service instead.");
+        }
 
-        var body = NacosUtils.BuildQueryString(parameters);
-        var response = await _httpClient.PostAsync(ConfigAdminApiPath, null, body,
-            _options.DefaultTimeout, cancellationToken);
-
-        return IsSuccessEnvelope(response);
+        return await PublishConfigAsync(dataId, group, content, type, cancellationToken);
     }
 
     public async Task<bool> RemoveConfigAsync(string dataId, string group, 
@@ -341,24 +346,31 @@ public class NacosConfigService : IConfigService
 
     /// <summary>
     /// Unwraps the v3 config read envelope and returns the config content.
-    /// A non-zero code (e.g. 20004 — config not found) or a missing data payload
-    /// both yield <c>null</c>.
+    /// Code <see cref="NacosConstants.ConfigNotFoundCode"/> (config does not exist)
+    /// and a missing data payload yield <c>null</c>; any other non-zero code is a
+    /// server-side failure and throws, so callers never mistake a refusal for a
+    /// missing config.
     /// </summary>
     private static string? ExtractConfigContent(string? response)
     {
-        if (string.IsNullOrEmpty(response) || !TryParseEnvelope(response, out var root, out _))
+        if (string.IsNullOrEmpty(response) || !NacosEnvelope.TryParse(response, out var root))
         {
             return null;
         }
 
-        if (GetEnvelopeCode(root) != NacosConstants.SuccessCode)
+        var code = NacosEnvelope.GetCode(root);
+
+        if (code == NacosConstants.ConfigNotFoundCode)
         {
             return null;
         }
+
+        NacosEnvelope.ThrowIfFailed(root, "Get config");
 
         if (root.TryGetProperty("data", out var data) &&
             data.ValueKind == JsonValueKind.Object &&
-            data.TryGetProperty("content", out var content))
+            data.TryGetProperty("content", out var content) &&
+            content.ValueKind == JsonValueKind.String)
         {
             return content.GetString();
         }
@@ -372,12 +384,12 @@ public class NacosConfigService : IConfigService
     /// </summary>
     private static bool IsSuccessEnvelope(string? response)
     {
-        if (string.IsNullOrEmpty(response) || !TryParseEnvelope(response, out var root, out _))
+        if (!NacosEnvelope.TryParse(response, out var root))
         {
             return false;
         }
 
-        if (GetEnvelopeCode(root) != NacosConstants.SuccessCode)
+        if (NacosEnvelope.GetCode(root) != NacosConstants.SuccessCode)
         {
             return false;
         }
@@ -388,43 +400,6 @@ public class NacosConfigService : IConfigService
         }
 
         return true;
-    }
-
-    /// <summary>
-    /// Parses a v3 response envelope into its root element.
-    /// </summary>
-    private static bool TryParseEnvelope(string response, out JsonElement root, out int code)
-    {
-        root = default;
-        code = NacosConstants.SuccessCode;
-
-        try
-        {
-            using var document = JsonDocument.Parse(response);
-            if (document.RootElement.ValueKind != JsonValueKind.Object)
-            {
-                return false;
-            }
-
-            // Clone so the element outlives the JsonDocument.
-            root = document.RootElement.Clone();
-            code = GetEnvelopeCode(root);
-            return true;
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
-
-    private static int GetEnvelopeCode(JsonElement root)
-    {
-        if (root.TryGetProperty("code", out var code) && code.TryGetInt32(out var value))
-        {
-            return value;
-        }
-
-        return NacosConstants.SuccessCode;
     }
 
     private string GetGroupOrDefault(string? group)

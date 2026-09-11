@@ -121,7 +121,7 @@ internal class ConfigRpcTransportClient : IAsyncDisposable
             ConfigListenContexts = listenContexts
         };
 
-        // Use stream request for listen operations
+        // Listen operations need the response body (long-poll timeout applies)
         return await _grpcClient.SendStreamRequestWithResponseAsync<ConfigBatchListenResponse>(
             ConfigBatchListenRequest.TYPE, request,
             TimeSpan.FromMilliseconds(_options.LongPollTimeout),

@@ -272,7 +272,9 @@ public class NacosGrpcClient : IAsyncDisposable
 
         try
         {
-            var call = _channel!.CreateCallInvoker().AsyncUnaryCall(RequestMethod, null,
+            // Dispose the call so the HTTP/2 response/stream objects are released
+            // per request instead of waiting for a GC (same as the generated stubs).
+            using var call = _channel!.CreateCallInvoker().AsyncUnaryCall(RequestMethod, null,
                 new CallOptions(deadline: deadline, cancellationToken: cancellationToken), payload);
 
             var response = await call.ResponseAsync;
@@ -317,7 +319,7 @@ public class NacosGrpcClient : IAsyncDisposable
         var request = new ServerCheckRequest();
         var payload = CreatePayload(ServerCheckRequest.TYPE, request);
 
-        var call = _channel!.CreateCallInvoker().AsyncUnaryCall(
+        using var call = _channel!.CreateCallInvoker().AsyncUnaryCall(
             RequestMethod,
             null,
             new CallOptions(deadline: DateTime.UtcNow.AddMilliseconds(ConnectionTimeoutMs), cancellationToken: cancellationToken),

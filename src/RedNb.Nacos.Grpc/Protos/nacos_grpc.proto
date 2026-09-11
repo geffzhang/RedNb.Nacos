@@ -36,15 +36,22 @@ message Payload {
   google.protobuf.Any body = 3;
 }
 
-// Bi-directional streaming service. All request/response traffic other than
-// ServerCheck rides this stream (server side: GrpcBiStreamRequestAcceptor).
+// Bi-directional streaming service. The stream carries exactly two kinds of
+// payload:
+//   * the client's ConnectionSetupRequest — the only payload that registers the
+//     connection server-side, answered with a SetupAckRequest push; and
+//   * the client's push acknowledgements (Payload whose type is a *Response).
+// Business requests must NOT ride this stream: the server's acceptor drops any
+// other type with "unknown payload receive" (server side:
+// GrpcBiStreamRequestAcceptor).
 service BiRequestStream {
   // Bi-directional streaming RPC
   rpc requestBiStream(stream Payload) returns (stream Payload);
 }
 
-// The unary service `Request/request` (ServerCheck only) is declared
-// manually in NacosGrpcClient. Grpc.Tools emits an uncompilable stub for it: the
+// The unary service `Request/request` carries every client-to-server request —
+// ServerCheck, config and naming CRUD, health checks. It is declared manually in
+// NacosGrpcClient: Grpc.Tools emits an uncompilable stub for it because the
 // generated blocking overload keeps the proto method name verbatim, producing
 // `Payload request(Payload request, ...)` whose body `request(request, options)`
 // does not resolve (CS0149).

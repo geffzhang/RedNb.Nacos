@@ -1,7 +1,8 @@
 namespace RedNb.Nacos.GrpcClient.Config;
 
 /// <summary>
-/// gRPC Metadata.type strings used by Config bi-stream requests and responses.
+/// gRPC Metadata.type strings used by Config requests and responses (they travel
+/// over the unary <c>Request/request</c> method).
 /// Matches the values the Nacos 3.x Java gRPC client dispatches on.
 /// </summary>
 internal static class ConfigRpcPaths

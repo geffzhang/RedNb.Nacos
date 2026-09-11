@@ -144,8 +144,12 @@ public class NacosNamingService : INamingService
 
         var parameters = BuildRegisterParameters(serviceName, groupName, instance);
 
-        await _httpClient.PostWithHeadersAsync(InstanceApiPath, parameters, null, null,
+        var response = await _httpClient.PostWithHeadersAsync(InstanceApiPath, parameters, null, null,
             _options.DefaultTimeout, cancellationToken);
+
+        // The v3 contract reports failures in the envelope, not in the HTTP status:
+        // a rejected registration must not look like a successful one.
+        NacosEnvelope.ThrowIfFailed(response, $"Register instance to {serviceName}@{groupName}");
 
         // Invalidate cached ServiceInfo so subsequent GetAllInstancesAsync(refreshes
         // from the server instead of returning a stale empty snapshot.
@@ -225,9 +229,6 @@ public class NacosNamingService : INamingService
     {
         groupName = GetGroupOrDefault(groupName);
 
-        // Stop heartbeat
-        _beatReactor.RemoveBeatInfo(serviceName, groupName, instance);
-
         var parameters = new Dictionary<string, string?>
         {
             { "serviceName", serviceName },
@@ -239,8 +240,15 @@ public class NacosNamingService : INamingService
             { "ephemeral", instance.Ephemeral.ToString().ToLower() }
         };
 
-        await _httpClient.DeleteWithHeadersAsync(InstanceApiPath, parameters, null,
+        var response = await _httpClient.DeleteWithHeadersAsync(InstanceApiPath, parameters, null,
             _options.DefaultTimeout, cancellationToken);
+
+        // Only a deregistration the server accepted may stop the heartbeat: a
+        // rejected one (v3 reports it in the envelope) leaves the instance alive.
+        NacosEnvelope.ThrowIfFailed(response, $"Deregister instance from {serviceName}@{groupName}");
+
+        // Stop heartbeat
+        _beatReactor.RemoveBeatInfo(serviceName, groupName, instance);
 
         // Invalidate cached ServiceInfo after a successful deregistration.
         _serviceInfoHolder.RemoveServiceInfo(serviceName, groupName, "");
@@ -741,6 +749,16 @@ public class NacosNamingService : INamingService
             var response = await _httpClient.PostWithHeadersAsync(InstanceApiPath, null, body, null,
                 _options.DefaultTimeout, cancellationToken);
 
+            // A heartbeat the server rejected (wrong instance, denied, ...) is
+            // reported in the v3 envelope and must not count as a success.
+            if (NacosEnvelope.TryParse(response, out var root) &&
+                NacosEnvelope.GetCode(root) != NacosConstants.SuccessCode)
+            {
+                _logger?.LogWarning("Heartbeat rejected for {Service}@{Group}: {Message}", serviceName,
+                    groupName, NacosEnvelope.GetMessage(root) ?? "unknown error");
+                return false;
+            }
+
             _isHealthy = true;
             return !string.IsNullOrEmpty(response);
         }
@@ -979,15 +997,22 @@ public class NacosNamingService : INamingService
 
     /// <summary>
     /// Parses the flat instance array returned in the <c>data</c> field of a v3
-    /// instance-list response. A malformed or absent payload yields an empty list.
+    /// instance-list response. A malformed or absent payload yields an empty list;
+    /// a non-zero envelope code (e.g. access denied) throws, so a refused query is
+    /// never reported as "the service has no instances".
     /// </summary>
     private static List<Instance> ParseInstanceList(string response)
     {
         try
         {
-            using var document = JsonDocument.Parse(response);
-            if (!document.RootElement.TryGetProperty("data", out var data) ||
-                data.ValueKind != JsonValueKind.Array)
+            if (!NacosEnvelope.TryParse(response, out var root))
+            {
+                return new List<Instance>();
+            }
+
+            NacosEnvelope.ThrowIfFailed(root, "List instances");
+
+            if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
             {
                 return new List<Instance>();
             }
@@ -1001,43 +1026,47 @@ public class NacosNamingService : INamingService
     }
 
     /// <summary>
-    /// Parses a v3 admin service-list envelope into the paged view model.
+    /// Parses a v3 admin service-list envelope into the paged view model. A non-zero
+    /// envelope code throws; individual malformed items are skipped.
     /// </summary>
     private static ListView<string> ParseServiceList(string? response)
     {
-        if (string.IsNullOrEmpty(response))
+        if (!NacosEnvelope.TryParse(response, out var root))
         {
             return new ListView<string>();
         }
 
-        try
+        NacosEnvelope.ThrowIfFailed(root, "List services");
+
+        if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
         {
-            using var document = JsonDocument.Parse(response);
-            if (!document.RootElement.TryGetProperty("data", out var data) ||
-                data.ValueKind != JsonValueKind.Object)
-            {
-                return new ListView<string>();
-            }
+            return new ListView<string>();
+        }
 
-            var count = data.TryGetProperty("totalCount", out var totalCount) ? totalCount.GetInt32() : 0;
-            var names = new List<string>();
+        // Guard every accessor: TryGetProperty succeeds for a JSON null, and the
+        // throwing accessors would escape as InvalidOperationException.
+        var count = data.TryGetProperty("totalCount", out var totalCount) &&
+                    totalCount.ValueKind == JsonValueKind.Number &&
+                    totalCount.TryGetInt32(out var total)
+            ? total
+            : 0;
 
-            if (data.TryGetProperty("pageItems", out var pageItems) && pageItems.ValueKind == JsonValueKind.Array)
+        var names = new List<string>();
+
+        if (data.TryGetProperty("pageItems", out var pageItems) && pageItems.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in pageItems.EnumerateArray())
             {
-                foreach (var item in pageItems.EnumerateArray())
+                if (item.ValueKind == JsonValueKind.Object &&
+                    item.TryGetProperty("name", out var name) &&
+                    name.ValueKind == JsonValueKind.String &&
+                    name.GetString() is { } serviceName)
                 {
-                    if (item.TryGetProperty("name", out var name) && name.GetString() is { } serviceName)
-                    {
-                        names.Add(serviceName);
-                    }
+                    names.Add(serviceName);
                 }
             }
+        }
 
-            return new ListView<string>(count, names);
-        }
-        catch (JsonException)
-        {
-            return new ListView<string>();
-        }
+        return new ListView<string>(count, names);
     }
 }

@@ -90,6 +90,40 @@ public class NamingServiceHttpTests : IDisposable
     }
 
     [Fact]
+    public async Task RegisterInstanceAsync_ErrorEnvelope_ShouldThrow()
+    {
+        // Arrange
+        // Nacos v3 reports a rejected registration in the envelope with HTTP 200;
+        // reporting success here would start a heartbeat for an unregistered instance.
+        _server
+            .Given(Request.Create()
+                .WithPath("/nacos/v3/client/ns/instance")
+                .WithParam("serviceName", "test-service")
+                .WithParam("groupName", "DEFAULT_GROUP")
+                .UsingPost())
+            .RespondWith(Response.Create()
+                .WithStatusCode(200)
+                .WithBody("{\"code\":10000,\"message\":\"parameter missing\"," +
+                    "\"data\":\"Required parameter 'serviceName' is not present\"}"));
+
+        var namingService = _factory.CreateNamingService(_options);
+        var instance = new Instance
+        {
+            Ip = "192.168.1.100",
+            Port = 8080,
+            Weight = 1.0,
+            Healthy = true
+        };
+
+        // Act
+        var action = async () => await namingService.RegisterInstanceAsync("test-service", instance);
+
+        // Assert
+        await action.Should().ThrowAsync<NacosException>()
+            .WithMessage("*10000*");
+    }
+
+    [Fact]
     public async Task DeregisterInstanceAsync_Success_ShouldNotThrow()
     {
         // Arrange
