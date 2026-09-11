@@ -76,6 +76,10 @@ Both properties are comma-separated `string` values. Explicit
 property is empty, the SDK derives console addresses from `ServerAddresses` by
 replacing each port with 8080.
 
+The console AI endpoints serve the **public namespace only**: the HTTP AI service
+ignores `NacosClientOptions.Namespace` and does not send an
+`X-Nacos-Namespace-Id` header.
+
 Channel availability in 3.2.4 differs per operation:
 
 - **Endpoint register/deregister (MCP and Agent)** — no HTTP endpoint on the
