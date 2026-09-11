@@ -166,11 +166,15 @@ public class NacosClientOptions
     {
         if (!string.IsNullOrWhiteSpace(ConsoleAddresses))
         {
+            // Explicit console addresses win verbatim — the operator already
+            // picked the port (e.g. 8443 behind TLS), so do NOT substitute
+            // 8080 onto them. Only the ServerAddresses fallback path is
+            // port-substituted, since those addresses describe the API port
+            // (8848) and need to be re-targeted at the console port.
             return ConsoleAddresses
                 .Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(s => s.Trim())
                 .Where(s => !string.IsNullOrEmpty(s))
-                .Select(SubstituteConsolePort)
                 .ToList();
         }
         return GetServerAddressList()
