@@ -18,7 +18,7 @@
 
 ---
 
-**RedNb.Nacos** 是一个功能完整的现代化 .NET Nacos 客户端 SDK，完全兼容 Nacos 2.x/3.x，提供 **200+ 个 API 方法**，涵盖配置中心、服务发现、分布式锁、AI 服务（MCP/A2A）和运维管理等全部功能。
+**RedNb.Nacos** 是一个功能完整的现代化 .NET Nacos 客户端 SDK，面向 Nacos 3.2+ 服务器，提供 **200+ 个 API 方法**，涵盖配置中心、服务发现、分布式锁、AI 服务（MCP/A2A）和运维管理等全部功能。
 
 > 🎯 **为什么选择 RedNb.Nacos？**
 > - 🆕 支持 **.NET 8.0** 和 **.NET 10.0**，采用最新语言特性
@@ -40,7 +40,7 @@ endpoints are no longer used; `Maintainer` and `Lock` interfaces are marked
 |------|------|
 | 🚀 **高性能** | 支持 HTTP 和 gRPC 两种通信协议 |
 | 📦 **模块化设计** | 按需引用，灵活组合 |
-| 🔄 **Nacos 2.x/3.x 兼容** | 完整支持 Fuzzy Watch、AI Service、分布式锁等新特性 |
+| 🔄 **Nacos 3.2+ 专属** | 面向 v3 协议重写，支持 Fuzzy Watch、AI Service、分布式锁等新特性 |
 | 🔒 **分布式锁** | 原生支持 Nacos 3.0 分布式锁功能 |
 | 🤖 **AI 服务** | 支持 MCP、A2A、Prompt、Skill、AgentSpec 全量 AI Registry 资源 |
 | 🛠️ **运维管理** | 完整的 Maintainer API，支持命名空间、集群、客户端管理 |
@@ -492,6 +492,8 @@ var lock = LockInstance.Create("my-key")
 
 ### 🤖 AI 服务 (IAiService) - Nacos 3.0
 
+> **说明**：Prompt / Skill / AgentSpec 端点需要启用 Nacos 控制台（8080 端口），不在实时集成测试的覆盖范围内。
+
 #### MCP 服务 (Model Context Protocol)
 
 | 功能 | 方法 | 描述 |
@@ -895,7 +897,7 @@ await configService.CancelFuzzyWatchAsync("app-*", "DEFAULT_GROUP", myWatcher);
 | 组件 | 版本要求 |
 |------|---------|
 | .NET | 8.0+ / 10.0+ |
-| Nacos Server | 2.x / 3.x |
+| Nacos Server | 3.2.0+ |
 | C# | 12.0+ |
 
 ## 🗺️ 路线图

@@ -396,14 +396,16 @@ internal class NamingRpcTransportClient : IAsyncDisposable
 
     #endregion
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (_disposed) return;
+        if (_disposed) return ValueTask.CompletedTask;
         _disposed = true;
 
         _grpcClient.UnregisterPushHandler("naming");
         OnServiceChanged = null;
         OnFuzzyWatchChanged = null;
         OnReconnected = null;
+
+        return ValueTask.CompletedTask;
     }
 }

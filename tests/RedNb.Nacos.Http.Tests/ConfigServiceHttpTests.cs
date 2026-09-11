@@ -127,6 +127,58 @@ public class ConfigServiceHttpTests : IDisposable
             .WithMessage("*10001*");
     }
 
+    [Fact]
+    public async Task GetConfigAsync_AccessDenied_ShouldThrowInsteadOfServingSnapshot()
+    {
+        // Arrange
+        // A refusal must not be masked by the local snapshot: the snapshot exists
+        // (first call succeeds), so a pre-fix client would report the denied read as
+        // a successful cache hit.
+        var envelope = JsonSerializer.Serialize(new
+        {
+            code = 0,
+            message = "success",
+            data = new
+            {
+                content = "cached=value",
+                md5 = "d41d8cd98f00b204e9800998ecf8427e",
+                contentType = "text"
+            }
+        });
+
+        _server
+            .Given(Request.Create()
+                .WithPath("/nacos/v3/client/cs/config")
+                .WithParam("dataId", "guarded-config")
+                .UsingGet())
+            .RespondWith(Response.Create()
+                .WithStatusCode(200)
+                .WithBody(envelope));
+
+        var configService = _factory.CreateConfigService(_options);
+        (await configService.GetConfigAsync("guarded-config", "DEFAULT_GROUP", 5000))
+            .Should().Be("cached=value");
+
+        // The server now denies the very same read.
+        _server.ResetMappings();
+        SetupLoginEndpoint();
+        _server
+            .Given(Request.Create()
+                .WithPath("/nacos/v3/client/cs/config")
+                .WithParam("dataId", "guarded-config")
+                .UsingGet())
+            .RespondWith(Response.Create()
+                .WithStatusCode(403)
+                .WithBody("{\"code\":403,\"message\":\"unknown user!\",\"data\":null}"));
+
+        // Act
+        var action = async () => await configService.GetConfigAsync("guarded-config", "DEFAULT_GROUP", 5000);
+
+        // Assert
+        await action.Should().ThrowAsync<NacosException>()
+            .Where(e => e.ErrorCode == NacosException.NoRight);
+    }
+
 #pragma warning disable CS0618 // CAS publish over HTTP is obsolete by design
     [Fact]
     public async Task PublishConfigCasAsync_WithCasMd5_ShouldThrowNotSupported()

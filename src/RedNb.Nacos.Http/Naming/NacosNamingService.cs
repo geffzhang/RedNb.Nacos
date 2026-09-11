@@ -772,6 +772,10 @@ public class NacosNamingService : INamingService
     private async Task<ServiceInfo?> QueryServiceAsync(string serviceName, string groupName,
         string clusters, CancellationToken cancellationToken)
     {
+        string? response;
+
+        // Only the transport call sits inside the catch: a failure here degrades to
+        // "no fresh data" (cache/failover still apply).
         try
         {
             var parameters = new Dictionary<string, string?>
@@ -786,31 +790,8 @@ public class NacosNamingService : INamingService
                 { "healthyOnly", "false" }
             };
 
-            var response = await _httpClient.GetWithHeadersAsync(InstanceListApiPath, parameters, null,
+            response = await _httpClient.GetWithHeadersAsync(InstanceListApiPath, parameters, null,
                 _options.DefaultTimeout, cancellationToken);
-
-            if (string.IsNullOrEmpty(response))
-            {
-                _metricsMonitor.RecordNamingRequestFailed();
-                return null;
-            }
-
-            _isHealthy = true;
-            _metricsMonitor.SetConnectionStatus(true);
-            _metricsMonitor.RecordNamingRequestSuccess();
-
-            // The v3 client API returns a flat JSON array of instances in `data`;
-            // rebuild the ServiceInfo the rest of the client works with.
-            var hosts = ParseInstanceList(response);
-            return new ServiceInfo
-            {
-                Name = serviceName,
-                GroupName = groupName,
-                Clusters = clusters,
-                CacheMillis = QueryCacheMillis,
-                LastRefTime = NacosUtils.GetCurrentTimeMillis(),
-                Hosts = hosts
-            };
         }
         catch (Exception ex)
         {
@@ -818,15 +799,41 @@ public class NacosNamingService : INamingService
             _isHealthy = false;
             _metricsMonitor.SetConnectionStatus(false);
             _metricsMonitor.RecordNamingRequestFailed();
-            
+
             // Update failover status
             if (_failoverReactor != null)
             {
                 _metricsMonitor.SetFailoverEnabled(_failoverReactor.IsFailoverSwitch());
             }
-            
+
             return null;
         }
+
+        if (string.IsNullOrEmpty(response))
+        {
+            _metricsMonitor.RecordNamingRequestFailed();
+            return null;
+        }
+
+        _isHealthy = true;
+        _metricsMonitor.SetConnectionStatus(true);
+        _metricsMonitor.RecordNamingRequestSuccess();
+
+        // Parsing sits OUTSIDE the catch window: a non-zero envelope code (e.g. access
+        // denied) is a server-side refusal, not a transport failure, and must propagate
+        // to the caller instead of being reported as "the service has no instances".
+        // The v3 client API returns a flat JSON array of instances in `data`;
+        // rebuild the ServiceInfo the rest of the client works with.
+        var hosts = ParseInstanceList(response);
+        return new ServiceInfo
+        {
+            Name = serviceName,
+            GroupName = groupName,
+            Clusters = clusters,
+            CacheMillis = QueryCacheMillis,
+            LastRefTime = NacosUtils.GetCurrentTimeMillis(),
+            Hosts = hosts
+        };
     }
 
     private async Task StartServiceInfoUpdateTaskAsync(CancellationToken cancellationToken)

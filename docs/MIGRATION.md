@@ -18,11 +18,16 @@ with it.
 - `IConfigService`, `INamingService`, `IAiService` and AI sub-interfaces
   (`IPromptService`, `ISkillService`, `IAgentSpecService`, `IA2aService`):
   **signatures unchanged.** Existing callers continue to work.
+  `IAiService` gained registry members (`IAsyncDisposable` plus the
+  `IPromptService`, `ISkillService` and `IAgentSpecService` interfaces), so an
+  implementer of `IAiService` written against the previous version must add the
+  corresponding members to compile.
 - `IMaintainerService` and its sub-interfaces: marked `[Obsolete]`. Calls
-  will return HTTP 404 at runtime. Migration paths:
-  - Stay on Nacos 2.x for legacy Maintainer APIs, or
+  will return HTTP 404 at runtime. The Maintainer APIs have no v3 equivalent;
+  migration paths:
   - Deploy `nacos-api-legacy-adapter` JAR on your 3.x server, or
-  - Wait for a future Maintainer rewrite
+  - Keep the Maintainer APIs on a frozen 2.x deployment, or
+  - Wait for the Maintainer rewrite
 - `ILockService`: marked `[Obsolete]`. Implementation still works on 3.x
   (the underlying `/nacos/v3/lock/...` endpoints are alive) but the
   interface will be removed in the next major version.
@@ -32,8 +37,8 @@ with it.
 - Config write (publish / remove) response is now `{code, message, data: bool}`
   instead of a bare `"true"`/`"false"` string.
 - Naming register/deregister response is now `{code, message, data}`.
-- Naming heartbeat uses the same endpoint as register with `heartBeat=true`.
-- Service listing moved to `/v3/console/ns/service/list` (was `/v1/ns/service/list`).
+- Naming heartbeat uses the same endpoint as register with `beat=true`.
+- Service listing moved to `/v3/admin/ns/service/list` (was `/v1/ns/service/list`).
 - Config listener no longer has an HTTP endpoint; subscribe/listen happens
   over the gRPC bi-stream connection.
 

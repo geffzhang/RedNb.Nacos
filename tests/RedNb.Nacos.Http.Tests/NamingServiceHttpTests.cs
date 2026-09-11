@@ -221,6 +221,33 @@ public class NamingServiceHttpTests : IDisposable
     }
 
     [Fact]
+    public async Task GetAllInstancesAsync_RefusedEnvelope_ShouldThrow()
+    {
+        // Arrange
+        // Nacos v3 reports a refused instance-list query (e.g. access denied) in the
+        // envelope with HTTP 200. Returning an empty list here would be read as
+        // "the service has no instances" and silently drop all traffic.
+        _server
+            .Given(Request.Create()
+                .WithPath("/nacos/v3/client/ns/instance/list")
+                .WithParam("serviceName", "forbidden-service")
+                .UsingGet())
+            .RespondWith(Response.Create()
+                .WithStatusCode(200)
+                .WithBody("{\"code\":403,\"message\":\"unknown user!\",\"data\":null}"));
+
+        var namingService = _factory.CreateNamingService(_options);
+
+        // Act
+        var action = async () => await namingService.GetAllInstancesAsync(
+            "forbidden-service", subscribe: false);
+
+        // Assert
+        await action.Should().ThrowAsync<NacosException>()
+            .WithMessage("*403*");
+    }
+
+    [Fact]
     public async Task SelectInstancesAsync_HealthyOnly_ShouldFilterUnhealthy()
     {
         // Arrange

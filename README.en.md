@@ -8,7 +8,7 @@
 [![NuGet Downloads](https://img.shields.io/nuget/dt/RedNb.Nacos.svg?style=flat-square)](https://www.nuget.org/packages/RedNb.Nacos)
 [![.NET](https://img.shields.io/badge/.NET-8.0%20|%2010.0-512BD4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg?style=flat-square)](LICENSE)
-[![Nacos](https://img.shields.io/badge/Nacos-2.x%20|%203.x-00C7B7.svg?style=flat-square)](https://nacos.io/)
+[![Nacos](https://img.shields.io/badge/Nacos-3.2%2B-00C7B7.svg?style=flat-square)](https://nacos.io/)
 [![GitHub stars](https://img.shields.io/github/stars/redNb/RedNb.Nacos?style=flat-square)](https://github.com/redNb/RedNb.Nacos/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/redNb/RedNb.Nacos?style=flat-square)](https://github.com/redNb/RedNb.Nacos/issues)
 
@@ -18,7 +18,7 @@ English | [简体中文](README.md)
 
 ---
 
-**RedNb.Nacos** is a fully-featured modern .NET Nacos client SDK, fully compatible with Nacos 2.x/3.x, providing **200+ API methods** covering configuration management, service discovery, distributed locks, AI services (MCP/A2A), and operations management.
+**RedNb.Nacos** is a fully-featured modern .NET Nacos client SDK, built for Nacos 3.2+ servers, providing **200+ API methods** covering configuration management, service discovery, distributed locks, AI services (MCP/A2A), and operations management.
 
 > 🎯 **Why Choose RedNb.Nacos?**
 > - 🆕 Supports **.NET 8.0** and **.NET 10.0** with latest language features
@@ -33,7 +33,7 @@ English | [简体中文](README.md)
 |---------|-------------|
 | 🚀 **High Performance** | Supports both HTTP and gRPC protocols |
 | 📦 **Modular Design** | Import on demand, flexible composition |
-| 🔄 **Nacos 2.x/3.x Compatible** | Full support for Fuzzy Watch, AI Service, Distributed Lock |
+| 🔄 **Nacos 3.2+ Only** | Rewritten for the v3 protocol: Fuzzy Watch, AI Service, Distributed Lock |
 | 🔒 **Distributed Lock** | Native Nacos 3.0 distributed lock support |
 | 🤖 **AI Service** | Supports MCP, A2A, Prompt, Skill and AgentSpec - the full AI Registry resource set |
 | 🛠️ **Operations Management** | Complete Maintainer API for namespace, cluster, client management |
@@ -440,6 +440,8 @@ var lock = LockInstance.Create("my-key")
 
 ### 🤖 AI Service (IAiService) - Nacos 3.0
 
+> **Note:** the Prompt / Skill / AgentSpec endpoints require the Nacos console (port 8080) to be enabled and are not covered by the live integration suite.
+
 #### MCP Service (Model Context Protocol)
 
 | Feature | Method | Description |
@@ -791,7 +793,7 @@ await configService.CancelFuzzyWatchAsync("app-*", "DEFAULT_GROUP", myWatcher);
 | Component | Version Requirement |
 |-----------|---------------------|
 | .NET | 8.0+ / 10.0+ |
-| Nacos Server | 2.x / 3.x |
+| Nacos Server | 3.2.0+ |
 | C# | 12.0+ |
 
 ## 🗺️ Roadmap

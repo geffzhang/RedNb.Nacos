@@ -86,6 +86,16 @@ public class NacosConfigService : IConfigService
             _metricsMonitor.RecordConfigRequestSuccess(); // 404 is still a successful response
             return null;
         }
+        catch (NacosException ex) when (ex.ErrorCode == NacosException.NoRight)
+        {
+            // Access denied is not a transient failure, so it must not be masked by a
+            // stale snapshot: serving the cached value after a refusal would report a
+            // permission problem as a successful read. This mirrors the Java client,
+            // which rethrows NO_RIGHT from getConfigInner for the same reason.
+            _isHealthy = false;
+            _metricsMonitor.RecordConfigRequestFailed();
+            throw;
+        }
         catch (Exception ex)
         {
             _logger?.LogWarning(ex, "Failed to get config from server, trying local cache");

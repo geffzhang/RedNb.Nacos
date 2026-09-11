@@ -238,13 +238,15 @@ internal class ConfigRpcTransportClient : IAsyncDisposable
         }
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (_disposed) return;
+        if (_disposed) return ValueTask.CompletedTask;
         _disposed = true;
 
         _grpcClient.UnregisterPushHandler("config");
         OnConfigChanged = null;
         OnFuzzyWatchChanged = null;
+
+        return ValueTask.CompletedTask;
     }
 }

@@ -146,9 +146,11 @@ public static class NacosConstants
     public const int ConfigNotFoundCode = 20004;
 
     /// <summary>
-    /// HTTP header used to pass <c>namespaceId</c> in Nacos 3.x v3 API requests.
-    /// In Nacos v3 the namespace identifier is transported as an HTTP header rather
-    /// than as a query parameter or multipart form part.
+    /// Legacy HTTP header used to pass <c>namespaceId</c> to the Nacos console AI
+    /// endpoints (Prompt / Skill / AgentSpec), which are parked and not exercised by
+    /// the live integration suite. It is retained for those endpoints only: the v3
+    /// client and admin APIs this library targets pass <c>namespaceId</c> as a request
+    /// parameter instead (and the v3 spec neither requires nor defines this header).
     /// See https://nacos.io/en/docs/v3/open-api for the v3 spec.
     /// </summary>
     public const string NamespaceHeader = "X-Nacos-Namespace-Id";

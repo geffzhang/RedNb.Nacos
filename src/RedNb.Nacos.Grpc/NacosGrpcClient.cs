@@ -43,27 +43,62 @@ public class NacosGrpcClient : IAsyncDisposable
         Marshallers.Create<Payload>(payload => payload.ToByteArray(), bytes => Payload.Parser.ParseFrom(bytes)),
         Marshallers.Create<Payload>(payload => payload.ToByteArray(), bytes => Payload.Parser.ParseFrom(bytes)));
 
-    private GrpcChannel? _channel;
-    private BiRequestStream.BiRequestStreamClient? _biStreamClient;
-    private AsyncDuplexStreamingCall<Payload, Payload>? _biStream;
-    
-    private readonly CancellationTokenSource _cts;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly ConcurrentDictionary<string, Action<string, string>> _pushHandlers = new();
-    
+
     /// <summary>
-    /// Completed when the server answers the ConnectionSetup with a
-    /// <c>SetupAckRequest</c>, i.e. when the connection is registered server-side.
+    /// The current connected generation. A reconnect replaces it: the previous
+    /// generation is cancelled and awaited in <see cref="CleanupConnectionAsync"/>
+    /// before a new one is created, and a loop that no longer belongs to the
+    /// current generation must not touch the shared connection state — a dying
+    /// channel's receive loop would otherwise mark the fresh connection as lost and
+    /// cause another reconnect.
     /// </summary>
-    private volatile TaskCompletionSource<bool>? _setupAck;
+    private volatile ConnectionGeneration? _current;
 
     private volatile bool _connected;
     private volatile bool _disposed;
-    private string? _currentServer;
-    private string? _connectionId;
     private DateTime _lastActiveTime;
-    private Task? _keepAliveTask;
-    private Task? _receiveTask;
+
+    /// <summary>
+    /// One connected generation: its own channel, bi-stream, cancellation source and
+    /// background loops, so a reconnect can retire all of them together.
+    /// </summary>
+    private sealed class ConnectionGeneration
+    {
+        public ConnectionGeneration(string server)
+        {
+            Server = server;
+        }
+
+        /// <summary>The server address this generation was opened against.</summary>
+        public string Server { get; }
+
+        /// <summary>Cancels this generation's receive and keep-alive loops.</summary>
+        public CancellationTokenSource Cts { get; } = new();
+
+        /// <summary>
+        /// Completed when the server answers the ConnectionSetup with a
+        /// <c>SetupAckRequest</c>, i.e. when the connection is registered server-side.
+        /// </summary>
+        public TaskCompletionSource<bool> SetupAck { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>The generation's channel, disposed in cleanup.</summary>
+        public GrpcChannel? Channel { get; set; }
+
+        /// <summary>The generation's bi-stream client and call.</summary>
+        public BiRequestStream.BiRequestStreamClient? StreamClient { get; set; }
+
+        public AsyncDuplexStreamingCall<Payload, Payload>? Stream { get; set; }
+
+        /// <summary>The connection ID assigned by the server.</summary>
+        public string? ConnectionId { get; set; }
+
+        public Task? KeepAliveTask { get; set; }
+
+        public Task? ReceiveTask { get; set; }
+    }
 
     /// <summary>
     /// Keep alive interval in milliseconds.
@@ -98,7 +133,6 @@ public class NacosGrpcClient : IAsyncDisposable
         _logger = logger;
         _module = module;
         _clientId = Guid.NewGuid().ToString("N");
-        _cts = new CancellationTokenSource();
         _lastActiveTime = DateTime.UtcNow;
         
         _jsonOptions = new JsonSerializerOptions
@@ -117,7 +151,7 @@ public class NacosGrpcClient : IAsyncDisposable
     /// <summary>
     /// Gets the connection ID assigned by server.
     /// </summary>
-    public string? ConnectionId => _connectionId;
+    public string? ConnectionId => _current?.ConnectionId;
 
     /// <summary>
     /// Gets the client ID.
@@ -145,6 +179,12 @@ public class NacosGrpcClient : IAsyncDisposable
 
     private async Task ConnectInternalAsync(CancellationToken cancellationToken)
     {
+        // Retire the previous generation before opening a new one: without this a
+        // reconnect leaks the old channel/stream (sockets and HTTP/2 threads) and
+        // leaves its receive loop running, which would report the new connection as
+        // lost as soon as the dead channel faults.
+        await CleanupConnectionAsync();
+
         var servers = _options.GetServerAddressList();
         Exception? lastException = null;
 
@@ -158,8 +198,10 @@ public class NacosGrpcClient : IAsyncDisposable
 
                 _logger?.LogInformation("Connecting to Nacos gRPC server at {Address}", address);
 
+                var generation = new ConnectionGeneration(server);
+
                 // Create channel with options
-                _channel = GrpcChannel.ForAddress(address, new GrpcChannelOptions
+                generation.Channel = GrpcChannel.ForAddress(address, new GrpcChannelOptions
                 {
                     HttpHandler = new SocketsHttpHandler
                     {
@@ -174,23 +216,26 @@ public class NacosGrpcClient : IAsyncDisposable
                     }
                 });
 
-                _biStreamClient = new BiRequestStream.BiRequestStreamClient(_channel);
+                generation.StreamClient = new BiRequestStream.BiRequestStreamClient(generation.Channel);
+
+                // Publish the generation before the first request so the unary path
+                // resolves it.
+                _current = generation;
 
                 // Server check to get connection ID
-                await ServerCheckAsync(cancellationToken);
+                await ServerCheckAsync(generation, cancellationToken);
 
                 // Start bi-directional stream
-                await StartBiStreamAsync(cancellationToken);
+                await StartBiStreamAsync(generation, cancellationToken);
 
                 // Start keep alive task
-                _keepAliveTask = KeepAliveLoopAsync(_cts.Token);
+                generation.KeepAliveTask = KeepAliveLoopAsync(generation, generation.Cts.Token);
 
-                _currentServer = server;
                 _connected = true;
                 _lastActiveTime = DateTime.UtcNow;
-                
-                _logger?.LogInformation("Connected to Nacos gRPC server at {Address}, ConnectionId: {ConnectionId}", 
-                    address, _connectionId);
+
+                _logger?.LogInformation("Connected to Nacos gRPC server at {Address}, ConnectionId: {ConnectionId}",
+                    address, generation.ConnectionId);
                 return;
             }
             catch (Exception ex)
@@ -267,27 +312,61 @@ public class NacosGrpcClient : IAsyncDisposable
                 break;
         }
 
-        var payload = CreatePayload(type, request);
+        var generation = _current ?? throw new NacosException(
+            NacosException.ClientDisconnect, "Not connected to Nacos server");
+
+        var payload = CreatePayload(generation, type, request);
         var deadline = DateTime.UtcNow.Add(timeout);
 
         try
         {
             // Dispose the call so the HTTP/2 response/stream objects are released
             // per request instead of waiting for a GC (same as the generated stubs).
-            using var call = _channel!.CreateCallInvoker().AsyncUnaryCall(RequestMethod, null,
+            using var call = generation.Channel!.CreateCallInvoker().AsyncUnaryCall(RequestMethod, null,
                 new CallOptions(deadline: deadline, cancellationToken: cancellationToken), payload);
 
             var response = await call.ResponseAsync;
-            _lastActiveTime = DateTime.UtcNow;
+
+            if (IsCurrent(generation))
+            {
+                _lastActiveTime = DateTime.UtcNow;
+            }
 
             return response.Body?.Value.ToStringUtf8();
         }
         catch (RpcException ex) when (ex.StatusCode == StatusCode.Unavailable)
         {
-            _connected = false;
+            if (IsCurrent(generation))
+            {
+                _connected = false;
+            }
+
             _logger?.LogWarning(ex, "gRPC connection lost, will reconnect");
             throw new NacosException(NacosException.ServerError, "Connection lost", ex);
         }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded)
+        {
+            // A half-open connection typically shows up as a deadline rather than an
+            // Unavailable status. Mark it lost so the next request reconnects instead
+            // of paying the full timeout again; the exception type is left as-is
+            // because the config long-poll listen call uses the same deadline.
+            if (IsCurrent(generation))
+            {
+                _connected = false;
+            }
+
+            _logger?.LogWarning(ex, "gRPC call timed out, will reconnect");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Whether the generation is still the connected one. Only the current
+    /// generation may mutate the shared connection state.
+    /// </summary>
+    private bool IsCurrent(ConnectionGeneration generation)
+    {
+        return ReferenceEquals(_current, generation);
     }
 
     /// <summary>
@@ -314,12 +393,12 @@ public class NacosGrpcClient : IAsyncDisposable
         RegisterPushHandler(handler.GetHashCode().ToString(), handler);
     }
 
-    private async Task ServerCheckAsync(CancellationToken cancellationToken)
+    private async Task ServerCheckAsync(ConnectionGeneration generation, CancellationToken cancellationToken)
     {
         var request = new ServerCheckRequest();
-        var payload = CreatePayload(ServerCheckRequest.TYPE, request);
+        var payload = CreatePayload(generation, ServerCheckRequest.TYPE, request);
 
-        using var call = _channel!.CreateCallInvoker().AsyncUnaryCall(
+        using var call = generation.Channel!.CreateCallInvoker().AsyncUnaryCall(
             RequestMethod,
             null,
             new CallOptions(deadline: DateTime.UtcNow.AddMilliseconds(ConnectionTimeoutMs), cancellationToken: cancellationToken),
@@ -331,20 +410,17 @@ public class NacosGrpcClient : IAsyncDisposable
         {
             var json = response.Body.Value.ToStringUtf8();
             var checkResponse = JsonSerializer.Deserialize<ServerCheckResponse>(json, _jsonOptions);
-            _connectionId = checkResponse?.ConnectionId;
+            generation.ConnectionId = checkResponse?.ConnectionId;
         }
     }
 
-    private async Task StartBiStreamAsync(CancellationToken cancellationToken)
+    private async Task StartBiStreamAsync(ConnectionGeneration generation, CancellationToken cancellationToken)
     {
-        var setupAck = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _setupAck = setupAck;
-
-        _biStream = _biStreamClient!.requestBiStream(cancellationToken: _cts.Token);
+        generation.Stream = generation.StreamClient!.requestBiStream(cancellationToken: generation.Cts.Token);
 
         // Receive before writing the setup so the server's SetupAckRequest cannot
         // be missed.
-        _receiveTask = ReceiveStreamMessagesAsync(_cts.Token);
+        generation.ReceiveTask = ReceiveStreamMessagesAsync(generation);
 
         // Send initial setup through stream. An explicit ability table makes the
         // server answer with SetupAckRequest once the connection is registered;
@@ -362,37 +438,43 @@ public class NacosGrpcClient : IAsyncDisposable
             AbilityTable = new Dictionary<string, bool>()
         };
 
-        var payload = CreatePayload(ConnectionSetupRequest.TYPE, setupRequest);
-        await _biStream.RequestStream.WriteAsync(payload, cancellationToken);
+        var payload = CreatePayload(generation, ConnectionSetupRequest.TYPE, setupRequest);
+        await generation.Stream.RequestStream.WriteAsync(payload, cancellationToken);
 
         // Wait for the registration acknowledgement before reporting the client as
         // connected: requests sent earlier are dropped by the server as coming
         // from an unknown connection.
-        var completed = await Task.WhenAny(setupAck.Task, Task.Delay(ConnectionTimeoutMs, cancellationToken));
-        if (completed != setupAck.Task)
+        var completed = await Task.WhenAny(generation.SetupAck.Task, Task.Delay(ConnectionTimeoutMs, cancellationToken));
+        if (completed != generation.SetupAck.Task)
         {
             _logger?.LogWarning(
                 "Nacos did not acknowledge the gRPC connection setup within {Timeout}ms", ConnectionTimeoutMs);
         }
     }
 
-    private async Task ReceiveStreamMessagesAsync(CancellationToken cancellationToken)
+    private async Task ReceiveStreamMessagesAsync(ConnectionGeneration generation)
     {
+        var cancellationToken = generation.Cts.Token;
+
         try
         {
-            await foreach (var payload in _biStream!.ResponseStream.ReadAllAsync(cancellationToken))
+            await foreach (var payload in generation.Stream!.ResponseStream.ReadAllAsync(cancellationToken))
             {
                 try
                 {
                     var type = payload.Metadata?.Type ?? "Unknown";
                     var body = payload.Body?.Value.ToStringUtf8() ?? "{}";
 
-                    _lastActiveTime = DateTime.UtcNow;
+                    if (IsCurrent(generation))
+                    {
+                        _lastActiveTime = DateTime.UtcNow;
+                    }
+
                     _logger?.LogDebug("Received push message of type {Type}", type);
 
                     // Everything the server writes to the bi-stream is a push:
                     // request responses travel over the unary Request/request call.
-                    await HandleServerPushAsync(type, body, cancellationToken);
+                    await HandleServerPushAsync(generation, type, body, cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -411,18 +493,25 @@ public class NacosGrpcClient : IAsyncDisposable
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Error in bi-stream receive loop");
-            _connected = false;
+
+            // Only the current generation may report itself as lost: an orphaned
+            // loop from a retired connection must not flag the fresh one.
+            if (IsCurrent(generation))
+            {
+                _connected = false;
+            }
         }
     }
 
-    private async Task HandleServerPushAsync(string type, string body, CancellationToken cancellationToken)
+    private async Task HandleServerPushAsync(ConnectionGeneration generation, string type, string body,
+        CancellationToken cancellationToken)
     {
         // The connection setup acknowledgement is the readiness signal awaited by
         // StartBiStreamAsync. It is sent without expecting an ack (sendRequestNoAck).
         if (type == SetupAckRequestType)
         {
             _logger?.LogDebug("Server acknowledged the gRPC connection setup");
-            _setupAck?.TrySetResult(true);
+            generation.SetupAck.TrySetResult(true);
             return;
         }
 
@@ -436,7 +525,7 @@ public class NacosGrpcClient : IAsyncDisposable
                 detectionResponse.RequestId = detectionRequestId;
             }
 
-            await SendPushAckAsync(ClientDetectionResponse.TYPE, detectionResponse, cancellationToken);
+            await SendPushAckAsync(generation, ClientDetectionResponse.TYPE, detectionResponse, cancellationToken);
             return;
         }
 
@@ -457,7 +546,7 @@ public class NacosGrpcClient : IAsyncDisposable
         if (type.EndsWith("Request"))
         {
             var responseType = type.Replace("Request", "Response");
-            await SendPushAckAsync(responseType, BuildPushAck(body), cancellationToken);
+            await SendPushAckAsync(generation, responseType, BuildPushAck(body), cancellationToken);
         }
     }
 
@@ -504,12 +593,13 @@ public class NacosGrpcClient : IAsyncDisposable
         return false;
     }
 
-    private async Task SendPushAckAsync(string type, object response, CancellationToken cancellationToken)
+    private async Task SendPushAckAsync(ConnectionGeneration generation, string type, object response,
+        CancellationToken cancellationToken)
     {
         try
         {
-            var ackPayload = CreatePayload(type, response);
-            await _biStream!.RequestStream.WriteAsync(ackPayload, cancellationToken);
+            var ackPayload = CreatePayload(generation, type, response);
+            await generation.Stream!.RequestStream.WriteAsync(ackPayload, cancellationToken);
             _logger?.LogDebug("Sent ack for {Type}", type);
         }
         catch (Exception ex)
@@ -518,7 +608,7 @@ public class NacosGrpcClient : IAsyncDisposable
         }
     }
 
-    private async Task KeepAliveLoopAsync(CancellationToken cancellationToken)
+    private async Task KeepAliveLoopAsync(ConnectionGeneration generation, CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -526,12 +616,15 @@ public class NacosGrpcClient : IAsyncDisposable
             {
                 await Task.Delay(KeepAliveIntervalMs, cancellationToken);
 
-                if (!_connected) continue;
+                // A retired generation must not health-check (or reconnect) anything:
+                // its loops are cancelled during cleanup anyway, this only closes the
+                // window between the cancellation and the loop observing it.
+                if (!IsCurrent(generation) || !_connected) continue;
 
                 // Check if we need to send health check
                 if ((DateTime.UtcNow - _lastActiveTime).TotalMilliseconds > KeepAliveIntervalMs)
                 {
-                    await SendHealthCheckAsync(cancellationToken);
+                    await SendHealthCheckAsync(generation, cancellationToken);
                 }
             }
             catch (OperationCanceledException)
@@ -545,14 +638,14 @@ public class NacosGrpcClient : IAsyncDisposable
         }
     }
 
-    private async Task SendHealthCheckAsync(CancellationToken cancellationToken)
+    private async Task SendHealthCheckAsync(ConnectionGeneration generation, CancellationToken cancellationToken)
     {
         try
         {
             var request = new HealthCheckRequest();
             var response = await RequestAsync<HealthCheckResponse>(HealthCheckRequest.TYPE, request, cancellationToken);
-            
-            if (response?.IsSuccess == true)
+
+            if (response?.IsSuccess == true && IsCurrent(generation))
             {
                 _lastActiveTime = DateTime.UtcNow;
             }
@@ -560,11 +653,15 @@ public class NacosGrpcClient : IAsyncDisposable
         catch (Exception ex)
         {
             _logger?.LogWarning(ex, "Health check failed");
-            _connected = false;
+
+            if (IsCurrent(generation))
+            {
+                _connected = false;
+            }
         }
     }
 
-    private Payload CreatePayload(string type, object request)
+    private Payload CreatePayload(ConnectionGeneration generation, string type, object request)
     {
         var json = JsonSerializer.Serialize(request, _jsonOptions);
         var body = ByteString.CopyFromUtf8(json);
@@ -575,9 +672,9 @@ public class NacosGrpcClient : IAsyncDisposable
             {
                 Type = type,
                 ClientIp = GetLocalIp(),
-                Headers = 
-                { 
-                    { "connectionId", _connectionId ?? _clientId },
+                Headers =
+                {
+                    { "connectionId", generation.ConnectionId ?? _clientId },
                     { "clientId", _clientId }
                 }
             },
@@ -601,31 +698,76 @@ public class NacosGrpcClient : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Retires the current generation: unpublishes it (so its loops can no longer
+    /// mutate the shared state), cancels and awaits its loops, then disposes its
+    /// stream and channel. Safe to call when nothing is connected.
+    /// </summary>
     private async Task CleanupConnectionAsync()
     {
+        var generation = _current;
+        _current = null;
         _connected = false;
-        _setupAck = null;
+
+        if (generation == null)
+        {
+            return;
+        }
 
         try
         {
-            if (_biStream != null)
+            await generation.Cts.CancelAsync();
+        }
+        catch { /* Ignore */ }
+
+        // Wait for the loops to observe the cancellation before touching their
+        // resources: a receive loop still reading from a disposed stream would only
+        // log errors, but its keep-alive sibling could still issue health checks.
+        var loopsCompleted = true;
+
+        foreach (var task in new[] { generation.KeepAliveTask, generation.ReceiveTask })
+        {
+            if (task == null)
             {
-                await _biStream.RequestStream.CompleteAsync();
-                _biStream.Dispose();
-                _biStream = null;
+                continue;
+            }
+
+            try
+            {
+                await task.WaitAsync(TimeSpan.FromSeconds(2));
+            }
+            catch
+            {
+                loopsCompleted = false;
+            }
+        }
+
+        try
+        {
+            if (generation.Stream != null)
+            {
+                await generation.Stream.RequestStream.CompleteAsync();
+                generation.Stream.Dispose();
+                generation.Stream = null;
             }
         }
         catch { /* Ignore */ }
 
         try
         {
-            _channel?.Dispose();
-            _channel = null;
+            generation.Channel?.Dispose();
+            generation.Channel = null;
         }
         catch { /* Ignore */ }
 
-        _biStreamClient = null;
-        _connectionId = null;
+        generation.StreamClient = null;
+
+        // Disposing a source whose loops never finished would make their next
+        // cancellation-token usage throw ObjectDisposedException, so leave it to the GC.
+        if (loopsCompleted)
+        {
+            generation.Cts.Dispose();
+        }
     }
 
     private static string GetLocalIp()
@@ -650,21 +792,10 @@ public class NacosGrpcClient : IAsyncDisposable
         if (_disposed) return;
         _disposed = true;
 
-        await _cts.CancelAsync();
-        
-        // Wait for background tasks
-        if (_keepAliveTask != null)
-        {
-            try { await _keepAliveTask.WaitAsync(TimeSpan.FromSeconds(2)); } catch { /* Ignore */ }
-        }
-        if (_receiveTask != null)
-        {
-            try { await _receiveTask.WaitAsync(TimeSpan.FromSeconds(2)); } catch { /* Ignore */ }
-        }
-
+        // Cancels and awaits the current generation's loops, then disposes its
+        // stream and channel.
         await CleanupConnectionAsync();
-        
-        _cts.Dispose();
+
         _connectionLock.Dispose();
     }
 }
