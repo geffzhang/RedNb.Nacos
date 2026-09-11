@@ -280,7 +280,7 @@ NamingRpcTransportClient 一元/流式/推送分派、`NacosGrpcAiService` 构�
 | 核心模型 | 200+ | 90% |
 | HTTP Config Service | 30+ | 90% |
 | HTTP Naming Service | 40+ | 90% |
-| HTTP AI Service | 30+ | 80%（单元级 + live 双通道集成） |
+| HTTP AI Service | 30+ | 16 功能行中 11 行无覆盖缺口（5 行 ⚠️：2 个订阅集成 Skip + 3 个注册表 gRPC 无测试；见 §一.3 矩阵） |
 | gRPC Config/Naming/AI | 24 | 85%（分派逻辑 + AI 线格式形状） |
 | Lock Service | 55+ | 100% ✅ |
 | Maintainer Service | 35+ | 40% |
@@ -353,7 +353,7 @@ NamingRpcTransportClient 一元/流式/推送分派、`NacosGrpcAiService` 构�
 |-----|----------|----------|---------|
 | Config Service | 100% (v3) | 100%\* | 90% |
 | Naming Service | 100% (v3) | 100%\* | 90% |
-| AI Service | 100%\* | 100%\* | 70% |
+| AI Service | 100%\* | 100%\* | 16 功能行中 11 行无覆盖缺口（5 行 ⚠️：2 个订阅集成 Skip + 3 个注册表 gRPC 无测试；见 §一.3 矩阵） |
 | Lock Service | 100% `[Obsolete]` | 100% | **100%** ✅ |
 | Maintainer Service | `[Obsolete]` | N/A | **40%** |
 | Failover 机制 | **100%** ✅ | N/A | **100%** ✅ |

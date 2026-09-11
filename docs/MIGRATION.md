@@ -26,6 +26,12 @@ with it.
   `AgentVersionInfo` objects (`version`, `createdAt`, `updatedAt`, `latest`) as
   the console endpoint actually serves them. `ListAgentVersionsAsync` is
   **unchanged** (`List<string>`) and now projects `.Version` from the rich list.
+  As with `IAiService`, an implementer of `IA2aService` written against the
+  previous version must add the new member to compile.
+- `NacosHttpClient` and `NacosConsoleHttpClient` now derive from the new public
+  `NacosHttpClientBase`, which holds the shared HTTP transport (the extension
+  seam is the `protected virtual BuildBaseUrl`). The public members of the
+  concrete classes are unchanged — they are inherited from the base.
 - `IMaintainerService` and its sub-interfaces: marked `[Obsolete]`. Calls
   will return HTTP 404 at runtime. The Maintainer APIs have no v3 equivalent;
   migration paths:
@@ -109,12 +115,24 @@ Channel availability in 3.2.4 differs per operation:
 - **MCP tool CRUD** — available on **neither** channel in Nacos 3.2.4: there is
   no console HTTP endpoint and no server-side gRPC handler. Both channels fail
   loud with `NacosException`.
-- **Other gRPC ops** — the 3.2.4 server registers only 8 AI gRPC handlers. The
-  remaining operations (delete/list/subscribe MCP and agent, MCP import and
-  validation, MCP tool CRUD, agent version lists) throw
-  `NacosException.ServerNotImplemented` (501) on the gRPC channel with a message
-  pointing at the HTTP console channel. Note the subscription operations are
-  polling-based over HTTP (10s), not push.
+- **Other gRPC ops** — the 3.2.4 server registers only 8 AI gRPC handlers, so
+  the remaining 14 operations throw `NacosException.ServerNotImplemented` (501)
+  on the gRPC channel. What the exception message says depends on the operation:
+  - The subscribe / delete / list / validate / import operations (MCP server
+    subscribe, delete, list, validate-import and import; agent subscribe, delete
+    and list, including both agent version-list members) point at the HTTP
+    console channel: `... has no Nacos 3.2.4 gRPC handler; use the HTTP console
+    channel (IAiService via NacosFactory with ConsoleAddresses) instead`.
+  - The four MCP-tool operations (`RefreshMcpToolAsync`, `GetMcpToolAsync`,
+    `DeleteMcpToolAsync`, `UpdateMcpToolAsync`) say that **no channel exists at
+    all**: `MCP tool management has no Nacos 3.2.4 gRPC handler and no HTTP
+    console endpoint — operation unavailable on this server`.
+  Note the subscription operations are polling-based over HTTP (10s), not push.
+- **gRPC subscribe is inert** — `SubscribeMcpServerAsync` and
+  `SubscribeAgentCardAsync` now throw 501 on the gRPC channel, so the local
+  listener registries and push-delivery branches inside the gRPC AI service stay
+  inert until a real subscribe implementation exists. Subscription over the HTTP
+  console channel is the live path.
 
 ## Questions
 

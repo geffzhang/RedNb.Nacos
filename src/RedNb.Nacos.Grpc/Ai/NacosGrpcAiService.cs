@@ -55,7 +55,7 @@ public partial class NacosGrpcAiService : IAiService
     /// Test-friendly overload: injects the gRPC client so tests can capture
     /// requests with a <c>FakeNacosGrpcClient</c> instead of a live channel.
     /// </summary>
-    public NacosGrpcAiService(NacosClientOptions options, NacosGrpcClient grpcClient, ILogger<NacosGrpcAiService>? logger = null)
+    internal NacosGrpcAiService(NacosClientOptions options, NacosGrpcClient grpcClient, ILogger<NacosGrpcAiService>? logger = null)
     {
         _options = options;
         _logger = logger;
