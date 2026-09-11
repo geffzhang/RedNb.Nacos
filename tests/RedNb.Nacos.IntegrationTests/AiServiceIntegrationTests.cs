@@ -60,14 +60,18 @@ public class AiServiceIntegrationTests : IAsyncLifetime
         };
 
         await _aiService!.ReleaseAgentCardAsync(card);
-        await Task.Delay(500);
 
-        var retrieved = await _aiService.GetAgentCardAsync(agentName);
-        retrieved.Should().NotBeNull();
-        retrieved!.Name.Should().Be(agentName);
-        retrieved.Version.Should().Be("1.0.0");
-
-        await _aiService.DeleteAgentAsync(agentName);
+        try
+        {
+            var retrieved = await _aiService.GetAgentCardAsync(agentName);
+            retrieved.Should().NotBeNull();
+            retrieved!.Name.Should().Be(agentName);
+            retrieved.Version.Should().Be("1.0.0");
+        }
+        finally
+        {
+            await _aiService.DeleteAgentAsync(agentName);
+        }
     }
 
     [Fact]
@@ -108,15 +112,22 @@ public class AiServiceIntegrationTests : IAsyncLifetime
             PreferredTransport = "jsonrpc",
             Url = "http://127.0.0.1:9999"
         });
-        await Task.Delay(500);
 
-        var page = await _aiService.ListAgentCardsAsync(search: "accurate", pageSize: 100);
-        page.PageItems.Should().Contain(i => i.Name == agentName);
-
-        await _aiService.DeleteAgentAsync(agentName);
+        try
+        {
+            // The console list endpoint requires an explicit search mode ("accurate"
+            // or "blur") and matches agentName exactly, so a pageSize-100 scan of the
+            // whole store is neither needed nor deterministic.
+            var page = await _aiService.ListAgentCardsAsync(agentName: agentName, search: "accurate");
+            page.PageItems.Should().Contain(i => i.Name == agentName);
+        }
+        finally
+        {
+            await _aiService.DeleteAgentAsync(agentName);
+        }
     }
 
-    [Fact(Skip = "Server contract surprise: live Nacos 3.2.4 returns rich objects {version, createdAt, updatedAt, latest} at /v3/console/ai/a2a/version/list, but SDK NacosAiService.cs:926 deserializes to List<string>. Tracked as Task 10 follow-up.")]
+    [Fact(Skip = "Server contract surprise: live Nacos 3.2.4 returns rich objects {version, createdAt, updatedAt, latest} at /v3/console/ai/a2a/version/list, but SDK NacosAiService deserializes to List<string>. Tracked in docs/SDK_COMPLETENESS_REPORT.md §五 (待完善).")]
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
     public async Task ListAgentVersions_ReturnsVersions()
@@ -155,14 +166,61 @@ public class AiServiceIntegrationTests : IAsyncLifetime
 
         var mcpId = await _aiService!.ReleaseMcpServerAsync(spec, toolSpecification: null);
         mcpId.Should().NotBeNullOrEmpty();
-        await Task.Delay(500);
 
-        var retrieved = await _aiService.GetMcpServerAsync(mcpName);
-        retrieved.Should().NotBeNull();
-        retrieved!.Name.Should().Be(mcpName);
-        retrieved.VersionDetail!.Version.Should().Be("1.0.0");
+        try
+        {
+            var retrieved = await _aiService.GetMcpServerAsync(mcpName);
+            retrieved.Should().NotBeNull();
+            retrieved!.Name.Should().Be(mcpName);
+            retrieved.VersionDetail!.Version.Should().Be("1.0.0");
+            // Control for ReleaseMcpServer_WithToolSpecification_...: a release with no
+            // tool specification must not report the TOOL capability.
+            retrieved.ToolSpec.Should().BeNull();
+        }
+        finally
+        {
+            await _aiService.DeleteMcpServerAsync(mcpName);
+        }
+    }
 
-        await _aiService.DeleteMcpServerAsync(mcpName);
+    [Fact]
+    [Trait("Category", "Integration")]
+    [Trait("Module", "AI")]
+    public async Task ReleaseMcpServer_WithToolSpecification_SucceedsAndMatchesChannelBehavior()
+    {
+        var mcpName = $"it-mcp-tools-{Guid.NewGuid():N}";
+        var spec = new McpServerBasicInfo
+        {
+            Name = mcpName,
+            VersionDetail = new ServerVersionDetail { Version = "1.0.0" },
+            Protocol = "stdio"
+        };
+        var toolSpec = new McpToolSpecification
+        {
+            Tools = new List<McpTool>
+            {
+                new() { Name = "echo", Description = "Echo tool" }
+            }
+        };
+
+        var mcpId = await _aiService!.ReleaseMcpServerAsync(spec, toolSpec);
+        mcpId.Should().NotBeNullOrEmpty();
+
+        try
+        {
+            // The HTTP console channel accepts and persists tool specifications
+            // (field name `toolSpecification`, bound by the server's McpDetailForm),
+            // so the tool must come back with the released server.
+            var retrieved = await _aiService.GetMcpServerAsync(mcpName);
+            retrieved.Should().NotBeNull();
+            retrieved!.Name.Should().Be(mcpName);
+            retrieved.ToolSpec.Should().NotBeNull();
+            retrieved.ToolSpec!.Tools.Should().Contain(t => t.Name == "echo");
+        }
+        finally
+        {
+            await _aiService.DeleteMcpServerAsync(mcpName);
+        }
     }
 
     [Fact]
@@ -177,12 +235,17 @@ public class AiServiceIntegrationTests : IAsyncLifetime
             VersionDetail = new ServerVersionDetail { Version = "1.0.0" },
             Protocol = "stdio"
         }, toolSpecification: null);
-        await Task.Delay(500);
 
-        var page = await _aiService.ListMcpServersAsync(pageSize: 100);
-        page.PageItems.Should().Contain(i => i.Name == mcpName);
-
-        await _aiService.DeleteMcpServerAsync(mcpName);
+        try
+        {
+            // mcpName is an exact server-side filter, so no pageSize-100 scan.
+            var page = await _aiService.ListMcpServersAsync(mcpName: mcpName);
+            page.PageItems.Should().Contain(i => i.Name == mcpName);
+        }
+        finally
+        {
+            await _aiService.DeleteMcpServerAsync(mcpName);
+        }
     }
 
     [Fact]

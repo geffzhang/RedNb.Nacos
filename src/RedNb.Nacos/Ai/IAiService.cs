@@ -34,6 +34,13 @@ public interface IAiService : IA2aService, IPromptService, ISkillService, IAgent
     /// <summary>
     /// Releases a new MCP server or new version with auto-created service reference.
     /// </summary>
+    /// <remarks>
+    /// A non-null <paramref name="toolSpecification"/> is carried over the HTTP
+    /// console channel as a <c>toolSpecification</c> form field and is persisted by
+    /// Nacos 3.2.4 (the released server reports <c>capabilities: ["TOOL"]</c> with a
+    /// matching <c>toolSpec</c>). Use the gRPC overload when the server also needs an
+    /// <see cref="McpEndpointSpec"/> — a non-local server type is rejected without one.
+    /// </remarks>
     /// <param name="serverSpecification">MCP server specification.</param>
     /// <param name="toolSpecification">MCP tool specification.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -43,6 +50,13 @@ public interface IAiService : IA2aService, IPromptService, ISkillService, IAgent
     /// <summary>
     /// Releases a new MCP server or new version.
     /// </summary>
+    /// <remarks>
+    /// Both optional specifications travel over the HTTP console channel as
+    /// <c>toolSpecification</c> / <c>endpointSpecification</c> form fields — the field
+    /// names bound by the server's <c>McpDetailForm</c> on Nacos 3.2.4. Nacos rejects a
+    /// non-local server type (<c>protocol</c> other than <c>stdio</c>) when
+    /// <paramref name="endpointSpecification"/> is omitted.
+    /// </remarks>
     /// <param name="serverSpecification">MCP server specification.</param>
     /// <param name="toolSpecification">MCP tool specification.</param>
     /// <param name="endpointSpecification">MCP endpoint specification (optional).</param>
