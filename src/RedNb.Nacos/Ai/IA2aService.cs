@@ -72,7 +72,7 @@ public interface IA2aService
     /// <remarks>
     /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
     /// console listener. The HTTP implementation
-    /// (<see cref="RedNb.Nacos.Client.Ai.NacosAiService"/>) throws
+    /// (<c>NacosAiService</c>) throws
     /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
     /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
     /// </remarks>
@@ -89,7 +89,7 @@ public interface IA2aService
     /// <remarks>
     /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
     /// console listener. The HTTP implementation
-    /// (<see cref="RedNb.Nacos.Client.Ai.NacosAiService"/>) throws
+    /// (<c>NacosAiService</c>) throws
     /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
     /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
     /// </remarks>
@@ -107,7 +107,7 @@ public interface IA2aService
     /// <remarks>
     /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
     /// console listener. The HTTP implementation
-    /// (<see cref="RedNb.Nacos.Client.Ai.NacosAiService"/>) throws
+    /// (<c>NacosAiService</c>) throws
     /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
     /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
     /// </remarks>
@@ -122,7 +122,7 @@ public interface IA2aService
     /// <remarks>
     /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
     /// console listener. The HTTP implementation
-    /// (<see cref="RedNb.Nacos.Client.Ai.NacosAiService"/>) throws
+    /// (<c>NacosAiService</c>) throws
     /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
     /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
     /// </remarks>
@@ -137,7 +137,7 @@ public interface IA2aService
     /// <remarks>
     /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
     /// console listener. The HTTP implementation
-    /// (<see cref="RedNb.Nacos.Client.Ai.NacosAiService"/>) throws
+    /// (<c>NacosAiService</c>) throws
     /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
     /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
     /// </remarks>
@@ -154,7 +154,7 @@ public interface IA2aService
     /// <remarks>
     /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
     /// console listener. The HTTP implementation
-    /// (<see cref="RedNb.Nacos.Client.Ai.NacosAiService"/>) throws
+    /// (<c>NacosAiService</c>) throws
     /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
     /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
     /// </remarks>
