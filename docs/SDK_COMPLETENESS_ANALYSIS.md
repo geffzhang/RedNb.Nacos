@@ -103,7 +103,7 @@ HTTP `AddListenerAsync` 保留本地监听器注册 + 一次性 MD5 种子（取
 | 4 | `NacosGrpcClient.cs` | `_current` 读写非原子，Dispose/Connect 竞态可导致新代未被发布（既有形态） |
 | 5 | `NacosGrpcClient.cs` | `RedoScheduledTask` 未实例化（见上文）；`DeadlineExceeded` 重连会丢弃服务端状态 |
 | 6 | `NacosGrpcConfigService.cs` | 非成功 `ConfigQueryResponse` 不检查 `ErrorCode`（Java 映射 300 = not found，待验证后跟进） |
-| 7 | `NacosConstants.NamespaceHeader` | 常量保留仅为已搁置的 AI 代码引用（AI 端点验证是下一步，届时一并清理） |
+| 7 | `NacosConstants.NamespaceHeader` | ~~常量保留仅为已搁置的 AI 代码引用~~（2026-09-11：`NacosAiService` 已不再发送该 header；常量暂保留——`NacosSkillService`/`NacosPromptService`/`NacosAgentSpecService` 3 个 helper 服务仍读取它，待后续清理） |
 
 ---
 
@@ -118,4 +118,4 @@ HTTP `AddListenerAsync` 保留本地监听器注册 + 一次性 MD5 种子（取
 
 代码库已完成 Nacos 3.2+ 协议迁移：v1/v2 路径与 HTTP 长轮询清除，gRPC 传输对齐 3.2.4 契约，
 Failover / Monitor 基础设施已集成并全量测试，废弃面按计划 `[Obsolete]` + 大声失败。
-剩余工作集中在 AI 控制台端点验证（HTTP/gRPC 双通道）、gRPC 服务层测试覆盖（高级功能实现已齐备）与 Redo 接线（详见 REPORT 的"待完善"章节）。
+剩余工作集中在 gRPC 服务层测试覆盖（ErrorCode 语义、Redo 接线、连接健壮性），详见 REPORT 的"待完善"章节。

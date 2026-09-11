@@ -49,6 +49,44 @@ with it.
   (query) — unchanged.
 - `NacosClientOptions.Username` and `Password` are still the public surface.
 
+## AI endpoints
+
+Nacos 3.2.4 exposes AI management endpoints **only on the console listener**
+(port 8080 by default), not on the API port (8848). Their paths start with
+`/v3/console/ai/**`, and the console listener has no `/nacos` context path.
+Authentication is unchanged: the console accepts the same `accessToken` issued
+by `/v3/auth/user/login`, which the SDK obtains from `Username`/`Password`.
+
+The HTTP AI service (`NacosFactory.CreateAiService`) targets the console port
+automatically. Configure `NacosClientOptions.ConsoleAddresses` to override the
+default (`ServerAddresses` with port 8080):
+
+```csharp
+var options = new NacosClientOptions
+{
+    ServerAddresses = "nacos-1:8848,nacos-2:8848",     // API port(s)
+    ConsoleAddresses = "nacos-1:8080,nacos-2:8080",    // Console port(s)
+    Username = "nacos",
+    Password = "nacos"
+};
+```
+
+Both properties are comma-separated `string` values. Explicit
+`ConsoleAddresses` entries are used verbatim (no port substitution); when the
+property is empty, the SDK derives console addresses from `ServerAddresses` by
+replacing each port with 8080.
+
+Channel availability in 3.2.4 differs per operation:
+
+- **Endpoint register/deregister (MCP and Agent)** — no HTTP endpoint on the
+  console, so the HTTP service throws `NacosException` (fail loud). The server
+  **does** expose gRPC handlers for these, so use the gRPC-backed service
+  (`NacosGrpcFactory.CreateAiServiceAsync`). Note: the .NET gRPC AI channel is
+  currently blocked by pre-existing SDK gaps — see
+  [SDK_COMPLETENESS_REPORT.md](SDK_COMPLETENESS_REPORT.md) §一.3.
+- **MCP tool CRUD** — available on **neither** channel in Nacos 3.2.4: there is
+  no console HTTP endpoint and no server-side gRPC handler.
+
 ## Questions
 
 Open an issue at https://github.com/redNb/RedNb.Nacos/issues.

@@ -24,7 +24,7 @@ SDK 已完成向 **Nacos 3.2+** 的协议迁移（分支 `AIRegistry`，标签 `
 | CAS 发布 | HTTP 重载 `[Obsolete]` + 非空 casMd5 抛 `NotSupportedException`（v3 admin 端点忽略 CAS）；gRPC 原生支持 |
 | 重连稳定性 | gRPC 连接代数（generation）隔离 + 清理旧代；`DeadlineExceeded` 视为连接失效；陈旧循环不会翻转新连接的 `_connected` |
 
-**测试矩阵（全部绿灯）**：Core 370 ×2 TFM · HTTP 132 ×2 TFM · gRPC 19 ×2 TFM · 集成测试 31（live Nacos 3.2.4，服务器日志无协议告警）。
+**测试矩阵（全部绿灯）**：Core 370 ×2 TFM · HTTP 132 ×2 TFM · gRPC 19 ×2 TFM · 集成测试 38（31 通过 · 7 Skip：AI gRPC 通道受既有 SDK gap 阻塞，见 §一.3；live Nacos 3.2.4，服务器日志无协议告警）。
 
 ---
 
@@ -72,9 +72,15 @@ SDK 已完成向 **Nacos 3.2+** 的协议迁移（分支 `AIRegistry`，标签 `
 
 ### 3. AI Service (AI/MCP/A2A 服务) - Nacos 3.0 新增功能
 
-> ⚠️ **状态：HTTP 与 gRPC 双通道均已实现，未对 live 控制台验证**。AI 端点部署在控制台端口 8080（`/v3/console/ai/**`），
-> 当前 6 个 AI 集成测试因吞掉 `NacosException` 而"通过"，并未真正打到 live 端点。详见下文"待完善"。
-> gRPC 实现位于 `NacosGrpcAiService.cs`（MCP/AgentCard）+ `NacosGrpcAiService.Registry.cs`（Prompt/Skill/AgentSpec 注册表）。
+> ⚠️ **状态：HTTP 通道已通过 live Nacos 3.2.4 验证（2026-09-11）；gRPC 通道被既有 SDK gap 阻塞，live 测试已 Skip**。
+> AI 端点部署在控制台端口 8080（`/v3/console/ai/**`）；HTTP 通道 `src/RedNb.Nacos.Http/Ai/` 已按真实控制器路径与参数名对齐并联调通过
+> （6 个 AI 集成测试改为真实断言并通过：4 个 live 往返 + 2 个 fail-loud，不再吞掉 `NacosException`；另有 3 个 Skip）。
+> gRPC 实现位于 `NacosGrpcAiService.cs`（MCP/AgentCard）+ `NacosGrpcAiService.Registry.cs`（Prompt/Skill/AgentSpec 注册表），
+> 请求 TYPE 字符串已按服务器 handler 类对齐（枚举 `nacos-ai-3.2.4.jar` handler 类验证），但通道被 4 个既有 SDK gap 阻塞：
+> `NacosGrpcClient` 无认证路径、`OperationResponse` 结构与服务器 `Response{resultCode,errorCode,message,requestId}` 不符、
+> `ReleaseMcpServerResponse` 读 `McpServerId` 而非服务器下发的 `mcpId`、HTTP `DeleteMcpServerAsync` 发送无 body 的 DELETE；已跟踪为后续修复。
+> HTTP 侧 register/deregister endpoint 无对应路径，调用时 fail loud 指向 gRPC 通道；MCP tool CRUD 在 3.2.4 两个通道均不存在（无 HTTP 端点、也无 gRPC handler）；
+> 订阅仍为 10s 轮询，可后续替换为 gRPC push。
 
 | 功能 | Java SDK | .NET SDK (HTTP) | .NET SDK (gRPC) | 测试覆盖 |
 |-----|---------|-----------------|-----------------|---------|
@@ -86,14 +92,15 @@ SDK 已完成向 **Nacos 3.2+** 的协议迁移（分支 `AIRegistry`，标签 `
 | unsubscribeMcpServer | ✅ | ✅ | ✅ | ✅ 单元(HTTP) |
 | deleteMcpServer | ✅ | ✅ | ✅ | ⚠️ 无测试 |
 | listMcpServers | ✅ | ✅ | ✅ | ⚠️ 无测试 |
-| getAgentCard | ✅ | ✅ | ✅ | ✅ 集成(吞异常) |
+| getAgentCard | ✅ | ✅ | ✅ | ✅ 集成(HTTP live 往返) |
 | releaseAgentCard | ✅ | ✅ | ✅ | ⚠️ 无测试 |
 | Agent Subscription | ✅ | ✅ | ✅ | ✅ 单元(HTTP) |
 | Prompt 注册表（draft/审核/发布/上下线/删除） | ✅ | ✅ | ✅ | ✅ 单元(HTTP) · ⚠️ gRPC 无测试 |
 | Skill 注册表（含 zip 上传/下载） | ✅ | ✅ | ✅ | ✅ 单元(HTTP) · ⚠️ gRPC 无测试 |
 | AgentSpec 注册表 | ✅ | ✅ | ✅ | ✅ 单元(HTTP) · ⚠️ gRPC 无测试 |
 
-**HTTP 实现完成度: 100%\*** | **gRPC 实现完成度: 100%\***（\* 双通道均未对 live 8080 控制台验证）
+**HTTP 实现完成度: 100%\*** | **gRPC 实现完成度: 100%\***（\* HTTP 通道已通过 live 8080 控制台验证（2026-09-11），但 endpoint register/deregister 无 HTTP 端点、MCP tool CRUD 两个通道均无（HTTP 侧调用 fail loud）；
+gRPC 通道 TYPE 字符串已对齐服务器，受 4 个既有 SDK gap 阻塞、live 测试 Skip —— 详见本节状态注）
 
 ### 4. Lock Service (分布式锁) - Nacos 3.0 新增功能
 
@@ -245,9 +252,10 @@ NamingRpcTransportClient 一元/流式/推送分派。
 | NamingSelectorIntegrationTests.cs | 选择器集成 | 4 | ✅ |
 | ConfigListenerPushTests.cs | 配置 gRPC 推送闭环 | 3 | ✅ |
 | NamingSubscribePushTests.cs | 命名 gRPC 推送闭环 | 3 | ✅ |
-| AiServiceIntegrationTests.cs | AI 服务集成 | 6 | ⚠️ 吞异常通过(见 AI 章节) |
+| AiServiceIntegrationTests.cs | AI 服务集成（HTTP 控制台） | 9 | ✅ 6 通过（4 live 往返 + 2 fail-loud 断言） · ⚠️ 3 Skip（2 订阅轮询 + 1 服务端契约差异） |
+| Ai/GrpcAiServiceIntegrationTests.cs | AI 服务集成（gRPC 通道） | 4 | ⚠️ Skip（受 4 个既有 SDK gap 阻塞，见 §一.3 AI 状态注） |
 
-**总计: 31 个集成测试**（服务器日志无协议告警）
+**总计: 38 个集成测试**（31 通过 · 7 Skip，见 §一.3；服务器日志无协议告警）
 
 ### 测试覆盖总结
 
@@ -263,7 +271,7 @@ NamingRpcTransportClient 一元/流式/推送分派。
 | Failover 机制 | 20+ | 100% ✅ |
 | MetricsMonitor | 25+ | 100% ✅ |
 
-**测试运行结果: 全部通过（370 + 132 + 19）×2 TFM + 31 集成 ✅**
+**测试运行结果: 全部通过（370 + 132 + 19）×2 TFM + 38 集成（31 通过 · 7 Skip）✅**
 
 ---
 
@@ -274,10 +282,7 @@ NamingRpcTransportClient 一元/流式/推送分派。
 
 ### 高优先级
 
-1. **AI 服务 live 验证（HTTP + gRPC 双通道）**
-   - [ ] 对 8080 控制台 `/v3/console/ai/**` 真实联调：HTTP `src/RedNb.Nacos.Http/Ai/`、gRPC `src/RedNb.Nacos.Grpc/Ai/NacosGrpcAiService.cs` + `NacosGrpcAiService.Registry.cs`
-   - [ ] 修正 6 个吞异常的 AI 集成测试（`tests/RedNb.Nacos.IntegrationTests/AiServiceIntegrationTests.cs`）：断言真实响应而非捕获 `NacosException` 后通过
-   - [ ] 验证后清理 `NacosConstants.NamespaceHeader`（目前仅为 AI 代码保留，ANALYSIS §三.7）
+1. ~~**AI 服务 live 验证（HTTP + gRPC 双通道）**~~（2026-09-11：HTTP 通道完成；gRPC 受既有 SDK gap 阻塞，见 §一.3 AI 行的 * 注；`NacosConstants.NamespaceHeader` 清理延期，见 ANALYSIS §三.7）
 
 2. **gRPC 服务层测试覆盖（实现齐备，测试空白）**
    - [ ] Config：AddConfigFilter（`NacosGrpcConfigService.cs:303`）、FuzzyWatch/CancelFuzzyWatch（`:313`/`:399`）
@@ -328,7 +333,7 @@ NamingRpcTransportClient 一元/流式/推送分派。
 | MetricsMonitor | **100%** ✅ | N/A | **100%** ✅ |
 | **总体** | **100%** | **100%\*** | **85%** |
 
-\* 实现已编码完成，但尚未对 live 控制台（8080）验证；gRPC 服务层无单元测试（19 个用例均为传输层分派）。
+\* 实现已编码完成；gRPC 服务层无单元测试（19 个用例均为传输层分派）。AI 通道状态见 §一.3 状态注：HTTP 已通过 live 8080 控制台验证（2026-09-11），gRPC 受 4 个既有 SDK gap 阻塞（live 测试 Skip）。
 
 ### 结论
 
