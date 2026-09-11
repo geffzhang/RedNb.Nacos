@@ -90,7 +90,7 @@ SDK 已完成向 **Nacos 3.2+** 的协议迁移（分支 `AIRegistry`，标签 `
 | 功能 | Java SDK | .NET SDK (HTTP) | .NET SDK (gRPC) | 测试覆盖 |
 |-----|---------|-----------------|-----------------|---------|
 | getMcpServer | ✅ | ✅ | ✅ | ✅ 单元(HTTP) + 集成(HTTP live 往返) |
-| releaseMcpServer | ✅ | ✅ | ✅ | ✅ 集成(HTTP live 往返，含 toolSpecification / endpointSpecification 持久化) · ⚠️ gRPC Skip |
+| releaseMcpServer | ✅ | ✅ | ✅ | ✅ 集成(HTTP live 往返：toolSpecification 持久化往返，endpointSpecification 受理 + serviceRef 回传) · ⚠️ gRPC Skip |
 | registerMcpServerEndpoint | ✅ | ✅ | ✅ | ✅ 集成(HTTP fail-loud 断言) · ⚠️ gRPC Skip |
 | deregisterMcpServerEndpoint | ✅ | ✅ | ✅ | ✅ 集成(HTTP fail-loud 断言) · ⚠️ gRPC Skip |
 | subscribeMcpServer | ✅ | ✅ | ✅ | ✅ 单元(HTTP) · ⚠️ 集成 Skip（轮询占位） |
