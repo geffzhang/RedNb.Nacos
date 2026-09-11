@@ -24,7 +24,7 @@ SDK 已完成向 **Nacos 3.2+** 的协议迁移（分支 `AIRegistry`，标签 `
 | CAS 发布 | HTTP 重载 `[Obsolete]` + 非空 casMd5 抛 `NotSupportedException`（v3 admin 端点忽略 CAS）；gRPC 原生支持 |
 | 重连稳定性 | gRPC 连接代数（generation）隔离 + 清理旧代；`DeadlineExceeded` 视为连接失效；陈旧循环不会翻转新连接的 `_connected` |
 
-**测试矩阵（全部绿灯）**：Core 370 ×2 TFM · HTTP 132 ×2 TFM · gRPC 19 ×2 TFM · 集成测试 38（31 通过 · 7 Skip：AI gRPC 通道受既有 SDK gap 阻塞，见 §一.3；live Nacos 3.2.4，服务器日志无协议告警）。
+**测试矩阵（全部绿灯）**：Core 370 ×2 TFM · HTTP 132 ×2 TFM · gRPC 19 ×2 TFM · 集成测试 38（31 通过 · 7 Skip：4 个 gRPC AI 测试受既有 SDK gap 阻塞（见 §一.3）+ 2 个订阅轮询占位 + 1 个服务端契约差异（`ListAgentVersions` 返回对象数组，SDK 按 `List<string>` 反序列化）；live Nacos 3.2.4，服务器日志无协议告警）。
 
 ---
 
@@ -348,9 +348,9 @@ gRPC 承载全部请求传输与服务端推送（连接就绪握手、重连代
 4. ✅ 配置监听 HTTP 长轮询移除，推送走 gRPC bi-stream
 5. ✅ gRPC 重连机制完善（连接代数隔离，陈旧循环不污染新连接）
 6. ✅ 错误信封在公开 API 边界抛异常（拒绝查询不再伪装成"无实例"）
-7. ✅ 测试矩阵：370+132+19 单元 ×2 TFM + 31 live 集成，全部绿灯
+7. ✅ 测试矩阵：370+132+19 单元 ×2 TFM + 38 live 集成（31 通过 · 7 Skip，见 §一.3；0 失败）
 
 **下一步优先级:**
-1. AI 服务 live 控制台验证（8080）
+1. ~~AI 服务 live 控制台验证（8080）~~（2026-09-11：HTTP 已完成；gRPC 受既有 SDK gap 阻塞，见 §五.1）
 2. gRPC Config/Naming 高级功能的测试覆盖（fuzzyWatch、批量、Selector 订阅——实现已齐备，见 §五.2）
 3. Redo 机制接线与负载均衡
