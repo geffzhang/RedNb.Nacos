@@ -91,7 +91,7 @@ public partial class NacosGrpcAiService : IAiService
         };
 
         var response = await _grpcClient.RequestAsync<McpServerQueryResponse>(
-            "McpServerQueryRequest", request, cancellationToken);
+            "QueryMcpServerRequest", request, cancellationToken);
 
         return response?.McpServerDetailInfo;
     }
@@ -117,7 +117,7 @@ public partial class NacosGrpcAiService : IAiService
         };
 
         var response = await _grpcClient.RequestAsync<McpServerReleaseResponse>(
-            "McpServerReleaseRequest", request, cancellationToken);
+            "ReleaseMcpServerRequest", request, cancellationToken);
 
         return response?.McpServerId ?? string.Empty;
     }
@@ -141,11 +141,11 @@ public partial class NacosGrpcAiService : IAiService
             Address = address,
             Port = port,
             Version = version,
-            Type = "register"
+            Type = "registerEndpoint"
         };
 
         var response = await _grpcClient.RequestAsync<OperationResponse>(
-            "McpEndpointRequest", request, cancellationToken);
+            "McpServerEndpointRequest", request, cancellationToken);
 
         if (response?.Success != true)
         {
@@ -167,11 +167,11 @@ public partial class NacosGrpcAiService : IAiService
             McpName = mcpName,
             Address = address,
             Port = port,
-            Type = "deregister"
+            Type = "deregisterEndpoint"
         };
 
         var response = await _grpcClient.RequestAsync<OperationResponse>(
-            "McpEndpointRequest", request, cancellationToken);
+            "McpServerEndpointRequest", request, cancellationToken);
 
         if (response?.Success != true)
         {
@@ -532,7 +532,7 @@ public partial class NacosGrpcAiService : IAiService
         };
 
         var response = await _grpcClient.RequestAsync<AgentCardQueryResponse>(
-            "AgentCardQueryRequest", request, cancellationToken);
+            "QueryAgentCardRequest", request, cancellationToken);
 
         return response?.AgentCardDetailInfo;
     }
@@ -564,7 +564,7 @@ public partial class NacosGrpcAiService : IAiService
         };
 
         var response = await _grpcClient.RequestAsync<OperationResponse>(
-            "AgentCardReleaseRequest", request, cancellationToken);
+            "ReleaseAgentCardRequest", request, cancellationToken);
 
         if (response?.Success != true)
         {
@@ -604,7 +604,7 @@ public partial class NacosGrpcAiService : IAiService
             Namespace = _namespaceId,
             AgentName = agentName,
             Endpoint = endpoint,
-            Type = "register"
+            Type = "registerEndpoint"
         };
 
         var response = await _grpcClient.RequestAsync<OperationResponse>(
@@ -654,7 +654,7 @@ public partial class NacosGrpcAiService : IAiService
             Namespace = _namespaceId,
             AgentName = agentName,
             Endpoint = endpoint,
-            Type = "deregister"
+            Type = "deregisterEndpoint"
         };
 
         var response = await _grpcClient.RequestAsync<OperationResponse>(
