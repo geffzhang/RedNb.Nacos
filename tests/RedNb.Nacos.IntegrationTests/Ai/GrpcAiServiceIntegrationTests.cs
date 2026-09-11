@@ -84,22 +84,38 @@ public class GrpcAiServiceIntegrationTests : IAsyncLifetime
     public async Task RegisterAndDeregisterMcpEndpoint_ViaGrpc()
     {
         var mcpName = $"grpc-mcp-ep-{Guid.NewGuid():N}";
+        var serviceName = $"svc-{Guid.NewGuid():N}";
         var released = await _grpcAi!.ReleaseMcpServerAsync(new McpServerBasicInfo
         {
             Name = mcpName,
             VersionDetail = new ServerVersionDetail { Version = "1.0.0" },
-            Protocol = "stdio"
+            Protocol = "mcp-sse",
+            RemoteServerConfig = new McpServerRemoteServiceConfig
+            {
+                ServiceRef = new McpServiceRef
+                {
+                    NamespaceId = "public",
+                    GroupName = "DEFAULT_GROUP",
+                    ServiceName = serviceName
+                }
+            }
         }, toolSpecification: null);
         released.Should().NotBeNullOrEmpty();
 
-        await WaitForAsync(_output, () => _grpcAi.GetMcpServerAsync(mcpName), s => s is not null);
+        try
+        {
+            await WaitForAsync(_output, () => _grpcAi.GetMcpServerAsync(mcpName), s => s is not null);
 
-        await _grpcAi.RegisterMcpServerEndpointAsync(mcpName, "127.0.0.1", 9100, "1.0.0");
-        var got = await WaitForAsync(_output, () => _grpcAi.GetMcpServerAsync(mcpName), s => s is not null);
-        got.Should().NotBeNull();
+            await _grpcAi.RegisterMcpServerEndpointAsync(mcpName, "127.0.0.1", 9100, "1.0.0");
+            var got = await WaitForAsync(_output, () => _grpcAi.GetMcpServerAsync(mcpName), s => s is not null);
+            got.Should().NotBeNull();
 
-        await _grpcAi.DeregisterMcpServerEndpointAsync(mcpName, "127.0.0.1", 9100);
-        await DeleteWithRetryAsync(_output, () => _httpAi!.DeleteMcpServerAsync(mcpName));
+            await _grpcAi.DeregisterMcpServerEndpointAsync(mcpName, "127.0.0.1", 9100);
+        }
+        finally
+        {
+            await DeleteWithRetryAsync(_output, () => _httpAi!.DeleteMcpServerAsync(mcpName));
+        }
     }
 
     [Fact]
