@@ -230,5 +230,13 @@ public class NacosClientOptions
                 NacosException.InvalidParam,
                 "At least one of ServerAddresses, ConsoleAddresses, or Endpoint must be provided");
         }
+
+        var hasCredentials = !string.IsNullOrWhiteSpace(Username) || !string.IsNullOrWhiteSpace(Password);
+        if (hasCredentials && !hasCore)
+        {
+            throw new NacosException(
+                NacosException.InvalidParam,
+                "Username/Password require ServerAddresses: login is performed against the server API port (8848), so a console-only configuration cannot authenticate");
+        }
     }
 }

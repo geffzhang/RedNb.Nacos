@@ -71,4 +71,32 @@ public class NacosClientOptionsTests
         Action act = () => opts.Validate();
         act.Should().NotThrow();
     }
+
+    [Fact]
+    public void Validate_Throws_WhenCredentialsSetWithoutServerAddresses()
+    {
+        var opts = new NacosClientOptions
+        {
+            ServerAddresses = "",
+            ConsoleAddresses = "localhost:8080",
+            Username = "nacos",
+            Password = "nacos"
+        };
+        Action act = () => opts.Validate();
+        act.Should().Throw<NacosException>()
+            .WithMessage("*Username/Password require ServerAddresses*");
+    }
+
+    [Fact]
+    public void Validate_AllowsServerAddressesWithCredentials()
+    {
+        var opts = new NacosClientOptions
+        {
+            ServerAddresses = "localhost:8848",
+            Username = "nacos",
+            Password = "nacos"
+        };
+        Action act = () => opts.Validate();
+        act.Should().NotThrow();
+    }
 }
