@@ -30,10 +30,12 @@ Spring jars come out of the `nacos-server` fat jar, but the Derby engine does
 running container:
 
 ```bash
-# Derby engine — from the container's plugins directory:
+# Fat jar (source of the Spring jars) + Derby engine (a server plugin, not in
+# the fat jar) — both copied out of the running container:
+docker cp nacos-server:/home/nacos/target/nacos-server.jar .
 docker cp nacos-server:/home/nacos/plugins/derby-10.14.2.0.jar .
 
-# spring-security-crypto + spring-jcl — from the nacos-server fat jar:
+# spring-security-crypto + spring-jcl — extracted from the fat jar:
 python -c "
 import zipfile, os
 outer = zipfile.ZipFile('nacos-server.jar')
@@ -85,12 +87,11 @@ java -cp "spring-security-crypto-6.5.10.jar;spring-jcl-6.2.18.jar;derby-10.14.2.
 #    granted ROLE_ADMIN to nacos
 ```
 
-> Working directory and platform: the `javac`/`java` commands assume the three
-> jars are in the current directory (where the `docker cp` / `python` steps
-> above put them); the Derby path argument is relative to the repo root, so
-> pass an absolute path if you run from elsewhere. The classpath separator
-> shown is `;` (Windows) — use `:` on Linux/macOS. `mv`/`$(date)` in §4 assume
-> a bash-style shell.
+> Working directory and platform: run §2 from the **repo root**. The `docker cp`
+> / `python` steps drop the jars into the current directory (the repo root) and
+> the Derby path argument is repo-root-relative, so the `javac`/`java` commands
+> work as written. The classpath separator shown is `;` (Windows) — use `:` on
+> Linux/macOS. `mv`/`$(date)` in §4 assume a bash-style shell.
 
 Restart the container so the in-memory user cache picks up the new row:
 
