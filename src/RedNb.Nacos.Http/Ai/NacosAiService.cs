@@ -1072,18 +1072,12 @@ public partial class NacosAiService : IAiService
     }
 
     /// <summary>
-    /// Builds a header dictionary carrying <c>namespaceId</c> as the v3
-    /// <c>X-Nacos-Namespace-Id</c> HTTP header (omitted when empty).
+    /// Returns an empty header dictionary. Nacos 3.x console controllers ignore
+    /// <c>X-Nacos-Namespace-Id</c> and always operate in the public namespace;
+    /// v3 namespaces are carried as <c>namespaceId</c> query parameters on the
+    /// core API instead.
     /// </summary>
-    private Dictionary<string, string> BuildNamespaceHeaders()
-    {
-        var headers = new Dictionary<string, string>();
-        if (!string.IsNullOrEmpty(_namespaceId))
-        {
-            headers[NacosConstants.NamespaceHeader] = _namespaceId;
-        }
-        return headers;
-    }
+    private Dictionary<string, string> BuildNamespaceHeaders() => new();
 
     private static void ValidateAgentName(string agentName)
     {
