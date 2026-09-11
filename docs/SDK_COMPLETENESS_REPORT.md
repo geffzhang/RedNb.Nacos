@@ -4,7 +4,7 @@
 
 本报告对比分析 Nacos Java SDK 与 RedNb.Nacos .NET SDK 的功能实现情况，评估完成度和测试覆盖率。
 
-**最后更新**: 2026-09-11（Nacos v3 迁移完成后）
+**最后更新**: 2026-09-11（Nacos v3 迁移完成 + AI 双通道 live 验证闭合）
 
 ---
 
@@ -24,10 +24,11 @@ SDK 已完成向 **Nacos 3.2+** 的协议迁移（分支 `AIRegistry`，标签 `
 | CAS 发布 | HTTP 重载 `[Obsolete]` + 非空 casMd5 抛 `NotSupportedException`（v3 admin 端点忽略 CAS）；gRPC 原生支持 |
 | 重连稳定性 | gRPC 连接代数（generation）隔离 + 清理旧代；`DeadlineExceeded` 视为连接失效；陈旧循环不会翻转新连接的 `_connected` |
 
-**测试矩阵**：Core 382 ×2 TFM · HTTP 132 ×2 TFM · gRPC 19 ×2 TFM · 集成测试 40（27 通过 · 6 环境阻塞 · 7 Skip：4 个 gRPC AI 测试受既有 SDK gap 阻塞（见 §一.3）+ 2 个订阅轮询占位 + 1 个服务端契约差异（`ListAgentVersions` 返回对象数组，SDK 按 `List<string>` 反序列化）；live Nacos 3.2.4，服务器日志无协议告警）。
+**测试矩阵**：Core 384 ×2 TFM · HTTP 134 ×2 TFM · gRPC 24 ×2 TFM · 集成测试 41（**39 通过 · 2 Skip · 0 失败**；2 个 Skip 均为订阅轮询占位 —— `SubscribeAgentCard_ReceivesUpdates` / `SubscribeMcpServer_ReceivesUpdates`，轮询周期 10s，非缺陷）；live Nacos 3.2.4，服务器日志无协议告警。
 
-> 2026-09-11 复跑：单元测试 382/132/19 ×2 TFM 全绿，AI 集成类 15 = 8 通过 · 7 Skip · 0 失败（HTTP 类含新增的 `ReleaseMcpServer_WithToolSpecification_...` 与 `ReleaseMcpServer_WithEndpointSpecification_...`）；
-> 同机全量集成复跑中非 AI 的 6 个 gRPC 推送用例失败（故上表计 6 环境阻塞，不计入"通过"），已在未含本次修复的基线代码上以相同方式复现（既存环境问题，另行跟踪，与本次变更无关）。
+> 2026-09-11 复跑（净机、单一 live 3.2.4）：单元测试 **384/134/24** ×2 TFM 全绿，集成测试 **41 = 39 通过 · 2 Skip · 0 失败**。
+> 此前 6 个非 AI gRPC 推送用例的失败已定位为 **gRPC 载荷头缺少 JWT `accessToken`**（server 401 `User not found`），并非环境阻塞 —— `SecurityProxy` 接线（commit `defeea8`）后全部转为通过。
+> 原"1 个服务端契约差异（`ListAgentVersions` 返回对象数组）"亦已消解：新增 rich 模型 `AgentVersionInfo` 承载 `{version,createdAt,updatedAt,latest}`，该用例已重开并通过（commit `9c55c02`）。
 
 ---
 
@@ -75,37 +76,47 @@ SDK 已完成向 **Nacos 3.2+** 的协议迁移（分支 `AIRegistry`，标签 `
 
 ### 3. AI Service (AI/MCP/A2A 服务) - Nacos 3.0 新增功能
 
-> ⚠️ **状态：HTTP 通道已通过 live Nacos 3.2.4 验证（2026-09-11）；gRPC 通道被既有 SDK gap 阻塞，live 测试已 Skip**。
+> ✅ **状态：HTTP 与 gRPC 双通道均已通过 live Nacos 3.2.4 验证（2026-09-11）；AI 集成测试 16 = 14 通过 · 2 Skip · 0 失败**。
 > AI 端点部署在控制台端口 8080（`/v3/console/ai/**`）；HTTP 通道 `src/RedNb.Nacos.Http/Ai/` 已按真实控制器路径与参数名对齐并联调通过
-> （8 个 HTTP AI 集成测试通过：6 个 live 往返 + 2 个 fail-loud，不再吞掉 `NacosException`；另有 3 个 Skip）。
+> （HTTP 类 12 = 10 通过：8 个 live 往返 + 2 个 fail-loud，不再吞掉 `NacosException`；另有 2 个订阅轮询用例 Skip）。
 > gRPC 实现位于 `NacosGrpcAiService.cs`（MCP/AgentCard）+ `NacosGrpcAiService.Registry.cs`（Prompt/Skill/AgentSpec 注册表），
-> 请求 TYPE 字符串已按服务器 handler 类对齐（枚举 `nacos-ai-3.2.4.jar` handler 类验证），但通道被 4 个既有 SDK gap 阻塞：
-> `NacosGrpcClient` 无认证路径、`OperationResponse` 结构与服务器 `Response{resultCode,errorCode,message,requestId}` 不符、
-> `ReleaseMcpServerResponse` 读 `McpServerId` 而非服务器下发的 `mcpId`；已跟踪为后续修复。
-> （更正：早前"HTTP `DeleteMcpServerAsync` 发送无 body 的 DELETE 导致 404"的诊断已被 live 探针证伪 —— 无 body 的 DELETE 删除已存在的服务器返回 200 `{"code":0,"message":"success","data":"ok"}`，
-> 404 仅为 "MCP server not found"；DELETE 控制器读查询参数、不绑定请求体（探针中省略查询参数、仅带 body 时收到 400 "Required parameter 'mcpId' or 'mcpName'"）。）
-> HTTP 侧 register/deregister endpoint 无对应路径，调用时 fail loud 指向 gRPC 通道；MCP tool CRUD 在 3.2.4 两个通道均不存在（无 HTTP 端点、也无 gRPC handler）；
+> 请求 TYPE 字符串已按服务器 handler 类对齐（枚举 `nacos-ai-3.2.4.jar` handler 类验证），gRPC 类 4 个用例全部 live 通过（含跨通道一致性：gRPC release → HTTP list 可见）。
+> 已修复的 gRPC 侧缺口：
+> (1) **认证路径** —— JWT `accessToken` 现随载荷头下发（`Payload.Metadata.Headers["accessToken"]`，由 `SecurityProxy` 注入，服务器 `NacosAuthPluginService` 解析；对齐 Java 客户端身份上下文）；
+> (2) **`mcpId` 绑定** —— `ReleaseMcpServerResponse` 读取服务器下发的 `mcpId`（原读 `McpServerId` 恒为空）；
+> (3) **`namespaceId` 载荷键** —— 请求 DTO 以 `namespaceId` 传递命名空间（原 `namespace` 被服务器静默忽略）。
+> (4) **AI gRPC 连接模块标签** —— 连接现宣告 `module=naming`（对齐 `NacosGrpcNamingService`），服务器才允许在该连接上注册短暂实例；此前宣告 `config` 时服务器回 -401 "connection already disconnect"。
+> 服务器仅注册 8 个 AI gRPC handler，其余 **14 个 ops**（`c468ae1` 的 12 个 + `9c55c02` 追加的 `ListAgentVersions[Infos]`）现抛 `NacosException.ServerNotImplemented`(501) 并提示改用 HTTP console 通道（`NacosFactory` + `ConsoleAddresses`），不再静默吞异常。
+> HTTP 侧 register/deregister endpoint 无对应路径，调用时 fail loud 指向 gRPC 通道；MCP tool CRUD 在 3.2.4 两个通道均不存在（无 HTTP 端点、也无 gRPC handler，两侧均 501/抛错）；
 > 订阅仍为 10s 轮询，可后续替换为 gRPC push。
+> （归档更正 1：早前"HTTP `DeleteMcpServerAsync` 发送无 body 的 DELETE 导致 404"的诊断已被 live 探针证伪 —— 无 body 的 DELETE 删除已存在的服务器返回 200 `{"code":0,"message":"success","data":"ok"}`，
+> 404 仅为 "MCP server not found"；DELETE 控制器读查询参数、不绑定请求体（探针中省略查询参数、仅带 body 时收到 400 "Required parameter 'mcpId' or 'mcpName'"）。）
+> （归档更正 2：早前 "`OperationResponse {Success,Message}` 与服务器 `Response{resultCode,errorCode,message,requestId}` 结构不符" 的诊断同样被 live wire 抓包**证伪** —— 成功响应经服务器 Jackson `isSuccess()` 序列化为 `{"Success":true,"ResultCode":200}`，SDK 侧读取正确，并非故障根因。
+> 当时 endpoint ops 的真实故障是：(a) `stdio` 服务器 `remoteServerConfig` 为 null，服务器 `McpServerEndpointRequestHandler` NPE 于 `buildServiceRef` → resultCode 500；(b) 上文 (4) 的模块标签问题。
+> 两者均已修复：live 端点往返测试改为 release 带 `RemoteServerConfig.ServiceRef` 的 `mcp-sse` 服务器，且客户端宣告 `naming` 模块。）
 
 | 功能 | Java SDK | .NET SDK (HTTP) | .NET SDK (gRPC) | 测试覆盖 |
 |-----|---------|-----------------|-----------------|---------|
 | getMcpServer | ✅ | ✅ | ✅ | ✅ 单元(HTTP) + 集成(HTTP live 往返) |
-| releaseMcpServer | ✅ | ✅ | ✅ | ✅ 集成(HTTP live 往返：toolSpecification 持久化往返，endpointSpecification 受理 + serviceRef 回传) · ⚠️ gRPC Skip |
-| registerMcpServerEndpoint | ✅ | ✅ | ✅ | ✅ 集成(HTTP fail-loud 断言) · ⚠️ gRPC Skip |
-| deregisterMcpServerEndpoint | ✅ | ✅ | ✅ | ✅ 集成(HTTP fail-loud 断言) · ⚠️ gRPC Skip |
-| subscribeMcpServer | ✅ | ✅ | ✅ | ✅ 单元(HTTP) · ⚠️ 集成 Skip（轮询占位） |
-| unsubscribeMcpServer | ✅ | ✅ | ✅ | ✅ 单元(HTTP) |
-| deleteMcpServer | ✅ | ✅ | ✅ | ✅ 集成(HTTP：随往返用例 try/finally 清理，探针验证 200) |
-| listMcpServers | ✅ | ✅ | ✅ | ✅ 集成(HTTP live 往返) |
+| releaseMcpServer | ✅ | ✅ | ✅ | ✅ 集成(HTTP live 往返：toolSpecification 持久化往返，endpointSpecification 受理 + serviceRef 回传) · ✅ 集成(gRPC live 往返) |
+| registerMcpServerEndpoint | ✅ | ✅ | ✅ | ✅ 集成(HTTP fail-loud 断言) · ✅ 集成(gRPC live 往返，release 需带 `RemoteServerConfig.ServiceRef` 的 server) |
+| deregisterMcpServerEndpoint | ✅ | ✅ | ✅ | ✅ 集成(HTTP fail-loud 断言) · ✅ 集成(gRPC live 往返，同上) |
+| subscribeMcpServer | ✅ | ✅ | ⛔ 501 | ✅ 单元(HTTP) · ⚠️ 集成 Skip（轮询占位）；gRPC 侧服务器无 handler，抛 `ServerNotImplemented` |
+| unsubscribeMcpServer | ✅ | ✅ | ✅ | ✅ 单元(HTTP)（gRPC 侧本地注销，不触达服务器） |
+| deleteMcpServer | ✅ | ✅ | ⛔ 501 | ✅ 集成(HTTP：随往返用例 try/finally 清理，探针验证 200)；gRPC 侧服务器无 handler，抛 `ServerNotImplemented` |
+| listMcpServers | ✅ | ✅ | ⛔ 501 | ✅ 集成(HTTP live 往返)；gRPC 侧服务器无 handler，抛 `ServerNotImplemented` |
 | getAgentCard | ✅ | ✅ | ✅ | ✅ 集成(HTTP live 往返) |
 | releaseAgentCard | ✅ | ✅ | ✅ | ✅ 集成(HTTP live 往返) |
-| Agent Subscription | ✅ | ✅ | ✅ | ✅ 单元(HTTP) · ⚠️ 集成 Skip（轮询占位） |
+| Agent Subscription | ✅ | ✅ | ⛔ 501 | ✅ 单元(HTTP) · ⚠️ 集成 Skip（轮询占位）；gRPC 侧服务器无 handler，抛 `ServerNotImplemented` |
+| listAgentVersionInfos | ✅ | ✅ | ⛔ 501 | ✅ 集成(HTTP live 往返，返回 rich `{version, createdAt, updatedAt, latest}`) |
+| listAgentVersions | ✅ | ✅ | ⛔ 501 | ✅ 集成(HTTP live 往返；实现由 `ListAgentVersionInfosAsync` project `.Version`，接口返回类型不变) |
 | Prompt 注册表（draft/审核/发布/上下线/删除） | ✅ | ✅ | ✅ | ✅ 单元(HTTP) · ⚠️ gRPC 无测试 |
 | Skill 注册表（含 zip 上传/下载） | ✅ | ✅ | ✅ | ✅ 单元(HTTP) · ⚠️ gRPC 无测试 |
 | AgentSpec 注册表 | ✅ | ✅ | ✅ | ✅ 单元(HTTP) · ⚠️ gRPC 无测试 |
 
-**HTTP 实现完成度: 100%\*** | **gRPC 实现完成度: 100%\***（\* HTTP 通道已通过 live 8080 控制台验证（2026-09-11），但 endpoint register/deregister 无 HTTP 端点、MCP tool CRUD 两个通道均无（HTTP 侧调用 fail loud）；
-gRPC 通道 TYPE 字符串已对齐服务器，受 4 个既有 SDK gap 阻塞、live 测试 Skip —— 详见本节状态注）
+**HTTP 实现完成度: 100%\*** | **gRPC 实现完成度: 100%\***（\* **双通道均通过 live Nacos 3.2.4 验证（2026-09-11）**；
+endpoint register/deregister 无 HTTP 端点（HTTP 侧 fail loud 指向 gRPC，gRPC 侧可用）；MCP tool CRUD 两个通道均无（两侧均 fail loud）；
+gRPC 通道 TYPE 字符串已对齐服务器，服务器未注册的 14 个 ops 抛 `ServerNotImplemented`(501) 并指引改用 HTTP console 通道 —— 详见本节状态注）
 
 ### 4. Lock Service (分布式锁) - Nacos 3.0 新增功能
 
@@ -227,14 +238,14 @@ gRPC 通道 TYPE 字符串已对齐服务器，受 4 个既有 SDK gap 阻塞、
 
 ### 1. 核心测试 (RedNb.Nacos.Tests)
 
-**总计: 382 个测试 × 2 TFM (net8.0 + net10.0)，全部通过**
+**总计: 384 个测试 × 2 TFM (net8.0 + net10.0)，全部通过**（2026-09-11 复跑实测 net8.0 = 384 通过 · 0 失败 · 0 Skip）
 
 覆盖：客户端配置、异常处理、工具类、实例模型、配置变更事件、过滤链、AES 加密、模糊监听、
 服务信息（含 TTL 缓存失效）、命名选择器、AI 模型、Lock（常量/实例/服务）、Maintainer、Failover、Monitor 等。
 
 ### 2. HTTP 实现测试 (RedNb.Nacos.Http.Tests)
 
-**总计: 132 个测试 × 2 TFM，全部通过**
+**总计: 134 个测试 × 2 TFM，全部通过**（2026-09-11 复跑实测 net8.0 = 134 通过 · 0 失败 · 0 Skip）
 
 覆盖：工厂类、服务器列表管理、配置监听管理、配置服务 v3（信封解析、20004→null、
 错误码抛异常、CAS 抛异常）、命名服务 v3（注册/注销/列表/错误信封抛异常/拒绝查询抛异常）、
@@ -242,11 +253,11 @@ gRPC 通道 TYPE 字符串已对齐服务器，受 4 个既有 SDK gap 阻塞、
 
 ### 3. gRPC 实现测试 (RedNb.Nacos.Grpc.Tests)
 
-**总计: 19 个测试 × 2 TFM，全部通过**
+**总计: 24 个测试 × 2 TFM，全部通过**（2026-09-11 复跑实测 net8.0 = 24 通过 · 0 失败 · 0 Skip）
 
 覆盖：ConfigRpcTransportClient 查询/监听/fuzzy-watch 调度（Metadata.type 断言）、
-NamingRpcTransportClient 一元/流式/推送分派。
-服务层（Config/Naming/AI 业务方法）无单元测试——批量/fuzzyWatch/Selector 订阅等方法连集成测试也未覆盖。
+NamingRpcTransportClient 一元/流式/推送分派、`NacosGrpcAiService` 构造与 AI 线格式形状（`mcpId` / `namespaceId` 载荷键，2026-09-11 新增）。
+服务层（Config/Naming 业务方法）无单元测试——批量/fuzzyWatch/Selector 订阅等方法连集成测试也未覆盖。
 
 ### 4. 集成测试 (RedNb.Nacos.IntegrationTests, live Nacos 3.2.4)
 
@@ -255,12 +266,12 @@ NamingRpcTransportClient 一元/流式/推送分派。
 | ConfigServiceIntegrationTests.cs | 配置服务集成 (v3) | 6 | ✅ |
 | NamingServiceIntegrationTests.cs | 命名服务集成 (v3) | 9 | ✅ |
 | NamingSelectorIntegrationTests.cs | 选择器集成 | 4 | ✅ |
-| ConfigListenerPushTests.cs | 配置 gRPC 推送闭环 | 3 | ⚠️ 本机环境阻塞（推送未到达，见 §零注） |
-| NamingSubscribePushTests.cs | 命名 gRPC 推送闭环 | 3 | ⚠️ 本机环境阻塞（同上） |
-| AiServiceIntegrationTests.cs | AI 服务集成（HTTP 控制台） | 11 | ✅ 8 通过（6 live 往返 + 2 fail-loud 断言） · ⚠️ 3 Skip（2 订阅轮询 + 1 服务端契约差异） |
-| Ai/GrpcAiServiceIntegrationTests.cs | AI 服务集成（gRPC 通道） | 4 | ⚠️ Skip（受 4 个既有 SDK gap 阻塞，见 §一.3 AI 状态注） |
+| ConfigListenerPushTests.cs | 配置 gRPC 推送闭环 | 3 | ✅（此前误判为环境阻塞；实为 gRPC auth 缺口，已修复） |
+| NamingSubscribePushTests.cs | 命名 gRPC 推送闭环 | 3 | ✅（同上） |
+| AiServiceIntegrationTests.cs | AI 服务集成（HTTP 控制台） | 12 | ✅ 10 通过（8 live 往返 + 2 fail-loud 断言） · ⚠️ 2 Skip（订阅轮询占位） |
+| Ai/GrpcAiServiceIntegrationTests.cs | AI 服务集成（gRPC 通道） | 4 | ✅ 4 通过（含跨通道一致性：gRPC release → HTTP list 可见） |
 
-**总计: 40 个集成测试**（27 通过 · 6 环境阻塞 · 7 Skip，见 §零注与 §一.3；AI 类复跑 15 = 8 通过 · 7 Skip · 0 失败；环境阻塞的 6 个为既存 gRPC 推送用例）
+**总计: 41 个集成测试**（**39 通过 · 2 Skip · 0 失败**，2026-09-11 实测；2 个 Skip 为订阅轮询占位，非缺陷）
 
 ### 测试覆盖总结
 
@@ -269,14 +280,14 @@ NamingRpcTransportClient 一元/流式/推送分派。
 | 核心模型 | 200+ | 90% |
 | HTTP Config Service | 30+ | 90% |
 | HTTP Naming Service | 40+ | 90% |
-| HTTP AI Service | 30+ | 70%（单元级） |
-| gRPC Config/Naming | 19 | 85%（分派逻辑） |
+| HTTP AI Service | 30+ | 80%（单元级 + live 双通道集成） |
+| gRPC Config/Naming/AI | 24 | 85%（分派逻辑 + AI 线格式形状） |
 | Lock Service | 55+ | 100% ✅ |
 | Maintainer Service | 35+ | 40% |
 | Failover 机制 | 20+ | 100% ✅ |
 | MetricsMonitor | 25+ | 100% ✅ |
 
-**测试运行结果: 单元（382 + 132 + 19）×2 TFM 全部通过 + 40 集成（27 通过 · 6 环境阻塞 · 7 Skip；复跑细节见 §零注）**
+**测试运行结果: 单元（384 + 134 + 24）×2 TFM 全部通过 + 41 集成（39 通过 · 2 Skip · 0 失败；复跑细节见 §零注）**
 
 ---
 
@@ -287,12 +298,23 @@ NamingRpcTransportClient 一元/流式/推送分派。
 
 ### 高优先级
 
-1. ~~**AI 服务 live 验证（HTTP + gRPC 双通道）**~~（2026-09-11：HTTP 通道完成；gRPC 受既有 SDK gap 阻塞，见 §一.3 AI 行的 * 注；`NacosConstants.NamespaceHeader` 清理延期，见 ANALYSIS §三.7）
+1. ~~**AI 服务 live 验证（HTTP + gRPC 双通道）**~~（2026-09-11 完成 — HTTP 与 gRPC 通道均已通过 live Nacos 3.2.4 验证，见 §一.3 AI 行的 * 注）
+
+   **已修复的 AI 缺口（2026-09-11 归档）**：
+   - [x] **gRPC 认证路径**（`defeea8`）：JWT `accessToken` 现随载荷头下发（`Payload.Metadata.Headers`，由 `SecurityProxy` 注入，服务器 `NacosAuthPluginService` 解析）。此前 gRPC AI 通道 401，**同一根因**也压着 6 个非 AI gRPC 推送集成测试 —— 修复后 6 个推送用例全部转为通过。
+   - [x] **`mcpId` 绑定**（`ae2d4f5`）：`ReleaseMcpServerResponse` 读取服务器下发的 `mcpId`（原读 `McpServerId`，恒为 null）。
+   - [x] **`namespaceId` 载荷键**（`ae2d4f5`）：AI gRPC 请求 DTO 以 `namespaceId` 传递命名空间（原 `namespace` 被服务器静默忽略）。
+   - [x] **无 handler 的 ops 改为 fail loud**（`c468ae1`，`9c55c02` 追加 2 个）：3.2.4 服务器仅注册 8 个 AI gRPC handler，其余 **14 个 ops**（Delete/List/Subscribe/Import/Validate/Tool CRUD + 2 个 Agent 版本列表）现抛 `NacosException.ServerNotImplemented`(501)，异常消息指引改用 HTTP console 通道（`NacosFactory` + `ConsoleAddresses`）；MCP tool CRUD 消息额外说明两个通道均不可用。
+   - [x] **console 客户端去重**（`a881977`）：抽出 `NacosHttpClientBase` 承载共享传输（`NacosConsoleHttpClient` 与 `NacosHttpClient` 此前近乎逐字重复），子类仅覆写 `BuildBaseUrl`；公共 API 不变。
+   - [x] **`Validate()` 凭据规则**（`b633d4c`）：`SecurityProxy` 只对 API 端口登录，故"配了凭据却无 `ServerAddresses`"现于配置期抛 `InvalidParam`；**无凭据的 console-only 配置仍然有效**。
+   - [x] **归档更正 — `OperationResponse` "结构不符" 系误诊**：live wire 抓包显示成功响应经服务器 Jackson `isSuccess()` 序列化为 `{"Success":true,"ResultCode":200}`，SDK 读取正确。endpoint ops 的真实故障是 (a) `stdio` server 的 `remoteServerConfig` 为 null 致服务器 handler NPE → resultCode 500，(b) AI gRPC 连接宣告 `module=config` 被拒注册短暂实例（-401）。两者均已修复（客户端宣告 `naming` 模块 + 端点往返改用带 `RemoteServerConfig.ServiceRef` 的 `mcp-sse` server）。
+
+   仍未闭合：`NacosConstants.NamespaceHeader` 常量**未删除** —— AI HTTP 服务已不再发送该 header，但 `NacosPromptService`/`NacosSkillService`/`NacosAgentSpecService` 三个 helper 服务仍读取它（console 只服务 public 命名空间）；见 ANALYSIS §三.7。
 
 2. **gRPC 服务层测试覆盖（实现齐备，测试空白）**
    - [ ] Config：AddConfigFilter（`NacosGrpcConfigService.cs:303`）、FuzzyWatch/CancelFuzzyWatch（`:313`/`:399`）
    - [ ] Naming：BatchRegister/BatchDeregister（`NacosGrpcNamingService.cs:162`/`:187`）、Selector 订阅（`:528`）、GetSubscribeServices（`:747`，本地订阅视图）、FuzzyWatch/CancelFuzzyWatch（`:787`/`:861`）
-   - [ ] 现状：gRPC 测试仅 19 个传输层分派用例（`RedNb.Nacos.Grpc.Tests`），服务层（Config/Naming/AI）零覆盖
+   - [ ] 现状：gRPC 测试 24 个 —— 传输层分派用例（`RedNb.Nacos.Grpc.Tests`）+ `NacosGrpcAiService` 线格式形状；服务层（Config/Naming）业务方法仍零覆盖
 
 3. **gRPC 配置查询错误语义**
    - [ ] `NacosGrpcConfigService.cs:133`：非成功 `ConfigQueryResponse` 未检查 `ErrorCode`（Java 映射 300 = not found）；先对 live 验证 300 行为再修改
@@ -317,7 +339,7 @@ NamingRpcTransportClient 一元/流式/推送分派。
 1. **测试补充**
    - [ ] Token 自动刷新
    - [ ] 心跳 `beat=false` 失败路径
-   - [ ] AI：gRPC 通道 live 测试（4 个用例 Skip，受 §一.3 的既有 SDK gap 阻塞）——HTTP 侧的 release/get/delete/list MCP 与 release/releaseAgentCard 已补齐 live 往返测试（2026-09-11）
+   - [x] AI：gRPC 通道 live 测试（4 个用例已重开并通过，2026-09-11）——HTTP 侧的 release/get/delete/list MCP 与 release AgentCard/版本列表均已补齐 live 往返测试
    - [ ] gRPC 端口偏移（8848+1000=9848）、重试配置
 
 2. **订阅失败语义确认**
@@ -338,13 +360,14 @@ NamingRpcTransportClient 一元/流式/推送分派。
 | MetricsMonitor | **100%** ✅ | N/A | **100%** ✅ |
 | **总体** | **100%** | **100%\*** | **85%** |
 
-\* 实现已编码完成；gRPC 服务层无单元测试（19 个用例均为传输层分派）。AI 通道状态见 §一.3 状态注：HTTP 已通过 live 8080 控制台验证（2026-09-11），gRPC 受 4 个既有 SDK gap 阻塞（live 测试 Skip）。
+\* 实现已编码完成；gRPC 服务层业务方法无单元测试（24 个用例为传输层分派 + AI 线格式形状）。AI 通道状态见 §一.3 状态注：**HTTP 与 gRPC 双通道均已通过 live Nacos 3.2.4 验证（2026-09-11）**。
 
 ### 结论
 
 .NET SDK 已完成 **Nacos 3.2+ 协议迁移**：HTTP Config/Naming 在 v3 客户端/管理端点上 100% 实现，
-gRPC 承载全部请求传输与服务端推送（连接就绪握手、重连代数隔离），
+gRPC 承载全部请求传输与服务端推送（连接就绪握手、重连代数隔离、载荷头 JWT 认证），
 错误信封统一抛 `NacosException`，废弃面（Maintainer/Lock/CAS）按计划标 `[Obsolete]` 并大声失败。
+AI 服务（MCP/A2A/注册表）HTTP 与 gRPC 双通道均已通过 live Nacos 3.2.4 验证（2026-09-11）。
 
 **本次迁移完成的改进:**
 1. ✅ HTTP Config/Naming 迁移到 v3 client/admin 端点 + 信封解析
@@ -353,9 +376,10 @@ gRPC 承载全部请求传输与服务端推送（连接就绪握手、重连代
 4. ✅ 配置监听 HTTP 长轮询移除，推送走 gRPC bi-stream
 5. ✅ gRPC 重连机制完善（连接代数隔离，陈旧循环不污染新连接）
 6. ✅ 错误信封在公开 API 边界抛异常（拒绝查询不再伪装成"无实例"）
-7. ✅ 测试矩阵已建立：382+132+19 单元 ×2 TFM 全绿 + 40 live 集成（27 通过 · 6 环境阻塞 · 7 Skip，见 §零注；单元与 AI 集成类 0 失败）
+7. ✅ 测试矩阵已建立：384+134+24 单元 ×2 TFM 全绿 + 41 live 集成（**39 通过 · 2 Skip · 0 失败**，见 §零注）
+8. ✅ AI 双通道 live 打通：HTTP console（8080）与 gRPC 均通过 live 3.2.4 验证；gRPC 认证/`mcpId`/`namespaceId`/连接模块标签缺口修复，无 handler 的 ops 改为 fail loud（见 §五.1）
 
 **下一步优先级:**
-1. ~~AI 服务 live 控制台验证（8080）~~（2026-09-11：HTTP 已完成；gRPC 受既有 SDK gap 阻塞，见 §五.1）
+1. ~~AI 服务 live 控制台验证（8080）~~（2026-09-11：HTTP 与 gRPC 双通道均已完成，见 §五.1）
 2. gRPC Config/Naming 高级功能的测试覆盖（fuzzyWatch、批量、Selector 订阅——实现已齐备，见 §五.2）
 3. Redo 机制接线与负载均衡

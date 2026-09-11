@@ -22,6 +22,10 @@ with it.
   `IPromptService`, `ISkillService` and `IAgentSpecService` interfaces), so an
   implementer of `IAiService` written against the previous version must add the
   corresponding members to compile.
+- `IA2aService` gained `ListAgentVersionInfosAsync`, returning rich
+  `AgentVersionInfo` objects (`version`, `createdAt`, `updatedAt`, `latest`) as
+  the console endpoint actually serves them. `ListAgentVersionsAsync` is
+  **unchanged** (`List<string>`) and now projects `.Version` from the rich list.
 - `IMaintainerService` and its sub-interfaces: marked `[Obsolete]`. Calls
   will return HTTP 404 at runtime. The Maintainer APIs have no v3 equivalent;
   migration paths:
@@ -48,6 +52,15 @@ with it.
 - The token still travels as `accessToken: <jwt>` (header) or `?accessToken=<jwt>`
   (query) — unchanged.
 - `NacosClientOptions.Username` and `Password` are still the public surface.
+- On the gRPC transport the JWT travels **inside the request payload headers**
+  (`Payload.Metadata.Headers["accessToken"]`), injected by the SDK's
+  `SecurityProxy`; the server's `NacosAuthPluginService` resolves it from there.
+  Without this the server rejects gRPC calls (including the config/naming push
+  subscriptions) with 401 `User not found`.
+- `NacosClientOptions.Validate()` now rejects credentials combined with an empty
+  `ServerAddresses` (config-time `InvalidParam`), because `SecurityProxy` can only
+  log in against the server API port. A console-only configuration *without*
+  credentials remains valid.
 
 ## AI endpoints
 
@@ -85,11 +98,23 @@ Channel availability in 3.2.4 differs per operation:
 - **Endpoint register/deregister (MCP and Agent)** — no HTTP endpoint on the
   console, so the HTTP service throws `NacosException` (fail loud). The server
   **does** expose gRPC handlers for these, so use the gRPC-backed service
-  (`NacosGrpcFactory.CreateAiServiceAsync`). Note: the .NET gRPC AI channel is
-  currently blocked by pre-existing SDK gaps — see
-  [SDK_COMPLETENESS_REPORT.md](SDK_COMPLETENESS_REPORT.md) §一.3.
+  (`NacosGrpcFactory.CreateAiServiceAsync`). The .NET gRPC AI channel is
+  live-verified against Nacos 3.2.4 (2026-09-11) — see
+  [SDK_COMPLETENESS_REPORT.md](SDK_COMPLETENESS_REPORT.md) §一.3. Two caveats
+  learned live: the server only accepts endpoint registration on a connection
+  labelled `module=naming` (the SDK announces it), and a server released as
+  `stdio` has a null `remoteServerConfig`, which makes the server's
+  `McpServerEndpointRequestHandler` NPE — release with
+  `RemoteServerConfig.ServiceRef` instead.
 - **MCP tool CRUD** — available on **neither** channel in Nacos 3.2.4: there is
-  no console HTTP endpoint and no server-side gRPC handler.
+  no console HTTP endpoint and no server-side gRPC handler. Both channels fail
+  loud with `NacosException`.
+- **Other gRPC ops** — the 3.2.4 server registers only 8 AI gRPC handlers. The
+  remaining operations (delete/list/subscribe MCP and agent, MCP import and
+  validation, MCP tool CRUD, agent version lists) throw
+  `NacosException.ServerNotImplemented` (501) on the gRPC channel with a message
+  pointing at the HTTP console channel. Note the subscription operations are
+  polling-based over HTTP (10s), not push.
 
 ## Questions
 
