@@ -131,7 +131,7 @@ public class AiServiceIntegrationTests : IAsyncLifetime
         }
     }
 
-    [Fact(Skip = "Server contract surprise: live Nacos 3.2.4 returns rich objects {version, createdAt, updatedAt, latest} at /v3/console/ai/a2a/version/list, but SDK NacosAiService deserializes to List<string>. Documented in docs/SDK_COMPLETENESS_REPORT.md §零 (测试矩阵 — the one server-contract-difference skip).")]
+    [Fact]
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
     public async Task ListAgentVersions_ReturnsVersions()
@@ -145,12 +145,41 @@ public class AiServiceIntegrationTests : IAsyncLifetime
             PreferredTransport = "jsonrpc",
             Url = "http://127.0.0.1:9999"
         });
-        await Task.Delay(500);
 
-        var versions = await _aiService.ListAgentVersionsAsync(agentName);
+        var versions = await WaitForAsync(
+            () => _aiService.ListAgentVersionsAsync(agentName),
+            list => list is not null && list.Contains("2.0.0"));
         versions.Should().Contain("2.0.0");
 
-        await _aiService.DeleteAgentAsync(agentName);
+        await DeleteWithRetryAsync(() => _aiService.DeleteAgentAsync(agentName));
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    [Trait("Module", "AI")]
+    public async Task ListAgentVersionInfos_ReturnsRichMetadata()
+    {
+        var agentName = $"it-agent-verinfo-{Guid.NewGuid():N}";
+        await _aiService!.ReleaseAgentCardAsync(new AgentCard
+        {
+            Name = agentName,
+            Version = "2.0.0",
+            ProtocolVersion = "0.3.7",
+            PreferredTransport = "jsonrpc",
+            Url = "http://127.0.0.1:9999"
+        });
+
+        var infos = await WaitForAsync(
+            () => _aiService.ListAgentVersionInfosAsync(agentName),
+            list => list is not null && list.Count > 0);
+
+        infos.Should().Contain(i => i.Version == "2.0.0");
+        var info = infos.Single(i => i.Version == "2.0.0");
+        info.Latest.Should().BeTrue();
+        info.CreatedAt.Should().HaveValue();
+        info.UpdatedAt.Should().HaveValue();
+
+        await DeleteWithRetryAsync(() => _aiService.DeleteAgentAsync(agentName));
     }
 
     // ---------- MCP Server (HTTP / console) ----------

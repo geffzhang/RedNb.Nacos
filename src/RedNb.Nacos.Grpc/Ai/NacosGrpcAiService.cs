@@ -802,20 +802,19 @@ public partial class NacosGrpcAiService : IAiService
     }
 
     /// <inheritdoc />
-    public async Task<List<string>> ListAgentVersionsAsync(string agentName, CancellationToken cancellationToken = default)
+    public Task<List<string>> ListAgentVersionsAsync(string agentName, CancellationToken cancellationToken = default)
     {
         ValidateAgentName(agentName);
+        throw new NacosException(NacosException.ServerNotImplemented,
+            "AgentVersionListRequest has no Nacos 3.2.4 gRPC handler; use the HTTP console channel (IAiService via NacosFactory with ConsoleAddresses) instead");
+    }
 
-        var request = new AgentVersionListRequest
-        {
-            Namespace = _namespaceId,
-            AgentName = agentName
-        };
-
-        var response = await _grpcClient.RequestAsync<AgentVersionListResponse>(
-            "AgentVersionListRequest", request, cancellationToken);
-
-        return response?.Versions ?? new List<string>();
+    /// <inheritdoc />
+    public Task<List<AgentVersionInfo>> ListAgentVersionInfosAsync(string agentName, CancellationToken cancellationToken = default)
+    {
+        ValidateAgentName(agentName);
+        throw new NacosException(NacosException.ServerNotImplemented,
+            "AgentVersionListRequest has no Nacos 3.2.4 gRPC handler; use the HTTP console channel (IAiService via NacosFactory with ConsoleAddresses) instead");
     }
 
     #endregion
@@ -1135,17 +1134,6 @@ public partial class NacosGrpcAiService : IAiService
     {
         public List<AgentCardBasicInfo>? AgentCards { get; set; }
         public int TotalCount { get; set; }
-    }
-
-    private class AgentVersionListRequest
-    {
-        public string? Namespace { get; set; }
-        public string AgentName { get; set; } = string.Empty;
-    }
-
-    private class AgentVersionListResponse
-    {
-        public List<string>? Versions { get; set; }
     }
 
     // Import/Validation Request/Response Models

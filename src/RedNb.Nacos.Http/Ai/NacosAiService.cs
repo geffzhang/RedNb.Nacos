@@ -778,6 +778,17 @@ public partial class NacosAiService : IAiService
     /// <inheritdoc />
     public async Task<List<string>> ListAgentVersionsAsync(string agentName, CancellationToken cancellationToken = default)
     {
+        var infos = await ListAgentVersionInfosAsync(agentName, cancellationToken);
+        return infos
+            .Select(i => i.Version)
+            .Where(v => v is not null)
+            .Select(v => v!)
+            .ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<List<AgentVersionInfo>> ListAgentVersionInfosAsync(string agentName, CancellationToken cancellationToken = default)
+    {
         ValidateAgentName(agentName);
 
         var parameters = new Dictionary<string, string?>
@@ -791,15 +802,16 @@ public partial class NacosAiService : IAiService
             var response = await _httpClient.GetWithHeadersAsync($"{A2aBasePath}/version/list", parameters, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
-                return new List<string>();
+                return new List<AgentVersionInfo>();
             }
 
-            var result = JsonSerializer.Deserialize<ApiResult<List<string>>>(response, JsonOptions);
-            return result?.Data ?? new List<string>();
+            var result = JsonSerializer.Deserialize<ApiResult<List<AgentVersionInfo>>>(response, JsonOptions);
+            return result?.Data ?? new List<AgentVersionInfo>();
         }
         catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
         {
-            return new List<string>();
+            // Server answers 404 {"code":50100,"message":"Agent not found"} for unknown agents.
+            return new List<AgentVersionInfo>();
         }
     }
 

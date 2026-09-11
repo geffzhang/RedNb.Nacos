@@ -239,5 +239,14 @@ public interface IA2aService
     /// <returns>List of version strings.</returns>
     Task<List<string>> ListAgentVersionsAsync(string agentName, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Lists all versions of an agent card with their metadata (created/updated
+    /// timestamps and latest flag), as served by the console AI endpoint.
+    /// </summary>
+    /// <param name="agentName">Name of the agent.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of agent version infos.</returns>
+    Task<List<AgentVersionInfo>> ListAgentVersionInfosAsync(string agentName, CancellationToken cancellationToken = default);
+
     #endregion
 }
