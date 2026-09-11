@@ -17,6 +17,7 @@ public class NacosIntegrationCollection : ICollectionFixture<NacosServerFixture>
 public class NacosServerFixture : IAsyncLifetime
 {
     public const string ServerAddress = "localhost:8848";
+    public const string ConsoleAddress = "localhost:8080";
     public const string Username = "nacos";
     public const string Password = "nacos";
 
