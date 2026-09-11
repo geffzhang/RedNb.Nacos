@@ -1,90 +1,90 @@
-# Nacos Docker Compose ����ָ��
+# Nacos Docker Compose 部署指南
 
-���� Nacos �ٷ��ĵ����ṩ Docker Compose һ�����𷽰���
+基于 Nacos 官方文档，提供 Docker Compose 一键部署方案。
 
-- **Nacos �汾**: 3.2.4 (�����ȶ���)
-- **�ٷ��ĵ�**: https://nacos.io/docs/latest/quickstart/quick-start/
+- **Nacos 版本**: 3.2.4 (最新稳定版)
+- **官方文档**: https://nacos.io/docs/latest/quickstart/quick-start/
 
-## ����ģʽ
+## 部署模式
 
-| �ļ� | ģʽ | �洢 | ���ó��� |
+| 文件 | 模式 | 存储 | 适用场景 |
 |------|------|------|----------|
-| `docker-compose.yml` | ���� | ��Ƕ (Derby) | �������顢�������� |
-| `docker-compose.mysql.yml` | ���� | MySQL | �������ԡ����ݳ־û� |
-| `docker-compose.cluster.yml` | ��Ⱥ (3�ڵ�) | MySQL | �������� |
+| `docker-compose.yml` | 单机 | 内嵌 (Derby) | 快速体验、开发测试 |
+| `docker-compose.mysql.yml` | 单机 | MySQL | 开发测试、数据持久化 |
+| `docker-compose.cluster.yml` | 集群 (3节点) | MySQL | 生产环境 |
 
-## ���ٿ�ʼ
+## 快速开始
 
-### 1. ����ģʽ (���)
+### 1. 单机模式 (最简单)
 
 ```bash
 cd deploy/docker-compose
 docker-compose up -d
 ```
 
-### 2. ����ģʽ + MySQL
+### 2. 单机模式 + MySQL
 
 ```bash
 docker-compose -f docker-compose.mysql.yml up -d
 ```
 
-### 3. ��Ⱥģʽ
+### 3. 集群模式
 
 ```bash
 docker-compose -f docker-compose.cluster.yml up -d
 ```
 
-### 4. ʹ�ýű�����
+### 4. 使用脚本启动
 
 ```bash
 # Linux/Mac
-./start.sh                    # ����ģʽ
-./start.sh mysql              # ���� + MySQL
-./start.sh cluster            # ��Ⱥģʽ
+./start.sh                    # 单机模式
+./start.sh mysql              # 单机 + MySQL
+./start.sh cluster            # 集群模式
 
 # Windows
-start.bat                     # ����ģʽ
-start.bat mysql               # ���� + MySQL
-start.bat cluster             # ��Ⱥģʽ
+start.bat                     # 单机模式
+start.bat mysql               # 单机 + MySQL
+start.bat cluster             # 集群模式
 ```
 
-## ���ʵ�ַ
+## 访问地址
 
-| ���� | ��ַ |
+| 服务 | 地址 |
 |------|------|
-| Nacos ����̨ | http://localhost:8080 |
+| Nacos 控制台 | http://localhost:8080 |
 | HTTP API | http://localhost:8848 |
-| gRPC �˿� | localhost:9848 |
+| gRPC 端口 | localhost:9848 |
 
-> �״η�����Ҫ��ʼ�� `nacos` �û����� (Nacos 3.0+ ��ȫ����)
+> 首次访问需要初始化 `nacos` 用户密码 (Nacos 3.0+ 安全特性)
 
-## ����˵��
+## 配置说明
 
-### ��������
+### 环境变量
 
-���� `.env.example` Ϊ `.env` ��������Ҫ�޸ģ�
+复制 `.env.example` 为 `.env` 并根据需要修改：
 
 ```bash
 cp .env.example .env
 ```
 
-| ���� | ˵�� | Ĭ��ֵ |
+| 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `MYSQL_PASSWORD` | MySQL ���� | nacos |
-| `JVM_XMS` | JVM ��ʼ�� | 512m |
-| `JVM_XMX` | JVM ���� | 512m |
-| `NACOS_AUTH_TOKEN` | ��Ȩ��Կ (Base64) | Ĭ����Կ |
+| `MYSQL_PASSWORD` | MySQL 密码 | nacos |
+| `JVM_XMS` | JVM 初始堆 | 512m |
+| `JVM_XMX` | JVM 最大堆 | 512m |
+| `NACOS_AUTH_TOKEN` | 鉴权密钥 (Base64) | 默认密钥 |
 
-### �˿�˵��
+### 端口说明
 
-| �˿� | ˵�� |
+| 端口 | 说明 |
 |------|------|
-| 8080 | ����̨ (Nacos 3.0+) |
+| 8080 | 控制台 (Nacos 3.0+) |
 | 8848 | HTTP API |
-| 9848 | gRPC �ͻ��� |
-| 9849 | gRPC ����� |
+| 9848 | gRPC 客户端 |
+| 9849 | gRPC 服务端 |
 
-## �ͻ�������
+## 客户端配置
 
 ```json
 {
@@ -97,22 +97,22 @@ cp .env.example .env
 }
 ```
 
-## ��������
+## 常用命令
 
 ```bash
-# �鿴��־
+# 查看日志
 docker-compose logs -f nacos
 
-# ֹͣ����
+# 停止服务
 docker-compose down
 
-# ֹͣ����������
+# 停止并清理数据
 docker-compose down -v
 ```
 
-## ��������
+## 生产建议
 
-- ʹ�ü�Ⱥģʽ (���� 3 �ڵ�)
-- �޸�Ĭ�ϼ�Ȩ��Կ
-- �Ƽ�����: 2C4G 60G
-- �����ⲿ MySQL ��Ⱥ
+- 使用集群模式 (至少 3 节点)
+- 修改默认鉴权密钥
+- 推荐配置: 2C4G 60G
+- 配置外部 MySQL 集群
