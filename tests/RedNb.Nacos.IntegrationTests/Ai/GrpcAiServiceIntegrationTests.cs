@@ -8,6 +8,7 @@ using RedNb.Nacos.GrpcClient;
 using RedNb.Nacos.GrpcClient.Ai;
 using Xunit;
 using Xunit.Abstractions;
+using static RedNb.Nacos.IntegrationTests.TestRetryHelpers;
 
 namespace RedNb.Nacos.IntegrationTests.Ai;
 
@@ -55,7 +56,7 @@ public class GrpcAiServiceIntegrationTests : IAsyncLifetime
         if (_httpAi is IAsyncDisposable h) await h.DisposeAsync();
     }
 
-    [Fact(Skip = "Blocked by pre-existing SDK gaps: NacosGrpcClient has no auth path (server returns 401), and ReleaseMcpServerResponse reads McpServerId while the server sends mcpId. Tracked in docs/SDK_COMPLETENESS_REPORT.md §五 (待完善).")]
+    [Fact]
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
     public async Task ReleaseAndGetMcpServer_ViaGrpc()
@@ -67,39 +68,41 @@ public class GrpcAiServiceIntegrationTests : IAsyncLifetime
             VersionDetail = new ServerVersionDetail { Version = "1.0.0" },
             Protocol = "stdio"
         };
-        await _grpcAi!.ReleaseMcpServerAsync(spec, toolSpecification: null);
-        await Task.Delay(500);
-        var got = await _grpcAi.GetMcpServerAsync(mcpName);
-        got.Should().NotBeNull();
+
+        var released = await _grpcAi!.ReleaseMcpServerAsync(spec, toolSpecification: null);
+        released.Should().NotBeNullOrEmpty();
+
+        var got = await WaitForAsync(_output, () => _grpcAi.GetMcpServerAsync(mcpName), s => s is not null);
         got!.Name.Should().Be(mcpName);
-        await _httpAi!.DeleteMcpServerAsync(mcpName);
+
+        await DeleteWithRetryAsync(_output, () => _httpAi!.DeleteMcpServerAsync(mcpName));
     }
 
-    [Fact(Skip = "Blocked by pre-existing SDK gap: OperationResponse {Success,Message} does not match the server Response {resultCode,errorCode,message,requestId}, so endpoint ops report failure despite server success. Tracked in docs/SDK_COMPLETENESS_REPORT.md §五 (待完善).")]
+    [Fact]
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
     public async Task RegisterAndDeregisterMcpEndpoint_ViaGrpc()
     {
         var mcpName = $"grpc-mcp-ep-{Guid.NewGuid():N}";
-        await _grpcAi!.ReleaseMcpServerAsync(new McpServerBasicInfo
+        var released = await _grpcAi!.ReleaseMcpServerAsync(new McpServerBasicInfo
         {
             Name = mcpName,
             VersionDetail = new ServerVersionDetail { Version = "1.0.0" },
             Protocol = "stdio"
         }, toolSpecification: null);
-        await Task.Delay(500);
+        released.Should().NotBeNullOrEmpty();
+
+        await WaitForAsync(_output, () => _grpcAi.GetMcpServerAsync(mcpName), s => s is not null);
 
         await _grpcAi.RegisterMcpServerEndpointAsync(mcpName, "127.0.0.1", 9100, "1.0.0");
-        await Task.Delay(500);
-        var got = await _grpcAi.GetMcpServerAsync(mcpName);
-        // Backend endpoint attached -> either retrieved or null on race; tolerate
+        var got = await WaitForAsync(_output, () => _grpcAi.GetMcpServerAsync(mcpName), s => s is not null);
         got.Should().NotBeNull();
 
         await _grpcAi.DeregisterMcpServerEndpointAsync(mcpName, "127.0.0.1", 9100);
-        await _httpAi!.DeleteMcpServerAsync(mcpName);
+        await DeleteWithRetryAsync(_output, () => _httpAi!.DeleteMcpServerAsync(mcpName));
     }
 
-    [Fact(Skip = "Blocked by pre-existing SDK gaps: gRPC auth path missing (401) and OperationResponse shape mismatch. Tracked in docs/SDK_COMPLETENESS_REPORT.md §五 (待完善).")]
+    [Fact]
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
     public async Task ReleaseAndGetAgentCard_ViaGrpc()
@@ -113,36 +116,40 @@ public class GrpcAiServiceIntegrationTests : IAsyncLifetime
             PreferredTransport = "jsonrpc",
             Url = "http://127.0.0.1:9999"
         };
+
         await _grpcAi!.ReleaseAgentCardAsync(card);
-        await Task.Delay(500);
-        var got = await _grpcAi.GetAgentCardAsync(agentName);
-        got.Should().NotBeNull();
+
+        var got = await WaitForAsync(_output, () => _grpcAi.GetAgentCardAsync(agentName), s => s is not null);
         got!.Name.Should().Be(agentName);
-        await _httpAi!.DeleteAgentAsync(agentName);
+
+        await DeleteWithRetryAsync(_output, () => _httpAi!.DeleteAgentAsync(agentName));
     }
 
-    [Fact(Skip = "Blocked by pre-existing SDK gaps: gRPC auth path missing (401) and OperationResponse shape mismatch, so the gRPC release never lands for the HTTP side to observe. (The earlier 'HTTP DELETE sends no body -> 404' diagnosis was disproven by probe: a body-less DELETE of an existing server returns 200; the 404 was only 'MCP server not found'.) Tracked in docs/SDK_COMPLETENESS_REPORT.md §五 (待完善).")]
+    [Fact]
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
     public async Task CrossChannel_ReleaseViaGrpc_VisibleViaHttpList()
     {
         var mcpName = $"cross-mcp-{Guid.NewGuid():N}";
-        await _grpcAi!.ReleaseMcpServerAsync(new McpServerBasicInfo
+        var released = await _grpcAi!.ReleaseMcpServerAsync(new McpServerBasicInfo
         {
             Name = mcpName,
             VersionDetail = new ServerVersionDetail { Version = "1.0.0" },
             Protocol = "stdio"
         }, toolSpecification: null);
-        await Task.Delay(1000);
+        released.Should().NotBeNullOrEmpty();
 
         try
         {
-            var page = await _httpAi!.ListMcpServersAsync(pageSize: 100);
+            var page = await WaitForAsync(
+                _output,
+                () => _httpAi!.ListMcpServersAsync(pageSize: 100),
+                p => p is not null && p.PageItems.Any(i => i.Name == mcpName));
             page.PageItems.Should().Contain(i => i.Name == mcpName);
         }
         finally
         {
-            await _httpAi!.DeleteMcpServerAsync(mcpName);
+            await DeleteWithRetryAsync(_output, () => _httpAi!.DeleteMcpServerAsync(mcpName));
         }
     }
 }

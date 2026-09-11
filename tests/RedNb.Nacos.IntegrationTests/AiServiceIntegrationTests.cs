@@ -7,6 +7,7 @@ using RedNb.Nacos.Core.Ai.Model.A2a;
 using RedNb.Nacos.Core.Ai.Model.Mcp;
 using Xunit;
 using Xunit.Abstractions;
+using static RedNb.Nacos.IntegrationTests.TestRetryHelpers;
 
 namespace RedNb.Nacos.IntegrationTests;
 
@@ -64,6 +65,7 @@ public class AiServiceIntegrationTests : IAsyncLifetime
         try
         {
             var retrieved = await WaitForAsync(
+                _output,
                 () => _aiService!.GetAgentCardAsync(agentName),
                 c => c is not null);
             retrieved.Should().NotBeNull();
@@ -72,7 +74,7 @@ public class AiServiceIntegrationTests : IAsyncLifetime
         }
         finally
         {
-            await DeleteWithRetryAsync(() => _aiService!.DeleteAgentAsync(agentName));
+            await DeleteWithRetryAsync(_output, () => _aiService!.DeleteAgentAsync(agentName));
         }
     }
 
@@ -121,13 +123,14 @@ public class AiServiceIntegrationTests : IAsyncLifetime
             // or "blur") and matches agentName exactly, so a pageSize-100 scan of the
             // whole store is neither needed nor deterministic.
             var page = await WaitForAsync(
+                _output,
                 () => _aiService!.ListAgentCardsAsync(agentName: agentName, search: "accurate"),
                 p => p.PageItems.Any(i => i.Name == agentName));
             page.PageItems.Should().Contain(i => i.Name == agentName);
         }
         finally
         {
-            await DeleteWithRetryAsync(() => _aiService!.DeleteAgentAsync(agentName));
+            await DeleteWithRetryAsync(_output, () => _aiService!.DeleteAgentAsync(agentName));
         }
     }
 
@@ -147,11 +150,12 @@ public class AiServiceIntegrationTests : IAsyncLifetime
         });
 
         var versions = await WaitForAsync(
+            _output,
             () => _aiService.ListAgentVersionsAsync(agentName),
             list => list is not null && list.Contains("2.0.0"));
         versions.Should().Contain("2.0.0");
 
-        await DeleteWithRetryAsync(() => _aiService.DeleteAgentAsync(agentName));
+        await DeleteWithRetryAsync(_output, () => _aiService.DeleteAgentAsync(agentName));
     }
 
     [Fact]
@@ -170,6 +174,7 @@ public class AiServiceIntegrationTests : IAsyncLifetime
         });
 
         var infos = await WaitForAsync(
+            _output,
             () => _aiService.ListAgentVersionInfosAsync(agentName),
             list => list is not null && list.Count > 0);
 
@@ -179,7 +184,7 @@ public class AiServiceIntegrationTests : IAsyncLifetime
         info.CreatedAt.Should().HaveValue();
         info.UpdatedAt.Should().HaveValue();
 
-        await DeleteWithRetryAsync(() => _aiService.DeleteAgentAsync(agentName));
+        await DeleteWithRetryAsync(_output, () => _aiService.DeleteAgentAsync(agentName));
     }
 
     // ---------- MCP Server (HTTP / console) ----------
@@ -203,6 +208,7 @@ public class AiServiceIntegrationTests : IAsyncLifetime
         try
         {
             var retrieved = await WaitForAsync(
+                _output,
                 () => _aiService!.GetMcpServerAsync(mcpName),
                 s => s is not null);
             retrieved.Should().NotBeNull();
@@ -214,7 +220,7 @@ public class AiServiceIntegrationTests : IAsyncLifetime
         }
         finally
         {
-            await DeleteWithRetryAsync(() => _aiService!.DeleteMcpServerAsync(mcpName));
+            await DeleteWithRetryAsync(_output, () => _aiService!.DeleteMcpServerAsync(mcpName));
         }
     }
 
@@ -247,6 +253,7 @@ public class AiServiceIntegrationTests : IAsyncLifetime
             // (field name `toolSpecification`, bound by the server's McpDetailForm),
             // so the tool must come back with the released server.
             var retrieved = await WaitForAsync(
+                _output,
                 () => _aiService!.GetMcpServerAsync(mcpName),
                 s => s?.ToolSpec is not null);
             retrieved.Should().NotBeNull();
@@ -256,7 +263,7 @@ public class AiServiceIntegrationTests : IAsyncLifetime
         }
         finally
         {
-            await DeleteWithRetryAsync(() => _aiService!.DeleteMcpServerAsync(mcpName));
+            await DeleteWithRetryAsync(_output, () => _aiService!.DeleteMcpServerAsync(mcpName));
         }
     }
 
@@ -303,6 +310,7 @@ public class AiServiceIntegrationTests : IAsyncLifetime
         try
         {
             var retrieved = await WaitForAsync(
+                _output,
                 () => _aiService.GetMcpServerAsync(mcpName),
                 s => s?.RemoteServerConfig?.ServiceRef is not null);
             retrieved.Should().NotBeNull();
@@ -316,7 +324,7 @@ public class AiServiceIntegrationTests : IAsyncLifetime
         }
         finally
         {
-            await DeleteWithRetryAsync(() => _aiService.DeleteMcpServerAsync(mcpName));
+            await DeleteWithRetryAsync(_output, () => _aiService.DeleteMcpServerAsync(mcpName));
         }
     }
 
@@ -337,13 +345,14 @@ public class AiServiceIntegrationTests : IAsyncLifetime
         {
             // mcpName is an exact server-side filter, so no pageSize-100 scan.
             var page = await WaitForAsync(
+                _output,
                 () => _aiService!.ListMcpServersAsync(mcpName: mcpName),
                 p => p.PageItems.Any(i => i.Name == mcpName));
             page.PageItems.Should().Contain(i => i.Name == mcpName);
         }
         finally
         {
-            await DeleteWithRetryAsync(() => _aiService!.DeleteMcpServerAsync(mcpName));
+            await DeleteWithRetryAsync(_output, () => _aiService!.DeleteMcpServerAsync(mcpName));
         }
     }
 
@@ -369,80 +378,6 @@ public class AiServiceIntegrationTests : IAsyncLifetime
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
     public async Task SubscribeMcpServer_ReceivesUpdates() { /* kept for reference */ }
-
-    // ---------- Read-after-write helpers ----------
-
-    /// <summary>
-    /// The Nacos 3.2.4 console is not always immediately consistent after a release:
-    /// an immediate read can briefly answer
-    /// {"code":20002,...,"data":"argument \"content\" is null"} or return an empty
-    /// page (observed up to ~1s). Polls <paramref name="read"/> until
-    /// <paramref name="isSettled"/> holds. A server error answered while the write is
-    /// still settling is retried too; if the timeout elapses, the last server error (or
-    /// a <see cref="TimeoutException"/>) is thrown, so the failure names the transient
-    /// instead of a bare null.
-    /// </summary>
-    private async Task<T> WaitForAsync<T>(
-        Func<Task<T>> read,
-        Func<T, bool> isSettled,
-        int timeoutMs = 2000,
-        int pollMs = 200)
-        where T : class?
-    {
-        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-        NacosException? lastServerError = null;
-
-        while (true)
-        {
-            try
-            {
-                var value = await read();
-                if (value is not null && isSettled(value))
-                {
-                    return value;
-                }
-            }
-            catch (NacosException ex)
-            {
-                lastServerError = ex; // transient while the release settles
-            }
-
-            if (DateTime.UtcNow >= deadline)
-            {
-                if (lastServerError is not null)
-                {
-                    throw lastServerError;
-                }
-
-                throw new TimeoutException($"The console read did not settle within {timeoutMs} ms.");
-            }
-
-            _output.WriteLine($"WaitForAsync: read not settled yet; retrying in {pollMs} ms.");
-            await Task.Delay(pollMs);
-        }
-    }
-
-    /// <summary>
-    /// Teardown guard: the same settle window can make the console answer a DELETE
-    /// transiently, which would orphan the fixture — retry a couple of times, then let
-    /// the failure surface.
-    /// </summary>
-    private async Task DeleteWithRetryAsync(Func<Task> delete, int attempts = 3)
-    {
-        for (var attempt = 1; ; attempt++)
-        {
-            try
-            {
-                await delete();
-                return;
-            }
-            catch (NacosException ex) when (attempt < attempts)
-            {
-                _output.WriteLine($"DeleteWithRetryAsync: {ex.Message}; retrying.");
-                await Task.Delay(200);
-            }
-        }
-    }
 
     // ---------- Test Listeners (unchanged) ----------
 
