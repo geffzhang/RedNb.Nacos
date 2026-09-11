@@ -42,11 +42,11 @@ SDK 已完成向 **Nacos 3.2+** 的协议迁移（分支 `AIRegistry`，标签 `
 | publishConfigCas | ✅ | ⚠️ `[Obsolete]`+抛异常 | ✅ (原生) | ✅ 单元(HTTP 抛异常) |
 | removeConfig | ✅ | ✅ (admin API) | ✅ | ✅ 单元+集成 |
 | getServerStatus | ✅ | ✅ | ✅ | ✅ 单元 |
-| addConfigFilter | ✅ | ✅ | ⚠️ 未实现 | ✅ 单元 |
-| fuzzyWatch (Nacos 3.0) | ✅ | ✅ | ⚠️ 未实现 | ✅ 单元 |
-| cancelFuzzyWatch | ✅ | ✅ | ⚠️ 未实现 | ✅ 单元 |
+| addConfigFilter | ✅ | ✅ | ✅ (filter chain) | ✅ 单元(HTTP) · ⚠️ gRPC 无测试 |
+| fuzzyWatch (Nacos 3.0) | ✅ | ✅ | ✅ | ✅ 单元(HTTP) · ⚠️ gRPC 无测试 |
+| cancelFuzzyWatch | ✅ | ✅ | ✅ | ✅ 单元(HTTP) · ⚠️ gRPC 无测试 |
 
-**HTTP 实现完成度: 100%** | **gRPC 实现完成度: 75%**
+**HTTP 实现完成度: 100%** | **gRPC 实现完成度: 100%\***（\* 实现齐备，未对 live 验证、服务层无测试）
 
 ### 2. Naming Service (命名服务)
 
@@ -54,42 +54,46 @@ SDK 已完成向 **Nacos 3.2+** 的协议迁移（分支 `AIRegistry`，标签 `
 |-----|---------|-----------------|-----------------|---------|
 | registerInstance (多重载) | ✅ | ✅ (v3) | ✅ | ✅ 单元+集成 |
 | deregisterInstance (多重载) | ✅ | ✅ (v3) | ✅ | ✅ 集成 |
-| batchRegisterInstance | ✅ | ✅ | ⚠️ 未实现 | ⚠️ 无测试 |
-| batchDeregisterInstance | ✅ | ✅ | ⚠️ 未实现 | ⚠️ 无测试 |
+| batchRegisterInstance | ✅ | ✅ | ✅ (redo 缓存联动) | ⚠️ 无测试 |
+| batchDeregisterInstance | ✅ | ✅ | ✅ (逐个注销，gRPC 无批量端点) | ⚠️ 无测试 |
 | getAllInstances (多重载) | ✅ | ✅ (v3 平铺数组解析) | ✅ | ✅ 单元+集成 |
 | selectInstances (多重载) | ✅ | ✅ | ✅ | ✅ 集成 |
 | selectOneHealthyInstance | ✅ | ✅ | ✅ | ✅ 集成 |
 | subscribe (Action回调) | ✅ | ✅ (本地通知器) | ✅ (bi-stream push) | ✅ 集成(推送) |
-| subscribe (Selector) | ✅ | ✅ | ⚠️ 未实现 | ✅ 集成 |
+| subscribe (Selector) | ✅ | ✅ | ✅ | ✅ 集成(HTTP) · ⚠️ gRPC 无测试 |
 | unsubscribe | ✅ | ✅ | ✅ | ⚠️ 无测试 |
 | getServicesOfServer | ✅ | ✅ (admin pageItems) | ✅ | ✅ 集成 |
-| getSubscribeServices | ✅ | ✅ | ⚠️ 未实现 | ⚠️ 无测试 |
-| fuzzyWatch (Nacos 3.0) | ✅ | ✅ | ⚠️ 未实现 | ✅ 单元 |
+| getSubscribeServices | ✅ | ✅ | ✅ (本地订阅视图) | ⚠️ 无测试 |
+| fuzzyWatch (Nacos 3.0) | ✅ | ✅ | ✅ | ✅ 单元(HTTP) · ⚠️ gRPC 无测试 |
 | 心跳机制 | ✅ | ✅ (`beat=true` 复用注册端点) | ✅ 连接级(无需客户端心跳) | ✅ 集成 |
 | 服务信息缓存 | ✅ | ✅ (TTL+写时失效) | ✅ (NamingServiceInfoHolder) | ✅ 单元 |
 
-**HTTP 实现完成度: 100%** | **gRPC 实现完成度: 75%**
+**HTTP 实现完成度: 100%** | **gRPC 实现完成度: 100%\***（\* 实现齐备，未对 live 验证、服务层无测试）
 
 ### 3. AI Service (AI/MCP/A2A 服务) - Nacos 3.0 新增功能
 
-> ⚠️ **状态：已实现，未对 live 控制台验证**。AI 端点部署在控制台端口 8080（`/v3/console/ai/**`），
+> ⚠️ **状态：HTTP 与 gRPC 双通道均已实现，未对 live 控制台验证**。AI 端点部署在控制台端口 8080（`/v3/console/ai/**`），
 > 当前 6 个 AI 集成测试因吞掉 `NacosException` 而"通过"，并未真正打到 live 端点。详见下文"待完善"。
+> gRPC 实现位于 `NacosGrpcAiService.cs`（MCP/AgentCard）+ `NacosGrpcAiService.Registry.cs`（Prompt/Skill/AgentSpec 注册表）。
 
 | 功能 | Java SDK | .NET SDK (HTTP) | .NET SDK (gRPC) | 测试覆盖 |
 |-----|---------|-----------------|-----------------|---------|
-| getMcpServer | ✅ | ✅ | ⚠️ 未实现 | ✅ 单元 |
-| releaseMcpServer | ✅ | ✅ | ⚠️ 未实现 | ⚠️ 无测试 |
-| registerMcpServerEndpoint | ✅ | ✅ | ⚠️ 未实现 | ⚠️ 无测试 |
-| deregisterMcpServerEndpoint | ✅ | ✅ | ⚠️ 未实现 | ⚠️ 无测试 |
-| subscribeMcpServer | ✅ | ✅ | ⚠️ 未实现 | ✅ 单元 |
-| unsubscribeMcpServer | ✅ | ✅ | ⚠️ 未实现 | ✅ 单元 |
-| deleteMcpServer | ✅ | ✅ | ⚠️ 未实现 | ⚠️ 无测试 |
-| listMcpServers | ✅ | ✅ | ⚠️ 未实现 | ⚠️ 无测试 |
-| getAgentCard | ✅ | ✅ | ⚠️ 未实现 | ✅ 集成(吞异常) |
-| releaseAgentCard | ✅ | ✅ | ⚠️ 未实现 | ⚠️ 无测试 |
-| Agent Subscription | ✅ | ✅ | ⚠️ 未实现 | ✅ 单元 |
+| getMcpServer | ✅ | ✅ | ✅ | ✅ 单元(HTTP) |
+| releaseMcpServer | ✅ | ✅ | ✅ | ⚠️ 无测试 |
+| registerMcpServerEndpoint | ✅ | ✅ | ✅ | ⚠️ 无测试 |
+| deregisterMcpServerEndpoint | ✅ | ✅ | ✅ | ⚠️ 无测试 |
+| subscribeMcpServer | ✅ | ✅ | ✅ | ✅ 单元(HTTP) |
+| unsubscribeMcpServer | ✅ | ✅ | ✅ | ✅ 单元(HTTP) |
+| deleteMcpServer | ✅ | ✅ | ✅ | ⚠️ 无测试 |
+| listMcpServers | ✅ | ✅ | ✅ | ⚠️ 无测试 |
+| getAgentCard | ✅ | ✅ | ✅ | ✅ 集成(吞异常) |
+| releaseAgentCard | ✅ | ✅ | ✅ | ⚠️ 无测试 |
+| Agent Subscription | ✅ | ✅ | ✅ | ✅ 单元(HTTP) |
+| Prompt 注册表（draft/审核/发布/上下线/删除） | ✅ | ✅ | ✅ | ✅ 单元(HTTP) · ⚠️ gRPC 无测试 |
+| Skill 注册表（含 zip 上传/下载） | ✅ | ✅ | ✅ | ✅ 单元(HTTP) · ⚠️ gRPC 无测试 |
+| AgentSpec 注册表 | ✅ | ✅ | ✅ | ✅ 单元(HTTP) · ⚠️ gRPC 无测试 |
 
-**HTTP 实现完成度: 100%\***（\* 未对 live 8080 控制台验证）| **gRPC 实现完成度: 0%**
+**HTTP 实现完成度: 100%\*** | **gRPC 实现完成度: 100%\***（\* 双通道均未对 live 8080 控制台验证）
 
 ### 4. Lock Service (分布式锁) - Nacos 3.0 新增功能
 
@@ -230,6 +234,7 @@ SDK 已完成向 **Nacos 3.2+** 的协议迁移（分支 `AIRegistry`，标签 `
 
 覆盖：ConfigRpcTransportClient 查询/监听/fuzzy-watch 调度（Metadata.type 断言）、
 NamingRpcTransportClient 一元/流式/推送分派。
+服务层（Config/Naming/AI 业务方法）无单元测试——批量/fuzzyWatch/Selector 订阅等方法连集成测试也未覆盖。
 
 ### 4. 集成测试 (RedNb.Nacos.IntegrationTests, live Nacos 3.2.4)
 
@@ -264,39 +269,49 @@ NamingRpcTransportClient 一元/流式/推送分派。
 
 ## 五、待完善功能列表
 
+> 本版修正了此前表格中 gRPC 高级功能"未实现"的误标（实现实际齐备，见 §一），
+> 缺口集中在**测试覆盖与 live 验证**。条目按建议优先级排列，代码位置为锚点。
+
 ### 高优先级
 
-1. **AI 服务 live 验证**
-   - [ ] 对 8080 控制台的 `/v3/console/ai/**` 做真实联调
-   - [ ] 修正 6 个吞异常的 AI 集成测试（断言真实响应，而不是捕获 NacosException 后通过）
+1. **AI 服务 live 验证（HTTP + gRPC 双通道）**
+   - [ ] 对 8080 控制台 `/v3/console/ai/**` 真实联调：HTTP `src/RedNb.Nacos.Http/Ai/`、gRPC `src/RedNb.Nacos.Grpc/Ai/NacosGrpcAiService.cs` + `NacosGrpcAiService.Registry.cs`
+   - [ ] 修正 6 个吞异常的 AI 集成测试（`tests/RedNb.Nacos.IntegrationTests/AiServiceIntegrationTests.cs`）：断言真实响应而非捕获 `NacosException` 后通过
+   - [ ] 验证后清理 `NacosConstants.NamespaceHeader`（目前仅为 AI 代码保留，ANALYSIS §三.7）
 
-2. **gRPC 高级功能**
-   - [ ] Config Filter 支持
-   - [ ] Fuzzy Watch 支持
-   - [ ] 批量注册/注销
-   - [ ] Selector 订阅 / getSubscribeServices
+2. **gRPC 服务层测试覆盖（实现齐备，测试空白）**
+   - [ ] Config：AddConfigFilter（`NacosGrpcConfigService.cs:303`）、FuzzyWatch/CancelFuzzyWatch（`:313`/`:399`）
+   - [ ] Naming：BatchRegister/BatchDeregister（`NacosGrpcNamingService.cs:162`/`:187`）、Selector 订阅（`:528`）、GetSubscribeServices（`:747`，本地订阅视图）、FuzzyWatch/CancelFuzzyWatch（`:787`/`:861`）
+   - [ ] 现状：gRPC 测试仅 19 个传输层分派用例（`RedNb.Nacos.Grpc.Tests`），服务层（Config/Naming/AI）零覆盖
 
 3. **gRPC 配置查询错误语义**
-   - [ ] `NacosGrpcConfigService` 检查 `ConfigQueryResponse.ErrorCode`（Java 映射 300 = not found）
+   - [ ] `NacosGrpcConfigService.cs:133`：非成功 `ConfigQueryResponse` 未检查 `ErrorCode`（Java 映射 300 = not found）；先对 live 验证 300 行为再修改
 
 ### 中优先级
 
-4. **Redo 机制接线**
-   - [ ] `RedoScheduledTask` 尚未实例化——重连后丢失的服务端状态无重做（见 ANALYSIS 文档）
+1. **Redo 机制接线**
+   - [ ] `RedoScheduledTask`（`src/RedNb.Nacos/Naming/Redo/RedoScheduledTask.cs`）未实例化——gRPC 重连后丢失的服务端状态无重做；`NamingGrpcRedoService` 缓存已就绪，只差调度
 
-5. **配置解析器测试**
-   - [ ] PropertiesChangeParser / JsonChangeParser / YamlChangeParser 测试
+2. **配置解析器测试**
+   - [ ] PropertiesChangeParser / JsonChangeParser / YamlChangeParser / ConfigChangeParserFactory
 
-6. **负载均衡**
-   - [ ] gRPC 连接池管理
-   - [ ] 多服务器地址负载均衡
+3. **连接健壮性与负载均衡（合并 ANALYSIS §三 N1-N5）**
+   - [ ] gRPC 多服务器地址负载均衡 / 连接池
+   - [ ] N1：被拒实例列表查询先计入成功指标再抛异常（指标计数顺序）
+   - [ ] N3：清理旧连接时持锁等待 keep-alive 循环（受 2s `WaitAsync` 约束）
+   - [ ] N4：`_current` 读写非原子（Dispose/Connect 竞态）
+   - [ ] N5：`DeadlineExceeded` 重连丢弃服务端状态（与第 4 条同源）
 
 ### 低优先级
 
-7. **测试补充**
-   - [ ] Token 刷新测试
-   - [ ] 批量注册/注销测试
-   - [ ] 心跳 `beat=false` 失败路径测试
+1. **测试补充**
+   - [ ] Token 自动刷新
+   - [ ] 心跳 `beat=false` 失败路径
+   - [ ] HTTP AI 无测试方法：release/register/deregister/delete/list MCP 端点、releaseAgentCard
+   - [ ] gRPC 端口偏移（8848+1000=9848）、重试配置
+
+2. **订阅失败语义确认**
+   - [ ] N2：`SubscribeAsync` 失败时本地监听器保持注册（后续推送可重新填充——已判可辩护，确认是否保持现状）
 
 ---
 
@@ -304,16 +319,16 @@ NamingRpcTransportClient 一元/流式/推送分派。
 
 | 模块 | HTTP 实现 | gRPC 实现 | 测试覆盖 |
 |-----|----------|----------|---------|
-| Config Service | 100% (v3) | 75% | 90% |
-| Naming Service | 100% (v3) | 75% | 90% |
-| AI Service | 100%\* | 0% | 70% |
+| Config Service | 100% (v3) | 100%\* | 90% |
+| Naming Service | 100% (v3) | 100%\* | 90% |
+| AI Service | 100%\* | 100%\* | 70% |
 | Lock Service | 100% `[Obsolete]` | 100% | **100%** ✅ |
 | Maintainer Service | `[Obsolete]` | N/A | **40%** |
 | Failover 机制 | **100%** ✅ | N/A | **100%** ✅ |
 | MetricsMonitor | **100%** ✅ | N/A | **100%** ✅ |
-| **总体** | **100%** | **65%** | **85%** |
+| **总体** | **100%** | **100%\*** | **85%** |
 
-\* AI Service HTTP 实现已编码完成，但尚未对 live 控制台（8080）验证。
+\* 实现已编码完成，但尚未对 live 控制台（8080）验证；gRPC 服务层无单元测试（19 个用例均为传输层分派）。
 
 ### 结论
 
@@ -332,5 +347,5 @@ gRPC 承载全部请求传输与服务端推送（连接就绪握手、重连代
 
 **下一步优先级:**
 1. AI 服务 live 控制台验证（8080）
-2. gRPC Config/Naming 高级功能（fuzzyWatch、批量、Selector 订阅）
+2. gRPC Config/Naming 高级功能的测试覆盖（fuzzyWatch、批量、Selector 订阅——实现已齐备，见 §五.2）
 3. Redo 机制接线与负载均衡

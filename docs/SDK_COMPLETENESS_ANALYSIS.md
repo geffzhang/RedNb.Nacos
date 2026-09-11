@@ -118,4 +118,4 @@ HTTP `AddListenerAsync` 保留本地监听器注册 + 一次性 MD5 种子（取
 
 代码库已完成 Nacos 3.2+ 协议迁移：v1/v2 路径与 HTTP 长轮询清除，gRPC 传输对齐 3.2.4 契约，
 Failover / Monitor 基础设施已集成并全量测试，废弃面按计划 `[Obsolete]` + 大声失败。
-剩余工作集中在 AI 控制台端点验证、gRPC 高级功能与 Redo 接线（详见 REPORT 的"待完善"章节）。
+剩余工作集中在 AI 控制台端点验证（HTTP/gRPC 双通道）、gRPC 服务层测试覆盖（高级功能实现已齐备）与 Redo 接线（详见 REPORT 的"待完善"章节）。
