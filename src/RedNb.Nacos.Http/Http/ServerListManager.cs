@@ -19,6 +19,18 @@ public class ServerListManager
     }
 
     /// <summary>
+    /// Constructs a <see cref="ServerListManager"/> directly from a pre-resolved
+    /// list of server addresses. Used by clients (e.g.
+    /// <c>NacosConsoleHttpClient</c>) whose server list is derived from a
+    /// different source than <see cref="NacosClientOptions.ServerAddresses"/>.
+    /// </summary>
+    public ServerListManager(IList<string> addresses)
+    {
+        _servers = addresses.Select(addr => new ServerInfo(addr)).ToList();
+        _currentIndex = 0;
+    }
+
+    /// <summary>
     /// Gets all server addresses.
     /// </summary>
     public List<string> GetServerList()
