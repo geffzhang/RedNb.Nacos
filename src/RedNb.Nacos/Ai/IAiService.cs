@@ -38,8 +38,9 @@ public interface IAiService : IA2aService, IPromptService, ISkillService, IAgent
     /// A non-null <paramref name="toolSpecification"/> is carried over the HTTP
     /// console channel as a <c>toolSpecification</c> form field and is persisted by
     /// Nacos 3.2.4 (the released server reports <c>capabilities: ["TOOL"]</c> with a
-    /// matching <c>toolSpec</c>). Use the gRPC overload when the server also needs an
-    /// <see cref="McpEndpointSpec"/> — a non-local server type is rejected without one.
+    /// matching <c>toolSpec</c>). Use the overload that accepts an
+    /// <see cref="McpEndpointSpec"/> when the server also needs one — a non-local
+    /// server type is rejected without it.
     /// </remarks>
     /// <param name="serverSpecification">MCP server specification.</param>
     /// <param name="toolSpecification">MCP tool specification.</param>

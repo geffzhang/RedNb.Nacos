@@ -349,6 +349,38 @@ public class AiModelTests
     }
 
     [Fact]
+    public void McpCapability_TokenForm_RoundTripsBothDirections()
+    {
+        // Nacos 3.2.4 serializes capabilities as bare enum tokens — a server released
+        // with a tool specification reads back as "capabilities": ["TOOL"].
+
+        // Read: bare token.
+        var token = JsonSerializer.Deserialize<McpCapability>("\"TOOL\"", _jsonOptions);
+        Assert.NotNull(token);
+        Assert.Equal("TOOL", token.Name);
+        Assert.Null(token.Description);
+
+        // Read: the token list the server actually sends.
+        var tokens = JsonSerializer.Deserialize<List<McpCapability>>("[\"TOOL\",\"PROMPT\"]", _jsonOptions);
+        Assert.NotNull(tokens);
+        Assert.Equal(2, tokens.Count);
+        Assert.Equal("TOOL", tokens[0].Name);
+        Assert.Equal("PROMPT", tokens[1].Name);
+
+        // Write: a capability without a description emits the token the server binds.
+        Assert.Equal("\"TOOL\"", JsonSerializer.Serialize(new McpCapability { Name = "TOOL" }, _jsonOptions));
+
+        // Read/write: a description keeps the object form.
+        var withDescription = JsonSerializer.Deserialize<McpCapability>("{\"name\":\"TOOL\",\"description\":\"tools\"}", _jsonOptions);
+        Assert.NotNull(withDescription);
+        Assert.Equal("TOOL", withDescription.Name);
+        Assert.Equal("tools", withDescription.Description);
+        var objectJson = JsonSerializer.Serialize(withDescription, _jsonOptions);
+        Assert.Contains("\"name\":\"TOOL\"", objectJson);
+        Assert.Contains("\"description\":\"tools\"", objectJson);
+    }
+
+    [Fact]
     public void Icon_SerializesCorrectly()
     {
         // Arrange

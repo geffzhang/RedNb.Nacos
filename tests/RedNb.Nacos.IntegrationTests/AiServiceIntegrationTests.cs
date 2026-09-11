@@ -63,14 +63,16 @@ public class AiServiceIntegrationTests : IAsyncLifetime
 
         try
         {
-            var retrieved = await _aiService.GetAgentCardAsync(agentName);
+            var retrieved = await WaitForAsync(
+                () => _aiService!.GetAgentCardAsync(agentName),
+                c => c is not null);
             retrieved.Should().NotBeNull();
             retrieved!.Name.Should().Be(agentName);
             retrieved.Version.Should().Be("1.0.0");
         }
         finally
         {
-            await _aiService.DeleteAgentAsync(agentName);
+            await DeleteWithRetryAsync(() => _aiService!.DeleteAgentAsync(agentName));
         }
     }
 
@@ -118,16 +120,18 @@ public class AiServiceIntegrationTests : IAsyncLifetime
             // The console list endpoint requires an explicit search mode ("accurate"
             // or "blur") and matches agentName exactly, so a pageSize-100 scan of the
             // whole store is neither needed nor deterministic.
-            var page = await _aiService.ListAgentCardsAsync(agentName: agentName, search: "accurate");
+            var page = await WaitForAsync(
+                () => _aiService!.ListAgentCardsAsync(agentName: agentName, search: "accurate"),
+                p => p.PageItems.Any(i => i.Name == agentName));
             page.PageItems.Should().Contain(i => i.Name == agentName);
         }
         finally
         {
-            await _aiService.DeleteAgentAsync(agentName);
+            await DeleteWithRetryAsync(() => _aiService!.DeleteAgentAsync(agentName));
         }
     }
 
-    [Fact(Skip = "Server contract surprise: live Nacos 3.2.4 returns rich objects {version, createdAt, updatedAt, latest} at /v3/console/ai/a2a/version/list, but SDK NacosAiService deserializes to List<string>. Tracked in docs/SDK_COMPLETENESS_REPORT.md §五 (待完善).")]
+    [Fact(Skip = "Server contract surprise: live Nacos 3.2.4 returns rich objects {version, createdAt, updatedAt, latest} at /v3/console/ai/a2a/version/list, but SDK NacosAiService deserializes to List<string>. Documented in docs/SDK_COMPLETENESS_REPORT.md §零 (测试矩阵 — the one server-contract-difference skip).")]
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
     public async Task ListAgentVersions_ReturnsVersions()
@@ -169,7 +173,9 @@ public class AiServiceIntegrationTests : IAsyncLifetime
 
         try
         {
-            var retrieved = await _aiService.GetMcpServerAsync(mcpName);
+            var retrieved = await WaitForAsync(
+                () => _aiService!.GetMcpServerAsync(mcpName),
+                s => s is not null);
             retrieved.Should().NotBeNull();
             retrieved!.Name.Should().Be(mcpName);
             retrieved.VersionDetail!.Version.Should().Be("1.0.0");
@@ -179,7 +185,7 @@ public class AiServiceIntegrationTests : IAsyncLifetime
         }
         finally
         {
-            await _aiService.DeleteMcpServerAsync(mcpName);
+            await DeleteWithRetryAsync(() => _aiService!.DeleteMcpServerAsync(mcpName));
         }
     }
 
@@ -211,7 +217,9 @@ public class AiServiceIntegrationTests : IAsyncLifetime
             // The HTTP console channel accepts and persists tool specifications
             // (field name `toolSpecification`, bound by the server's McpDetailForm),
             // so the tool must come back with the released server.
-            var retrieved = await _aiService.GetMcpServerAsync(mcpName);
+            var retrieved = await WaitForAsync(
+                () => _aiService!.GetMcpServerAsync(mcpName),
+                s => s?.ToolSpec is not null);
             retrieved.Should().NotBeNull();
             retrieved!.Name.Should().Be(mcpName);
             retrieved.ToolSpec.Should().NotBeNull();
@@ -219,7 +227,67 @@ public class AiServiceIntegrationTests : IAsyncLifetime
         }
         finally
         {
-            await _aiService.DeleteMcpServerAsync(mcpName);
+            await DeleteWithRetryAsync(() => _aiService!.DeleteMcpServerAsync(mcpName));
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    [Trait("Module", "AI")]
+    public async Task ReleaseMcpServer_WithEndpointSpecification_CarriesSpecOverConsole()
+    {
+        var mcpName = $"it-mcp-ep-{Guid.NewGuid():N}";
+        var serviceName = $"svc-{Guid.NewGuid():N}";
+        var spec = new McpServerBasicInfo
+        {
+            Name = mcpName,
+            VersionDetail = new ServerVersionDetail { Version = "1.0.0" },
+            Protocol = "mcp-sse",
+            RemoteServerConfig = new McpServerRemoteServiceConfig
+            {
+                ServiceRef = new McpServiceRef
+                {
+                    NamespaceId = "public",
+                    GroupName = "DEFAULT_GROUP",
+                    ServiceName = serviceName
+                }
+            }
+        };
+        var endpointSpec = new McpEndpointSpec
+        {
+            Type = AiConstants.Mcp.EndpointTypeRef,
+            Data = new Dictionary<string, string>
+            {
+                { "namespaceId", "public" },
+                { "groupName", "DEFAULT_GROUP" },
+                { "serviceName", serviceName }
+            }
+        };
+
+        // A non-local server type is rejected by Nacos 3.2.4 with
+        // "request parameter `endpointSpecification` is required if mcp server type
+        // not `local`" (probe P6), so a successful release is itself proof that the
+        // form field reached the release service.
+        var mcpId = await _aiService!.ReleaseMcpServerAsync(spec, toolSpecification: null, endpointSpec);
+        mcpId.Should().NotBeNullOrEmpty();
+
+        try
+        {
+            var retrieved = await WaitForAsync(
+                () => _aiService.GetMcpServerAsync(mcpName),
+                s => s?.RemoteServerConfig?.ServiceRef is not null);
+            retrieved.Should().NotBeNull();
+            retrieved!.Name.Should().Be(mcpName);
+            retrieved.Protocol.Should().Be("mcp-sse");
+            retrieved.RemoteServerConfig.Should().NotBeNull();
+            retrieved.RemoteServerConfig!.ServiceRef!.ServiceName.Should().Be(serviceName);
+            // The backend/frontend endpoint lists stay empty for a REF registration
+            // (probe: both empty after release), so presence is asserted on the
+            // service reference the endpoint spec resolves through.
+        }
+        finally
+        {
+            await DeleteWithRetryAsync(() => _aiService.DeleteMcpServerAsync(mcpName));
         }
     }
 
@@ -239,12 +307,14 @@ public class AiServiceIntegrationTests : IAsyncLifetime
         try
         {
             // mcpName is an exact server-side filter, so no pageSize-100 scan.
-            var page = await _aiService.ListMcpServersAsync(mcpName: mcpName);
+            var page = await WaitForAsync(
+                () => _aiService!.ListMcpServersAsync(mcpName: mcpName),
+                p => p.PageItems.Any(i => i.Name == mcpName));
             page.PageItems.Should().Contain(i => i.Name == mcpName);
         }
         finally
         {
-            await _aiService.DeleteMcpServerAsync(mcpName);
+            await DeleteWithRetryAsync(() => _aiService!.DeleteMcpServerAsync(mcpName));
         }
     }
 
@@ -270,6 +340,80 @@ public class AiServiceIntegrationTests : IAsyncLifetime
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
     public async Task SubscribeMcpServer_ReceivesUpdates() { /* kept for reference */ }
+
+    // ---------- Read-after-write helpers ----------
+
+    /// <summary>
+    /// The Nacos 3.2.4 console is not always immediately consistent after a release:
+    /// an immediate read can briefly answer
+    /// {"code":20002,...,"data":"argument \"content\" is null"} or return an empty
+    /// page (observed up to ~1s). Polls <paramref name="read"/> until
+    /// <paramref name="isSettled"/> holds. A server error answered while the write is
+    /// still settling is retried too; if the timeout elapses, the last server error (or
+    /// a <see cref="TimeoutException"/>) is thrown, so the failure names the transient
+    /// instead of a bare null.
+    /// </summary>
+    private async Task<T> WaitForAsync<T>(
+        Func<Task<T>> read,
+        Func<T, bool> isSettled,
+        int timeoutMs = 2000,
+        int pollMs = 200)
+        where T : class?
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        NacosException? lastServerError = null;
+
+        while (true)
+        {
+            try
+            {
+                var value = await read();
+                if (value is not null && isSettled(value))
+                {
+                    return value;
+                }
+            }
+            catch (NacosException ex)
+            {
+                lastServerError = ex; // transient while the release settles
+            }
+
+            if (DateTime.UtcNow >= deadline)
+            {
+                if (lastServerError is not null)
+                {
+                    throw lastServerError;
+                }
+
+                throw new TimeoutException($"The console read did not settle within {timeoutMs} ms.");
+            }
+
+            _output.WriteLine($"WaitForAsync: read not settled yet; retrying in {pollMs} ms.");
+            await Task.Delay(pollMs);
+        }
+    }
+
+    /// <summary>
+    /// Teardown guard: the same settle window can make the console answer a DELETE
+    /// transiently, which would orphan the fixture — retry a couple of times, then let
+    /// the failure surface.
+    /// </summary>
+    private async Task DeleteWithRetryAsync(Func<Task> delete, int attempts = 3)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await delete();
+                return;
+            }
+            catch (NacosException ex) when (attempt < attempts)
+            {
+                _output.WriteLine($"DeleteWithRetryAsync: {ex.Message}; retrying.");
+                await Task.Delay(200);
+            }
+        }
+    }
 
     // ---------- Test Listeners (unchanged) ----------
 
