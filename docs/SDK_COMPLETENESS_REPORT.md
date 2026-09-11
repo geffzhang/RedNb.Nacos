@@ -4,7 +4,27 @@
 
 本报告对比分析 Nacos Java SDK 与 RedNb.Nacos .NET SDK 的功能实现情况，评估完成度和测试覆盖率。
 
-**最后更新**: 2025-01
+**最后更新**: 2026-09-11（Nacos v3 迁移完成后）
+
+---
+
+## 零、Nacos 3.x 迁移状态（本次更新核心）
+
+SDK 已完成向 **Nacos 3.2+** 的协议迁移（分支 `AIRegistry`，标签 `nacos-v3-migration-complete`）：
+
+| 维度 | 迁移结果 |
+|------|---------|
+| 最低服务器版本 | Nacos 3.2.0（集成测试基于 3.2.4） |
+| HTTP Config | `GET /v3/client/cs/config`（20004 → null）；`POST/DELETE /v3/admin/cs/config`（自动携带 accessToken）；v3 信封 `{code, message, data}` 解析 |
+| HTTP Naming | `/v3/client/ns/instance`（+ `/list`，心跳为 `beat=true` 复用注册端点）；`/v3/admin/ns/service/list`；错误信封抛 `NacosException` |
+| gRPC | 一元 `Request/request` 承载全部业务请求；`BiRequestStream/requestBiStream` 承载 ConnectionSetup + 服务端推送；SetupAck 握手后才标记连接就绪 |
+| 认证 | `POST /v3/auth/user/login`，令牌仍走 `accessToken` 头 |
+| 命名空间 | `namespaceId` 查询/表单参数（v3 不再使用 `X-Nacos-Namespace-Id` 头） |
+| 配置监听 | HTTP 长轮询已移除（v3 无 HTTP 监听端点）；服务端推送由 gRPC bi-stream 提供 |
+| CAS 发布 | HTTP 重载 `[Obsolete]` + 非空 casMd5 抛 `NotSupportedException`（v3 admin 端点忽略 CAS）；gRPC 原生支持 |
+| 重连稳定性 | gRPC 连接代数（generation）隔离 + 清理旧代；`DeadlineExceeded` 视为连接失效；陈旧循环不会翻转新连接的 `_connected` |
+
+**测试矩阵（全部绿灯）**：Core 370 ×2 TFM · HTTP 132 ×2 TFM · gRPC 19 ×2 TFM · 集成测试 31（live Nacos 3.2.4，服务器日志无协议告警）。
 
 ---
 
@@ -14,43 +34,46 @@
 
 | 功能 | Java SDK | .NET SDK (HTTP) | .NET SDK (gRPC) | 测试覆盖 |
 |-----|---------|-----------------|-----------------|---------|
-| getConfig | ✅ | ✅ | ✅ | ✅ 单元+集成 |
-| getConfigAndSignListener | ✅ | ✅ | ✅ | ✅ 集成 |
-| addListener | ✅ | ✅ | ✅ | ✅ 单元+集成 |
+| getConfig | ✅ | ✅ (v3) | ✅ | ✅ 单元+集成 |
+| getConfigAndSignListener | ✅ | ✅ (本地注册+gRPC 推送) | ✅ | ✅ 集成 |
+| addListener | ✅ | ✅ (本地注册+gRPC 推送) | ✅ (bi-stream push) | ✅ 单元+集成(推送) |
 | removeListener | ✅ | ✅ | ✅ | ✅ 单元 |
-| publishConfig | ✅ | ✅ | ✅ | ✅ 单元+集成 |
-| publishConfigCas | ✅ | ✅ | ✅ | ⚠️ 无测试 |
-| removeConfig | ✅ | ✅ | ✅ | ✅ 单元+集成 |
+| publishConfig | ✅ | ✅ (admin API) | ✅ | ✅ 单元+集成 |
+| publishConfigCas | ✅ | ⚠️ `[Obsolete]`+抛异常 | ✅ (原生) | ✅ 单元(HTTP 抛异常) |
+| removeConfig | ✅ | ✅ (admin API) | ✅ | ✅ 单元+集成 |
 | getServerStatus | ✅ | ✅ | ✅ | ✅ 单元 |
 | addConfigFilter | ✅ | ✅ | ⚠️ 未实现 | ✅ 单元 |
 | fuzzyWatch (Nacos 3.0) | ✅ | ✅ | ⚠️ 未实现 | ✅ 单元 |
 | cancelFuzzyWatch | ✅ | ✅ | ⚠️ 未实现 | ✅ 单元 |
 
-**HTTP 实现完成度: 100%** | **gRPC 实现完成度: 70%**
+**HTTP 实现完成度: 100%** | **gRPC 实现完成度: 75%**
 
 ### 2. Naming Service (命名服务)
 
 | 功能 | Java SDK | .NET SDK (HTTP) | .NET SDK (gRPC) | 测试覆盖 |
 |-----|---------|-----------------|-----------------|---------|
-| registerInstance (多重载) | ✅ | ✅ | ✅ | ✅ 单元+集成 |
-| deregisterInstance (多重载) | ✅ | ✅ | ✅ | ✅ 集成 |
+| registerInstance (多重载) | ✅ | ✅ (v3) | ✅ | ✅ 单元+集成 |
+| deregisterInstance (多重载) | ✅ | ✅ (v3) | ✅ | ✅ 集成 |
 | batchRegisterInstance | ✅ | ✅ | ⚠️ 未实现 | ⚠️ 无测试 |
 | batchDeregisterInstance | ✅ | ✅ | ⚠️ 未实现 | ⚠️ 无测试 |
-| getAllInstances (多重载) | ✅ | ✅ | ✅ | ✅ 单元+集成 |
+| getAllInstances (多重载) | ✅ | ✅ (v3 平铺数组解析) | ✅ | ✅ 单元+集成 |
 | selectInstances (多重载) | ✅ | ✅ | ✅ | ✅ 集成 |
 | selectOneHealthyInstance | ✅ | ✅ | ✅ | ✅ 集成 |
-| subscribe (Action回调) | ✅ | ✅ | ✅ | ✅ 集成 |
+| subscribe (Action回调) | ✅ | ✅ (本地通知器) | ✅ (bi-stream push) | ✅ 集成(推送) |
 | subscribe (Selector) | ✅ | ✅ | ⚠️ 未实现 | ✅ 集成 |
 | unsubscribe | ✅ | ✅ | ✅ | ⚠️ 无测试 |
-| getServicesOfServer | ✅ | ✅ | ✅ | ✅ 集成 |
+| getServicesOfServer | ✅ | ✅ (admin pageItems) | ✅ | ✅ 集成 |
 | getSubscribeServices | ✅ | ✅ | ⚠️ 未实现 | ⚠️ 无测试 |
 | fuzzyWatch (Nacos 3.0) | ✅ | ✅ | ⚠️ 未实现 | ✅ 单元 |
-| 心跳机制 (BeatReactor) | ✅ | ✅ | ⚠️ 未实现 | ⚠️ 无测试 |
-| 服务信息缓存 | ✅ | ✅ | ⚠️ 部分 | ✅ 单元 |
+| 心跳机制 | ✅ | ✅ (`beat=true` 复用注册端点) | ✅ 连接级(无需客户端心跳) | ✅ 集成 |
+| 服务信息缓存 | ✅ | ✅ (TTL+写时失效) | ✅ (NamingServiceInfoHolder) | ✅ 单元 |
 
-**HTTP 实现完成度: 100%** | **gRPC 实现完成度: 60%**
+**HTTP 实现完成度: 100%** | **gRPC 实现完成度: 75%**
 
 ### 3. AI Service (AI/MCP/A2A 服务) - Nacos 3.0 新增功能
+
+> ⚠️ **状态：已实现，未对 live 控制台验证**。AI 端点部署在控制台端口 8080（`/v3/console/ai/**`），
+> 当前 6 个 AI 集成测试因吞掉 `NacosException` 而"通过"，并未真正打到 live 端点。详见下文"待完善"。
 
 | 功能 | Java SDK | .NET SDK (HTTP) | .NET SDK (gRPC) | 测试覆盖 |
 |-----|---------|-----------------|-----------------|---------|
@@ -62,40 +85,45 @@
 | unsubscribeMcpServer | ✅ | ✅ | ⚠️ 未实现 | ✅ 单元 |
 | deleteMcpServer | ✅ | ✅ | ⚠️ 未实现 | ⚠️ 无测试 |
 | listMcpServers | ✅ | ✅ | ⚠️ 未实现 | ⚠️ 无测试 |
-| getAgentCard | ✅ | ✅ | ⚠️ 未实现 | ✅ 集成 |
+| getAgentCard | ✅ | ✅ | ⚠️ 未实现 | ✅ 集成(吞异常) |
 | releaseAgentCard | ✅ | ✅ | ⚠️ 未实现 | ⚠️ 无测试 |
 | Agent Subscription | ✅ | ✅ | ⚠️ 未实现 | ✅ 单元 |
 
-**HTTP 实现完成度: 100%** | **gRPC 实现完成度: 0%**
+**HTTP 实现完成度: 100%\***（\* 未对 live 8080 控制台验证）| **gRPC 实现完成度: 0%**
 
 ### 4. Lock Service (分布式锁) - Nacos 3.0 新增功能
 
+> `ILockService` 已标记 `[Obsolete]`：底层 `/v3/lock/...` 端点在 3.x 仍可用，接口将于下个大版本移除。
+
 | 功能 | Java SDK | .NET SDK (HTTP) | .NET SDK (gRPC) | 测试覆盖 |
 |-----|---------|-----------------|-----------------|---------|
-| lock | ✅ | ✅ | ✅ | ✅ 单元 |
-| unlock | ✅ | ✅ | ✅ | ✅ 单元 |
-| tryLock (带超时) | ✅ | ✅ | ✅ | ✅ 单元 |
-| remoteTryLock | ✅ | ✅ | ✅ | ✅ 单元 |
-| remoteReleaseLock | ✅ | ✅ | ✅ | ✅ 单元 |
+| lock | ✅ | ✅ `[Obsolete]` | ✅ | ✅ 单元 |
+| unlock | ✅ | ✅ `[Obsolete]` | ✅ | ✅ 单元 |
+| tryLock (带超时) | ✅ | ✅ `[Obsolete]` | ✅ | ✅ 单元 |
+| remoteTryLock | ✅ | ✅ `[Obsolete]` | ✅ | ✅ 单元 |
+| remoteReleaseLock | ✅ | ✅ `[Obsolete]` | ✅ | ✅ 单元 |
 | LockInstance (Fluent API) | ✅ | ✅ | ✅ | ✅ 单元 |
 
 **HTTP 实现完成度: 100%** | **gRPC 实现完成度: 100%** | **测试覆盖: 100%** ✅
 
 ### 5. Maintainer Service (运维管理服务)
 
+> ⚠️ `IMaintainerService` 及全部子接口已标记 `[Obsolete]`：**v3 无对应端点，运行时返回 404**。
+> 迁移路径见 [MIGRATION.md](MIGRATION.md)（legacy-adapter JAR / 冻结 2.x 部署 / 等待重写）。
+
 | 功能模块 | Java SDK | .NET SDK | 测试覆盖 |
 |---------|---------|----------|---------|
-| IServiceMaintainer | ✅ | ✅ | ✅ 单元 |
-| IInstanceMaintainer | ✅ | ✅ | ✅ 单元 |
-| INamingMaintainer | ✅ | ✅ | ✅ 单元 |
-| IConfigMaintainer | ✅ | ✅ | ✅ 单元 |
-| IConfigHistoryMaintainer | ✅ | ✅ | ⚠️ 无测试 |
-| IBetaConfigMaintainer | ✅ | ✅ | ⚠️ 无测试 |
-| IConfigOpsMaintainer | ✅ | ✅ | ⚠️ 无测试 |
-| IClientMaintainer | ✅ | ✅ | ⚠️ 无测试 |
-| ICoreMaintainer | ✅ | ✅ | ⚠️ 无测试 |
+| IServiceMaintainer | ✅ | ✅ `[Obsolete]` | ✅ 单元 |
+| IInstanceMaintainer | ✅ | ✅ `[Obsolete]` | ✅ 单元 |
+| INamingMaintainer | ✅ | ✅ `[Obsolete]` | ✅ 单元 |
+| IConfigMaintainer | ✅ | ✅ `[Obsolete]` | ✅ 单元 |
+| IConfigHistoryMaintainer | ✅ | ✅ `[Obsolete]` | ⚠️ 无测试 |
+| IBetaConfigMaintainer | ✅ | ✅ `[Obsolete]` | ⚠️ 无测试 |
+| IConfigOpsMaintainer | ✅ | ✅ `[Obsolete]` | ⚠️ 无测试 |
+| IClientMaintainer | ✅ | ✅ `[Obsolete]` | ⚠️ 无测试 |
+| ICoreMaintainer | ✅ | ✅ `[Obsolete]` | ⚠️ 无测试 |
 
-**实现完成度: 100%** | **测试覆盖: 40%** ✅
+**实现完成度: 100% (已废弃)** | **测试覆盖: 40%**
 
 ---
 
@@ -105,8 +133,8 @@
 
 | 功能 | Java SDK | .NET SDK | 测试覆盖 |
 |-----|---------|----------|---------|
-| 用户名/密码认证 | ✅ | ✅ | ✅ 单元 |
-| Token 自动刷新 | ✅ | ✅ | ⚠️ 无测试 |
+| 用户名/密码认证 | ✅ | ✅ (`/v3/auth/user/login`) | ✅ 单元+集成 |
+| Token 自动刷新 | ✅ | ✅ (TTL 缓存) | ⚠️ 无测试 |
 | TLS/SSL 支持 | ✅ | ✅ | ⚠️ 无测试 |
 | AccessKey/SecretKey | ✅ | ✅ (可配) | ⚠️ 无测试 |
 
@@ -115,10 +143,10 @@
 | 功能 | Java SDK | .NET SDK | 测试覆盖 |
 |-----|---------|----------|---------|
 | 服务器地址 | ✅ | ✅ | ✅ 单元 |
-| 命名空间 | ✅ | ✅ | ✅ 单元 |
+| 命名空间 | ✅ | ✅ (`namespaceId` 参数) | ✅ 单元 |
 | 超时配置 | ✅ | ✅ | ✅ 单元 |
-| 长轮询超时 | ✅ | ✅ | ⚠️ 无测试 |
-| gRPC 端口偏移 | ✅ | ✅ | ⚠️ 无测试 |
+| 长轮询超时 | ✅ | ✅ (HTTP 长轮询已随 v3 移除) | N/A |
+| gRPC 端口偏移 | ✅ | ✅ (8848+1000=9848) | ⚠️ 无测试 |
 | 重试配置 | ✅ | ✅ | ⚠️ 无测试 |
 
 ### 3. 选择器 (Selector)
@@ -181,83 +209,56 @@
 
 ## 四、测试覆盖率分析
 
-### 1. 单元测试 (RedNb.Nacos.Tests)
+### 1. 核心测试 (RedNb.Nacos.Tests)
 
-| 测试文件 | 测试内容 | 测试数量 |
-|---------|---------|---------|
-| NacosClientOptionsTests.cs | 客户端配置 | 7 |
-| NacosExceptionTests.cs | 异常处理 | 3 |
-| NacosUtilsTests.cs | 工具类 | 8 |
-| InstanceTests.cs | 实例模型 | 5 |
-| ConfigTypeTests.cs | 配置类型 | 3 |
-| ConfigChangeEventTests.cs | 配置变更事件 | 5 |
-| ConfigFilterChainManagerTests.cs | 过滤链 | 5 |
-| AesEncryptionConfigFilterTests.cs | AES 加密过滤器 | 4 |
-| ConfigFuzzyWatchChangeEventTests.cs | 配置模糊监听 | 3 |
-| ServiceInfoTests.cs | 服务信息 | 4 |
-| NamingSelectorTests.cs | 命名选择器 | 15 |
-| NamingFuzzyWatchChangeEventTests.cs | 命名模糊监听 | 3 |
-| AiModelTests.cs | AI 模型 | 5 |
-| **Lock 测试 (新增)** | | |
-| LockInstanceTests.cs | Lock 实例 | 25+ |
-| LockConstantsTests.cs | Lock 常量 | 15 |
-| LockServiceTests.cs | Lock 服务 | 15+ |
-| **Maintainer 测试 (新增)** | | |
-| ServiceMaintainerTests.cs | 服务维护 | 10+ |
-| InstanceMaintainerTests.cs | 实例维护 | 15+ |
-| ConfigMaintainerTests.cs | 配置维护 | 10+ |
-| **Failover 测试 (新增)** | | |
-| FailoverSwitchTests.cs | 故障开关 | 5+ |
-| FailoverDataTests.cs | 故障数据 | 5+ |
-| FailoverReactorTests.cs | 故障反应器 | 10+ |
-| **Monitor 测试 (新增)** | | |
-| MetricsMonitorTests.cs | 指标监控 | 15+ |
-| MetricNamesTests.cs | 指标名称 | 10+ |
+**总计: 370 个测试 × 2 TFM (net8.0 + net10.0)，全部通过**
 
-**总计: ~200 个单元测试**
+覆盖：客户端配置、异常处理、工具类、实例模型、配置变更事件、过滤链、AES 加密、模糊监听、
+服务信息（含 TTL 缓存失效）、命名选择器、AI 模型、Lock（常量/实例/服务）、Maintainer、Failover、Monitor 等。
 
 ### 2. HTTP 实现测试 (RedNb.Nacos.Http.Tests)
 
-| 测试文件 | 测试内容 | 测试数量 |
-|---------|---------|---------|
-| NacosFactoryTests.cs | 工厂类 | 4 |
-| ServerListManagerTests.cs | 服务器列表管理 | 5 |
-| ConfigListenerManagerTests.cs | 配置监听管理 | 10 |
-| ConfigServiceHttpTests.cs | 配置服务 HTTP | 5 |
-| NamingServiceHttpTests.cs | 命名服务 HTTP | 4 |
-| ServiceInfoHolderTests.cs | 服务信息持有 | 5 |
-| AiListenerManagerTests.cs | AI 监听管理 | 12 |
-| AiCacheHolderTests.cs | AI 缓存 | 4 |
-| NacosAiServiceTests.cs | AI 服务 | 6 |
+**总计: 132 个测试 × 2 TFM，全部通过**
 
-**总计: ~55 个 HTTP 测试**
+覆盖：工厂类、服务器列表管理、配置监听管理、配置服务 v3（信封解析、20004→null、
+错误码抛异常、CAS 抛异常）、命名服务 v3（注册/注销/列表/错误信封抛异常/拒绝查询抛异常）、
+服务信息持有与缓存、AI 服务（Prompt/Skill/AgentSpec 单元级）。
 
-### 3. 集成测试 (RedNb.Nacos.IntegrationTests)
+### 3. gRPC 实现测试 (RedNb.Nacos.Grpc.Tests)
 
-| 测试文件 | 测试内容 | 测试数量 |
-|---------|---------|---------|
-| ConfigServiceIntegrationTests.cs | 配置服务集成 | 6 |
-| NamingServiceIntegrationTests.cs | 命名服务集成 | 8 |
-| NamingSelectorIntegrationTests.cs | 选择器集成 | 4 |
-| AiServiceIntegrationTests.cs | AI 服务集成 | 5 |
+**总计: 19 个测试 × 2 TFM，全部通过**
 
-**总计: ~23 个集成测试**
+覆盖：ConfigRpcTransportClient 查询/监听/fuzzy-watch 调度（Metadata.type 断言）、
+NamingRpcTransportClient 一元/流式/推送分派。
+
+### 4. 集成测试 (RedNb.Nacos.IntegrationTests, live Nacos 3.2.4)
+
+| 测试文件 | 测试内容 | 测试数量 | 状态 |
+|---------|---------|---------|------|
+| ConfigServiceIntegrationTests.cs | 配置服务集成 (v3) | 6 | ✅ |
+| NamingServiceIntegrationTests.cs | 命名服务集成 (v3) | 9 | ✅ |
+| NamingSelectorIntegrationTests.cs | 选择器集成 | 4 | ✅ |
+| ConfigListenerPushTests.cs | 配置 gRPC 推送闭环 | 3 | ✅ |
+| NamingSubscribePushTests.cs | 命名 gRPC 推送闭环 | 3 | ✅ |
+| AiServiceIntegrationTests.cs | AI 服务集成 | 6 | ⚠️ 吞异常通过(见 AI 章节) |
+
+**总计: 31 个集成测试**（服务器日志无协议告警）
 
 ### 测试覆盖总结
 
 | 模块 | 测试数量 | 覆盖率估计 |
 |-----|---------|-----------|
-| 核心模型 | 80+ | 90% |
-| HTTP Config Service | 25+ | 80% |
-| HTTP Naming Service | 20+ | 75% |
-| HTTP AI Service | 20+ | 65% |
+| 核心模型 | 200+ | 90% |
+| HTTP Config Service | 30+ | 90% |
+| HTTP Naming Service | 40+ | 90% |
+| HTTP AI Service | 30+ | 70%（单元级） |
+| gRPC Config/Naming | 19 | 85%（分派逻辑） |
 | Lock Service | 55+ | 100% ✅ |
 | Maintainer Service | 35+ | 40% |
 | Failover 机制 | 20+ | 100% ✅ |
 | MetricsMonitor | 25+ | 100% ✅ |
-| gRPC 服务 | 0 | 0% |
 
-**测试运行结果: 全部通过 359/359 ✅**
+**测试运行结果: 全部通过（370 + 132 + 19）×2 TFM + 31 集成 ✅**
 
 ---
 
@@ -265,42 +266,37 @@
 
 ### 高优先级
 
-1. **gRPC 功能完善**
+1. **AI 服务 live 验证**
+   - [ ] 对 8080 控制台的 `/v3/console/ai/**` 做真实联调
+   - [ ] 修正 6 个吞异常的 AI 集成测试（断言真实响应，而不是捕获 NacosException 后通过）
+
+2. **gRPC 高级功能**
    - [ ] Config Filter 支持
    - [ ] Fuzzy Watch 支持
-   - [ ] 批量注册
-   - [ ] 心跳机制
+   - [ ] 批量注册/注销
+   - [ ] Selector 订阅 / getSubscribeServices
 
-2. **测试覆盖**
-   - [x] Lock Service 测试 ✅
-   - [x] Maintainer Service 测试 ✅ (部分)
-   - [ ] publishConfigCas 测试
-   - [ ] 批量注册/注销测试
-   - [ ] Token 刷新测试
-
-3. **gRPC 连接稳定性**
-   - [ ] 重连机制完善
-   - [ ] 连接池管理
-   - [ ] 负载均衡
+3. **gRPC 配置查询错误语义**
+   - [ ] `NacosGrpcConfigService` 检查 `ConfigQueryResponse.ErrorCode`（Java 映射 300 = not found）
 
 ### 中优先级
 
-4. **配置解析器测试**
-   - [ ] PropertiesChangeParser 测试
-   - [ ] JsonChangeParser 测试
-   - [ ] YamlChangeParser 测试
+4. **Redo 机制接线**
+   - [ ] `RedoScheduledTask` 尚未实例化——重连后丢失的服务端状态无重做（见 ANALYSIS 文档）
 
-5. **AI 服务完善**
-   - [ ] MCP Server 集成测试
-   - [ ] MCP Endpoint 集成测试
-   - [ ] Agent Card 集成测试
+5. **配置解析器测试**
+   - [ ] PropertiesChangeParser / JsonChangeParser / YamlChangeParser 测试
+
+6. **负载均衡**
+   - [ ] gRPC 连接池管理
+   - [ ] 多服务器地址负载均衡
 
 ### 低优先级
 
-6. **文档完善**
-   - [ ] API 参考文档
-   - [ ] 使用示例
-   - [ ] 最佳实践指南
+7. **测试补充**
+   - [ ] Token 刷新测试
+   - [ ] 批量注册/注销测试
+   - [ ] 心跳 `beat=false` 失败路径测试
 
 ---
 
@@ -308,28 +304,33 @@
 
 | 模块 | HTTP 实现 | gRPC 实现 | 测试覆盖 |
 |-----|----------|----------|---------|
-| Config Service | 100% | 70% | 80% |
-| Naming Service | 100% | 60% | 75% |
-| AI Service | 100% | 0% | 50% |
-| Lock Service | 100% | 100% | **100%** ✅ |
-| Maintainer Service | 100% | N/A | **40%** ✅ |
+| Config Service | 100% (v3) | 75% | 90% |
+| Naming Service | 100% (v3) | 75% | 90% |
+| AI Service | 100%\* | 0% | 70% |
+| Lock Service | 100% `[Obsolete]` | 100% | **100%** ✅ |
+| Maintainer Service | `[Obsolete]` | N/A | **40%** |
 | Failover 机制 | **100%** ✅ | N/A | **100%** ✅ |
 | MetricsMonitor | **100%** ✅ | N/A | **100%** ✅ |
-| **总体** | **100%** | **46%** | **70%** |
+| **总体** | **100%** | **65%** | **85%** |
+
+\* AI Service HTTP 实现已编码完成，但尚未对 live 控制台（8080）验证。
 
 ### 结论
 
-.NET SDK 的 **HTTP 实现已 100% 完成**，完全与 Java SDK 功能对等。gRPC 实现约在 46%，主要缺少 AI 服务和一些高级功能。测试覆盖率已提升至 **70%**。
+.NET SDK 已完成 **Nacos 3.2+ 协议迁移**：HTTP Config/Naming 在 v3 客户端/管理端点上 100% 实现，
+gRPC 承载全部请求传输与服务端推送（连接就绪握手、重连代数隔离），
+错误信封统一抛 `NacosException`，废弃面（Maintainer/Lock/CAS）按计划标 `[Obsolete]` 并大声失败。
 
-**本次完成的改进:**
-1. ✅ 创建 Lock Service 完整测试覆盖 (55+ 测试)
-2. ✅ 创建 Maintainer Service 部分测试覆盖 (35+ 测试)
-3. ✅ 创建 Failover 机制完整测试覆盖 (20+ 测试)
-4. ✅ 创建 MetricsMonitor 完整测试覆盖 (25+ 测试)
-5. ✅ 集成 Failover 到 NamingService
-6. ✅ 集成 MetricsMonitor 到 NamingService 和 ConfigService
+**本次迁移完成的改进:**
+1. ✅ HTTP Config/Naming 迁移到 v3 client/admin 端点 + 信封解析
+2. ✅ gRPC 协议对齐 3.2.4（`Request/request` 一元 + bi-stream 推送 + SetupAck 握手）
+3. ✅ 心跳机制修正（`beat=true` 复用注册端点）
+4. ✅ 配置监听 HTTP 长轮询移除，推送走 gRPC bi-stream
+5. ✅ gRPC 重连机制完善（连接代数隔离，陈旧循环不污染新连接）
+6. ✅ 错误信封在公开 API 边界抛异常（拒绝查询不再伪装成"无实例"）
+7. ✅ 测试矩阵：370+132+19 单元 ×2 TFM + 31 live 集成，全部绿灯
 
 **下一步优先级:**
-1. 完善 gRPC Config/Naming 服务的高级功能
-2. 实现 gRPC AI 服务
-3. 添加 gRPC 连接稳定性机制
+1. AI 服务 live 控制台验证（8080）
+2. gRPC Config/Naming 高级功能（fuzzyWatch、批量、Selector 订阅）
+3. Redo 机制接线与负载均衡
