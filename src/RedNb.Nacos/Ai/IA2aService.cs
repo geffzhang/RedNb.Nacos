@@ -69,6 +69,13 @@ public interface IA2aService
     /// <summary>
     /// Registers an endpoint to an agent card.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
+    /// console listener. The HTTP implementation
+    /// (<see cref="RedNb.Nacos.Client.Ai.NacosAiService"/>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
+    /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
+    /// </remarks>
     /// <param name="agentName">Name of the agent.</param>
     /// <param name="version">Version of this endpoint.</param>
     /// <param name="address">Address for this endpoint.</param>
@@ -79,6 +86,13 @@ public interface IA2aService
     /// <summary>
     /// Registers an endpoint to an agent card with transport.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
+    /// console listener. The HTTP implementation
+    /// (<see cref="RedNb.Nacos.Client.Ai.NacosAiService"/>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
+    /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
+    /// </remarks>
     /// <param name="agentName">Name of the agent.</param>
     /// <param name="version">Version of this endpoint.</param>
     /// <param name="address">Address for this endpoint.</param>
@@ -90,6 +104,13 @@ public interface IA2aService
     /// <summary>
     /// Registers an endpoint to an agent card.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
+    /// console listener. The HTTP implementation
+    /// (<see cref="RedNb.Nacos.Client.Ai.NacosAiService"/>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
+    /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
+    /// </remarks>
     /// <param name="agentName">Name of the agent.</param>
     /// <param name="endpoint">Endpoint information.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -98,6 +119,13 @@ public interface IA2aService
     /// <summary>
     /// Batch registers endpoints to an agent card.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
+    /// console listener. The HTTP implementation
+    /// (<see cref="RedNb.Nacos.Client.Ai.NacosAiService"/>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
+    /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
+    /// </remarks>
     /// <param name="agentName">Name of the agent.</param>
     /// <param name="endpoints">Collection of endpoints.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -106,6 +134,13 @@ public interface IA2aService
     /// <summary>
     /// Deregisters an endpoint from an agent card.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
+    /// console listener. The HTTP implementation
+    /// (<see cref="RedNb.Nacos.Client.Ai.NacosAiService"/>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
+    /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
+    /// </remarks>
     /// <param name="agentName">Name of the agent.</param>
     /// <param name="version">Version of this endpoint.</param>
     /// <param name="address">Address for this endpoint.</param>
@@ -116,6 +151,13 @@ public interface IA2aService
     /// <summary>
     /// Deregisters an endpoint from an agent card.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
+    /// console listener. The HTTP implementation
+    /// (<see cref="RedNb.Nacos.Client.Ai.NacosAiService"/>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
+    /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
+    /// </remarks>
     /// <param name="agentName">Name of the agent.</param>
     /// <param name="endpoint">Endpoint information.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
