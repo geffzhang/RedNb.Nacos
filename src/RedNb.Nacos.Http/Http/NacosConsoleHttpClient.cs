@@ -1,10 +1,5 @@
-using System.Net;
-using System.Net.Http.Headers;
-using System.Text;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using RedNb.Nacos.Core;
-using RedNb.Nacos.Utils;
 
 namespace RedNb.Nacos.Client.Http;
 
@@ -12,7 +7,8 @@ namespace RedNb.Nacos.Client.Http;
 /// HTTP client for the Nacos <b>console</b> listener (default port 8080). The
 /// console listener serves the AI admin/UI API (e.g. <c>/v3/console/ai/**</c>)
 /// plus readiness/health probes, and unlike the API port (8848) does not sit
-/// under the <c>/nacos</c> context path.
+/// under the <c>/nacos</c> context path. Shares its full implementation with
+/// <see cref="NacosHttpClient"/> via <see cref="NacosHttpClientBase"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -30,16 +26,13 @@ namespace RedNb.Nacos.Client.Http;
 ///   <see cref="NacosClientOptions.GetConsoleBaseUrl"/>, which omits the
 ///   <c>ContextPath</c>.</item>
 /// </list>
+/// <para>
+/// Because the console address list is required, construction fails fast with
+/// <see cref="NacosException"/> when no console address can be resolved.
+/// </para>
 /// </remarks>
-public class NacosConsoleHttpClient : IDisposable
+public class NacosConsoleHttpClient : NacosHttpClientBase
 {
-    private readonly HttpClient _httpClient;
-    private readonly NacosClientOptions _options;
-    private readonly ILogger? _logger;
-    private readonly ServerListManager _serverListManager;
-    private readonly SecurityProxy _securityProxy;
-    private bool _disposed;
-
     /// <summary>
     /// Resolved console base URLs (one per console address, scheme honors
     /// <see cref="NacosClientOptions.EnableTls"/>). Exposed for testability —
@@ -49,9 +42,18 @@ public class NacosConsoleHttpClient : IDisposable
     public IReadOnlyList<string> ConsoleBaseUrls { get; }
 
     public NacosConsoleHttpClient(NacosClientOptions options, ILogger? logger = null)
+        : base(options, logger, CreateServerListManager(options))
     {
-        _options = options;
-        _logger = logger;
+        ConsoleBaseUrls = options.GetConsoleAddressList()
+            .Select(a => options.GetConsoleBaseUrl(a))
+            .ToList();
+    }
+
+    /// <inheritdoc />
+    protected override string BuildBaseUrl(string server) => _options.GetConsoleBaseUrl(server);
+
+    private static ServerListManager CreateServerListManager(NacosClientOptions options)
+    {
         var addresses = options.GetConsoleAddressList();
         if (addresses.Count == 0)
         {
@@ -59,402 +61,7 @@ public class NacosConsoleHttpClient : IDisposable
                 NacosException.InvalidParam,
                 "ConsoleAddresses (or derivable ServerAddresses) is required for NacosConsoleHttpClient");
         }
-        ConsoleBaseUrls = addresses
-            .Select(a => options.GetConsoleBaseUrl(a))
-            .ToList();
-        _serverListManager = new ServerListManager(addresses);
-        _securityProxy = new SecurityProxy(options, logger);
 
-        var handler = new HttpClientHandler
-        {
-            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-        };
-
-        _httpClient = new HttpClient(handler)
-        {
-            // Set timeout to infinite - we'll control timeout per-request with CancellationToken
-            Timeout = Timeout.InfiniteTimeSpan
-        };
-
-        _httpClient.DefaultRequestHeaders.Add("Client-Version", "RedNb.Nacos/1.0.0");
-        _httpClient.DefaultRequestHeaders.Add("User-Agent", "RedNb.Nacos.Client");
-    }
-
-    /// <summary>
-    /// Sends a GET request.
-    /// </summary>
-    public async Task<string?> GetAsync(string path, Dictionary<string, string?>? parameters = null,
-        long timeout = 0, CancellationToken cancellationToken = default)
-    {
-        return await RequestAsync(HttpMethod.Get, path, parameters, null, null, timeout, cancellationToken);
-    }
-
-    /// <summary>
-    /// Sends a GET request with custom headers.
-    /// </summary>
-    public async Task<string?> GetWithHeadersAsync(string path, Dictionary<string, string?>? parameters = null,
-        Dictionary<string, string>? headers = null, long timeout = 0,
-        CancellationToken cancellationToken = default)
-    {
-        return await RequestAsync(HttpMethod.Get, path, parameters, null, headers, timeout, cancellationToken);
-    }
-
-    /// <summary>
-    /// Sends a POST request.
-    /// </summary>
-    public async Task<string?> PostAsync(string path, Dictionary<string, string?>? parameters = null,
-        string? body = null, long timeout = 0, CancellationToken cancellationToken = default)
-    {
-        return await RequestAsync(HttpMethod.Post, path, parameters, body, null, timeout, cancellationToken);
-    }
-
-    /// <summary>
-    /// Sends a POST request with custom headers.
-    /// </summary>
-    public async Task<string?> PostWithHeadersAsync(string path, Dictionary<string, string?>? parameters = null,
-        string? body = null, Dictionary<string, string>? headers = null, long timeout = 0,
-        CancellationToken cancellationToken = default)
-    {
-        return await RequestAsync(HttpMethod.Post, path, parameters, body, headers, timeout, cancellationToken);
-    }
-
-    /// <summary>
-    /// Sends a PUT request.
-    /// </summary>
-    public async Task<string?> PutAsync(string path, Dictionary<string, string?>? parameters = null,
-        string? body = null, long timeout = 0, CancellationToken cancellationToken = default)
-    {
-        return await RequestAsync(HttpMethod.Put, path, parameters, body, null, timeout, cancellationToken);
-    }
-
-    /// <summary>
-    /// Sends a PUT request with custom headers.
-    /// </summary>
-    public async Task<string?> PutWithHeadersAsync(string path, Dictionary<string, string?>? parameters = null,
-        string? body = null, Dictionary<string, string>? headers = null, long timeout = 0,
-        CancellationToken cancellationToken = default)
-    {
-        return await RequestAsync(HttpMethod.Put, path, parameters, body, headers, timeout, cancellationToken);
-    }
-
-    /// <summary>
-    /// Sends a DELETE request.
-    /// </summary>
-    public async Task<string?> DeleteAsync(string path, Dictionary<string, string?>? parameters = null,
-        long timeout = 0, CancellationToken cancellationToken = default)
-    {
-        return await RequestAsync(HttpMethod.Delete, path, parameters, null, null, timeout, cancellationToken);
-    }
-
-    /// <summary>
-    /// Sends a DELETE request with custom headers.
-    /// </summary>
-    public async Task<string?> DeleteWithHeadersAsync(string path, Dictionary<string, string?>? parameters = null,
-        Dictionary<string, string>? headers = null, long timeout = 0,
-        CancellationToken cancellationToken = default)
-    {
-        return await RequestAsync(HttpMethod.Delete, path, parameters, null, headers, timeout, cancellationToken);
-    }
-
-    /// <summary>
-    /// Sends a GET request and returns the raw response, including status code,
-    /// response headers and binary body. A 304 (Not Modified) status is returned
-    /// normally instead of throwing.
-    /// </summary>
-    public async Task<NacosRawResponse> GetRawAsync(string path, Dictionary<string, string?>? parameters = null,
-        Dictionary<string, string>? headers = null, long timeout = 0, CancellationToken cancellationToken = default)
-    {
-        return await RequestRawAsync(HttpMethod.Get, path, parameters, null, headers, timeout, cancellationToken);
-    }
-
-    /// <summary>
-    /// Sends a POST request with multipart/form-data content.
-    /// </summary>
-    public async Task<string?> PostMultipartAsync(string path, MultipartFormDataContent content,
-        Dictionary<string, string?>? parameters = null, long timeout = 0, CancellationToken cancellationToken = default)
-    {
-        var raw = await RequestRawAsync(HttpMethod.Post, path, parameters, content, null, timeout, cancellationToken);
-        return raw.BodyString;
-    }
-
-    /// <summary>
-    /// Sends a POST request with multipart/form-data content and custom headers.
-    /// Required for v3 multipart uploads that need to transmit <c>namespaceId</c> as
-    /// the <c>X-Nacos-Namespace-Id</c> HTTP header instead of a form part.
-    /// </summary>
-    public async Task<string?> PostMultipartWithHeadersAsync(string path, MultipartFormDataContent content,
-        Dictionary<string, string?>? parameters = null, Dictionary<string, string>? headers = null,
-        long timeout = 0, CancellationToken cancellationToken = default)
-    {
-        var raw = await RequestRawAsync(HttpMethod.Post, path, parameters, content, headers, timeout, cancellationToken);
-        return raw.BodyString;
-    }
-
-    /// <summary>
-    /// Sends an HTTP request with automatic retry and server failover.
-    /// </summary>
-    private async Task<string?> RequestAsync(HttpMethod method, string path,
-        Dictionary<string, string?>? parameters, string? body, Dictionary<string, string>? headers, long timeout,
-        CancellationToken cancellationToken)
-    {
-        var servers = _serverListManager.GetServerList();
-        if (servers.Count == 0)
-        {
-            throw new NacosException(NacosException.InvalidParam, "No available servers");
-        }
-
-        // Use default timeout if not specified
-        var effectiveTimeout = timeout > 0 ? timeout : _options.DefaultTimeout;
-
-        Exception? lastException = null;
-        var maxRetry = Math.Max(1, servers.Count);
-
-        for (var i = 0; i < maxRetry; i++)
-        {
-            var server = _serverListManager.GetNextServer();
-            // Console listener has no /nacos context path — derive base URL via the
-            // console-specific helper so paths like /v3/console/ai/mcp resolve
-            // against http(s)://host:8080/ rather than .../nacos/.
-            var baseUrl = _options.GetConsoleBaseUrl(server);
-
-            // Create a timeout CancellationTokenSource for this request
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(effectiveTimeout));
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
-
-            try
-            {
-                var url = BuildUrl(baseUrl, path, parameters);
-                _logger?.LogDebug("Sending {Method} request to {Url} with timeout {Timeout}ms", method, url, effectiveTimeout);
-
-                using var request = new HttpRequestMessage(method, url);
-
-                // Add authentication headers
-                await AddAuthHeadersAsync(request, cancellationToken);
-
-                if (body != null && (method == HttpMethod.Post || method == HttpMethod.Put))
-                {
-                    request.Content = new StringContent(body, Encoding.UTF8, NacosConstants.ContentTypeFormUrlEncoded);
-                }
-
-                // Add custom headers
-                if (headers != null)
-                {
-                    foreach (var header in headers)
-                    {
-                        request.Headers.TryAddWithoutValidation(header.Key, header.Value);
-                    }
-                }
-
-                var response = await _httpClient.SendAsync(request, linkedCts.Token);
-                var content = await response.Content.ReadAsStringAsync(cancellationToken);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    _serverListManager.MarkServerHealthy(server);
-                    return content;
-                }
-
-                if (response.StatusCode == HttpStatusCode.Forbidden)
-                {
-                    throw new NacosException(NacosException.NoRight, $"Access denied: {content}");
-                }
-
-                if (response.StatusCode == HttpStatusCode.NotFound)
-                {
-                    throw new NacosException(NacosException.NotFound, $"Not found: {path}");
-                }
-
-                throw new NacosException((int)response.StatusCode, $"Request failed: {content}");
-            }
-            catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
-            {
-                // User requested cancellation - propagate immediately without retry
-                throw;
-            }
-            catch (OperationCanceledException ex) when (timeoutCts.IsCancellationRequested)
-            {
-                // Request timeout - this is a server issue, retry with next server
-                _serverListManager.MarkServerUnhealthy(server);
-                lastException = new NacosException(NacosException.ServerError, "Request timeout", ex);
-                _logger?.LogWarning("Request to {Server} timed out after {Timeout}ms", server, effectiveTimeout);
-            }
-            catch (HttpRequestException ex)
-            {
-                _serverListManager.MarkServerUnhealthy(server);
-                lastException = new NacosException(NacosException.ServerError, ex.Message, ex);
-                _logger?.LogWarning(ex, "Request to {Server} failed", server);
-            }
-            catch (NacosException ex) when (ex.ErrorCode is NacosException.NoRight or NacosException.NotFound or NacosException.InvalidParam)
-            {
-                throw; // Don't retry for these errors
-            }
-            catch (Exception ex)
-            {
-                _serverListManager.MarkServerUnhealthy(server);
-                lastException = ex;
-                _logger?.LogWarning(ex, "Request to {Server} failed with unexpected error", server);
-            }
-        }
-
-        throw lastException ?? new NacosException(NacosException.ServerError, "All servers failed");
-    }
-
-    /// <summary>
-    /// Sends an HTTP request and returns the raw response with automatic retry and server failover.
-    /// Unlike <see cref="RequestAsync"/>, a 304 (Not Modified) status is returned normally,
-    /// and the response body is exposed as raw bytes together with the response headers.
-    /// </summary>
-    private async Task<NacosRawResponse> RequestRawAsync(HttpMethod method, string path,
-        Dictionary<string, string?>? parameters, HttpContent? content, Dictionary<string, string>? headers,
-        long timeout, CancellationToken cancellationToken)
-    {
-        var servers = _serverListManager.GetServerList();
-        if (servers.Count == 0)
-        {
-            throw new NacosException(NacosException.InvalidParam, "No available servers");
-        }
-
-        var effectiveTimeout = timeout > 0 ? timeout : _options.DefaultTimeout;
-
-        Exception? lastException = null;
-        var maxRetry = Math.Max(1, servers.Count);
-
-        // Buffer the content once so it can be reused across retries
-        byte[]? contentBytes = null;
-        string? contentType = null;
-        if (content != null)
-        {
-            contentBytes = await content.ReadAsByteArrayAsync(cancellationToken);
-            contentType = content.Headers.ContentType?.ToString();
-        }
-
-        for (var i = 0; i < maxRetry; i++)
-        {
-            var server = _serverListManager.GetNextServer();
-            // Console listener has no /nacos context path (see RequestAsync).
-            var baseUrl = _options.GetConsoleBaseUrl(server);
-
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(effectiveTimeout));
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
-
-            try
-            {
-                var url = BuildUrl(baseUrl, path, parameters);
-                _logger?.LogDebug("Sending raw {Method} request to {Url} with timeout {Timeout}ms", method, url, effectiveTimeout);
-
-                using var request = new HttpRequestMessage(method, url);
-
-                await AddAuthHeadersAsync(request, cancellationToken);
-
-                if (contentBytes != null && (method == HttpMethod.Post || method == HttpMethod.Put))
-                {
-                    request.Content = new ByteArrayContent(contentBytes);
-                    if (!string.IsNullOrEmpty(contentType))
-                    {
-                        request.Content.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(contentType);
-                    }
-                }
-
-                if (headers != null)
-                {
-                    foreach (var header in headers)
-                    {
-                        request.Headers.TryAddWithoutValidation(header.Key, header.Value);
-                    }
-                }
-
-                var response = await _httpClient.SendAsync(request, linkedCts.Token);
-                var body = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-
-                if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NotModified)
-                {
-                    _serverListManager.MarkServerHealthy(server);
-
-                    var responseHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                    foreach (var header in response.Headers)
-                    {
-                        responseHeaders[header.Key] = string.Join(",", header.Value);
-                    }
-                    foreach (var header in response.Content.Headers)
-                    {
-                        responseHeaders[header.Key] = string.Join(",", header.Value);
-                    }
-
-                    return new NacosRawResponse((int)response.StatusCode, responseHeaders, body);
-                }
-
-                var errorContent = Encoding.UTF8.GetString(body);
-
-                if (response.StatusCode == HttpStatusCode.Forbidden)
-                {
-                    throw new NacosException(NacosException.NoRight, $"Access denied: {errorContent}");
-                }
-
-                if (response.StatusCode == HttpStatusCode.NotFound)
-                {
-                    throw new NacosException(NacosException.NotFound, $"Not found: {path}");
-                }
-
-                throw new NacosException((int)response.StatusCode, $"Request failed: {errorContent}");
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
-            {
-                _serverListManager.MarkServerUnhealthy(server);
-                lastException = new NacosException(NacosException.ServerError, "Request timeout");
-                _logger?.LogWarning("Request to {Server} timed out after {Timeout}ms", server, effectiveTimeout);
-            }
-            catch (HttpRequestException ex)
-            {
-                _serverListManager.MarkServerUnhealthy(server);
-                lastException = new NacosException(NacosException.ServerError, ex.Message, ex);
-                _logger?.LogWarning(ex, "Request to {Server} failed", server);
-            }
-            catch (NacosException ex) when (ex.ErrorCode is NacosException.NoRight or NacosException.NotFound or NacosException.InvalidParam)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _serverListManager.MarkServerUnhealthy(server);
-                lastException = ex;
-                _logger?.LogWarning(ex, "Request to {Server} failed with unexpected error", server);
-            }
-        }
-
-        throw lastException ?? new NacosException(NacosException.ServerError, "All servers failed");
-    }
-
-    private static string BuildUrl(string baseUrl, string path, Dictionary<string, string?>? parameters)
-    {
-        var url = $"{baseUrl.TrimEnd('/')}/{path.TrimStart('/')}";
-
-        if (parameters != null && parameters.Count > 0)
-        {
-            var queryString = NacosUtils.BuildQueryString(parameters);
-            url = $"{url}?{queryString}";
-        }
-
-        return url;
-    }
-
-    private async Task AddAuthHeadersAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-    {
-        var token = await _securityProxy.GetAccessTokenAsync(cancellationToken);
-        if (!string.IsNullOrEmpty(token))
-        {
-            request.Headers.Add(NacosConstants.AccessToken, token);
-        }
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _httpClient.Dispose();
-        _securityProxy.Dispose();
-        _disposed = true;
+        return new ServerListManager(addresses);
     }
 }
