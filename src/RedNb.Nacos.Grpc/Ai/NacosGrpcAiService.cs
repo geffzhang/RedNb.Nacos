@@ -43,8 +43,11 @@ public partial class NacosGrpcAiService : IAiService
     /// <summary>
     /// Creates a new NacosGrpcAiService.
     /// </summary>
+    // The connection must announce the naming module: the server only tracks
+    // `naming`-labelled connections, and MCP endpoint ops register ephemeral
+    // naming instances bound to the connection (mirror NacosGrpcNamingService).
     public NacosGrpcAiService(NacosClientOptions options, ILogger<NacosGrpcAiService>? logger = null)
-        : this(options, new NacosGrpcClient(options, logger), logger)
+        : this(options, new NacosGrpcClient(options, logger, "naming"), logger)
     {
     }
 
