@@ -44,10 +44,19 @@ public partial class NacosGrpcAiService : IAiService
     /// Creates a new NacosGrpcAiService.
     /// </summary>
     public NacosGrpcAiService(NacosClientOptions options, ILogger<NacosGrpcAiService>? logger = null)
+        : this(options, new NacosGrpcClient(options, logger), logger)
+    {
+    }
+
+    /// <summary>
+    /// Test-friendly overload: injects the gRPC client so tests can capture
+    /// requests with a <c>FakeNacosGrpcClient</c> instead of a live channel.
+    /// </summary>
+    public NacosGrpcAiService(NacosClientOptions options, NacosGrpcClient grpcClient, ILogger<NacosGrpcAiService>? logger = null)
     {
         _options = options;
         _logger = logger;
-        _grpcClient = new NacosGrpcClient(options, logger);
+        _grpcClient = grpcClient;
         _namespaceId = options.Namespace ?? string.Empty;
 
         // Prompt / Skill / AgentSpec APIs are HTTP-only on the Nacos server side,
@@ -85,7 +94,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var request = new McpServerQueryRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             McpName = mcpName,
             Version = version
         };
@@ -109,7 +118,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var request = new McpServerReleaseRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             McpName = serverSpecification.Name!,
             ServerSpecification = serverSpecification,
             ToolSpecification = toolSpecification,
@@ -119,7 +128,7 @@ public partial class NacosGrpcAiService : IAiService
         var response = await _grpcClient.RequestAsync<McpServerReleaseResponse>(
             "ReleaseMcpServerRequest", request, cancellationToken);
 
-        return response?.McpServerId ?? string.Empty;
+        return response?.McpId ?? string.Empty;
     }
 
     /// <inheritdoc />
@@ -136,7 +145,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var request = new McpEndpointRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             McpName = mcpName,
             Address = address,
             Port = port,
@@ -163,7 +172,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var request = new McpEndpointRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             McpName = mcpName,
             Address = address,
             Port = port,
@@ -202,7 +211,7 @@ public partial class NacosGrpcAiService : IAiService
         // Send subscribe request
         var request = new McpServerSubscribeRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             McpName = mcpName,
             Version = version,
             Subscribe = true
@@ -257,7 +266,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var request = new McpServerDeleteRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             McpName = mcpName,
             Version = version
         };
@@ -291,7 +300,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var request = new McpServerListRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             McpName = mcpName,
             Search = search,
             PageNo = pageNo,
@@ -327,7 +336,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var grpcRequest = new McpServerValidateImportRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             ImportType = request.ImportType.ToString().ToLowerInvariant(),
             ImportData = request.ImportData,
             OverrideExisting = request.OverrideExisting
@@ -362,7 +371,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var grpcRequest = new McpServerImportGrpcRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             ImportType = request.ImportType.ToString().ToLowerInvariant(),
             ImportData = request.ImportData,
             OverrideExisting = request.OverrideExisting,
@@ -406,7 +415,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var request = new McpToolRefreshRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             McpName = mcpName,
             ToolName = toolName,
             Version = version
@@ -430,7 +439,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var request = new McpToolQueryRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             McpName = mcpName,
             ToolName = toolName,
             Version = version
@@ -454,7 +463,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var request = new McpToolDeleteRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             McpName = mcpName,
             ToolName = toolName,
             Version = version
@@ -485,7 +494,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var request = new McpToolUpdateRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             McpName = mcpName,
             Tool = toolSpec,
             Version = version
@@ -525,7 +534,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var request = new AgentCardQueryRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             AgentName = agentName,
             Version = version,
             RegistrationType = registrationType
@@ -556,7 +565,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var request = new AgentCardReleaseRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             AgentName = agentCard.Name!,
             AgentCard = agentCard,
             RegistrationType = registrationType ?? AiConstants.A2a.A2aEndpointTypeService,
@@ -601,7 +610,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var request = new AgentEndpointRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             AgentName = agentName,
             Endpoint = endpoint,
             Type = "registerEndpoint"
@@ -651,7 +660,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var request = new AgentEndpointRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             AgentName = agentName,
             Endpoint = endpoint,
             Type = "deregisterEndpoint"
@@ -690,7 +699,7 @@ public partial class NacosGrpcAiService : IAiService
         // Send subscribe request
         var request = new AgentCardSubscribeRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             AgentName = agentName,
             Version = version,
             Subscribe = true
@@ -745,7 +754,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var request = new AgentDeleteRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             AgentName = agentName,
             Version = version
         };
@@ -779,7 +788,7 @@ public partial class NacosGrpcAiService : IAiService
 
         var request = new AgentListRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             AgentName = agentName,
             Search = search,
             PageNo = pageNo,
@@ -992,7 +1001,7 @@ public partial class NacosGrpcAiService : IAiService
 
     private class McpServerQueryRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string McpName { get; set; } = string.Empty;
         public string? Version { get; set; }
     }
@@ -1004,7 +1013,7 @@ public partial class NacosGrpcAiService : IAiService
 
     private class McpServerReleaseRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string McpName { get; set; } = string.Empty;
         public McpServerBasicInfo? ServerSpecification { get; set; }
         public McpToolSpecification? ToolSpecification { get; set; }
@@ -1013,12 +1022,12 @@ public partial class NacosGrpcAiService : IAiService
 
     private class McpServerReleaseResponse
     {
-        public string? McpServerId { get; set; }
+        public string? McpId { get; set; }
     }
 
     private class McpEndpointRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string McpName { get; set; } = string.Empty;
         public string Address { get; set; } = string.Empty;
         public int Port { get; set; }
@@ -1028,7 +1037,7 @@ public partial class NacosGrpcAiService : IAiService
 
     private class McpServerSubscribeRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string McpName { get; set; } = string.Empty;
         public string? Version { get; set; }
         public bool Subscribe { get; set; }
@@ -1043,7 +1052,7 @@ public partial class NacosGrpcAiService : IAiService
 
     private class AgentCardQueryRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string AgentName { get; set; } = string.Empty;
         public string? Version { get; set; }
         public string? RegistrationType { get; set; }
@@ -1056,7 +1065,7 @@ public partial class NacosGrpcAiService : IAiService
 
     private class AgentCardReleaseRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string AgentName { get; set; } = string.Empty;
         public AgentCard? AgentCard { get; set; }
         public string RegistrationType { get; set; } = AiConstants.A2a.A2aEndpointTypeService;
@@ -1065,7 +1074,7 @@ public partial class NacosGrpcAiService : IAiService
 
     private class AgentEndpointRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string AgentName { get; set; } = string.Empty;
         public AgentEndpoint? Endpoint { get; set; }
         public string Type { get; set; } = "register";
@@ -1073,7 +1082,7 @@ public partial class NacosGrpcAiService : IAiService
 
     private class AgentCardSubscribeRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string AgentName { get; set; } = string.Empty;
         public string? Version { get; set; }
         public bool Subscribe { get; set; }
@@ -1094,14 +1103,14 @@ public partial class NacosGrpcAiService : IAiService
 
     private class McpServerDeleteRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string McpName { get; set; } = string.Empty;
         public string? Version { get; set; }
     }
 
     private class McpServerListRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string? McpName { get; set; }
         public string? Search { get; set; }
         public int PageNo { get; set; }
@@ -1116,14 +1125,14 @@ public partial class NacosGrpcAiService : IAiService
 
     private class AgentDeleteRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string AgentName { get; set; } = string.Empty;
         public string? Version { get; set; }
     }
 
     private class AgentListRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string? AgentName { get; set; }
         public string? Search { get; set; }
         public int PageNo { get; set; }
@@ -1139,7 +1148,7 @@ public partial class NacosGrpcAiService : IAiService
     // Import/Validation Request/Response Models
     private class McpServerValidateImportRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string ImportType { get; set; } = string.Empty;
         public string? ImportData { get; set; }
         public bool OverrideExisting { get; set; }
@@ -1157,7 +1166,7 @@ public partial class NacosGrpcAiService : IAiService
 
     private class McpServerImportGrpcRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string ImportType { get; set; } = string.Empty;
         public string? ImportData { get; set; }
         public bool OverrideExisting { get; set; }
@@ -1179,7 +1188,7 @@ public partial class NacosGrpcAiService : IAiService
     // Tool Management Request/Response Models
     private class McpToolRefreshRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string McpName { get; set; } = string.Empty;
         public string ToolName { get; set; } = string.Empty;
         public string? Version { get; set; }
@@ -1187,7 +1196,7 @@ public partial class NacosGrpcAiService : IAiService
 
     private class McpToolQueryRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string McpName { get; set; } = string.Empty;
         public string ToolName { get; set; } = string.Empty;
         public string? Version { get; set; }
@@ -1200,7 +1209,7 @@ public partial class NacosGrpcAiService : IAiService
 
     private class McpToolDeleteRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string McpName { get; set; } = string.Empty;
         public string ToolName { get; set; } = string.Empty;
         public string? Version { get; set; }
@@ -1208,7 +1217,7 @@ public partial class NacosGrpcAiService : IAiService
 
     private class McpToolUpdateRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string McpName { get; set; } = string.Empty;
         public McpToolSpec? Tool { get; set; }
         public string? Version { get; set; }
