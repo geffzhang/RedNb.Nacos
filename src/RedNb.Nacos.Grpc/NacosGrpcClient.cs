@@ -25,6 +25,7 @@ public class NacosGrpcClient : IAsyncDisposable
     private readonly string _clientId;
     private readonly string _module;
     private readonly JsonSerializerOptions _jsonOptions;
+    private readonly RedNb.Nacos.Client.Http.SecurityProxy _securityProxy;
     
     /// <summary>
     /// The Nacos 3.x unary request method (<c>Request/request</c>, no proto package —
@@ -141,6 +142,8 @@ public class NacosGrpcClient : IAsyncDisposable
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             PropertyNameCaseInsensitive = true
         };
+
+        _securityProxy = new RedNb.Nacos.Client.Http.SecurityProxy(options, logger);
     }
 
     /// <summary>
@@ -315,7 +318,7 @@ public class NacosGrpcClient : IAsyncDisposable
         var generation = _current ?? throw new NacosException(
             NacosException.ClientDisconnect, "Not connected to Nacos server");
 
-        var payload = CreatePayload(generation, type, request);
+        var payload = await CreatePayloadAsync(generation, type, request, cancellationToken);
         var deadline = DateTime.UtcNow.Add(timeout);
 
         try
@@ -396,7 +399,7 @@ public class NacosGrpcClient : IAsyncDisposable
     private async Task ServerCheckAsync(ConnectionGeneration generation, CancellationToken cancellationToken)
     {
         var request = new ServerCheckRequest();
-        var payload = CreatePayload(generation, ServerCheckRequest.TYPE, request);
+        var payload = await CreatePayloadAsync(generation, ServerCheckRequest.TYPE, request, cancellationToken);
 
         using var call = generation.Channel!.CreateCallInvoker().AsyncUnaryCall(
             RequestMethod,
@@ -438,7 +441,7 @@ public class NacosGrpcClient : IAsyncDisposable
             AbilityTable = new Dictionary<string, bool>()
         };
 
-        var payload = CreatePayload(generation, ConnectionSetupRequest.TYPE, setupRequest);
+        var payload = await CreatePayloadAsync(generation, ConnectionSetupRequest.TYPE, setupRequest, cancellationToken);
         await generation.Stream.RequestStream.WriteAsync(payload, cancellationToken);
 
         // Wait for the registration acknowledgement before reporting the client as
@@ -598,7 +601,7 @@ public class NacosGrpcClient : IAsyncDisposable
     {
         try
         {
-            var ackPayload = CreatePayload(generation, type, response);
+            var ackPayload = await CreatePayloadAsync(generation, type, response, cancellationToken);
             await generation.Stream!.RequestStream.WriteAsync(ackPayload, cancellationToken);
             _logger?.LogDebug("Sent ack for {Type}", type);
         }
@@ -661,12 +664,12 @@ public class NacosGrpcClient : IAsyncDisposable
         }
     }
 
-    private Payload CreatePayload(ConnectionGeneration generation, string type, object request)
+    private async Task<Payload> CreatePayloadAsync(ConnectionGeneration generation, string type, object request, CancellationToken cancellationToken = default)
     {
         var json = JsonSerializer.Serialize(request, _jsonOptions);
         var body = ByteString.CopyFromUtf8(json);
 
-        return new Payload
+        var payload = new Payload
         {
             Metadata = new ProtoMetadata
             {
@@ -683,6 +686,18 @@ public class NacosGrpcClient : IAsyncDisposable
                 Value = body
             }
         };
+
+        // Nacos 3.x gRPC auth travels INSIDE the payload header map (not gRPC
+        // call metadata): NacosAuthPluginService resolves identity from the
+        // Authorization/accessToken headers, and the official Java client sends
+        // the raw JWT under "accessToken" on every payload.
+        var token = await _securityProxy.GetAccessTokenAsync(cancellationToken);
+        if (!string.IsNullOrEmpty(token))
+        {
+            payload.Metadata.Headers["accessToken"] = token;
+        }
+
+        return payload;
     }
 
     private async Task EnsureConnectedAsync(CancellationToken cancellationToken)
@@ -796,6 +811,7 @@ public class NacosGrpcClient : IAsyncDisposable
         // stream and channel.
         await CleanupConnectionAsync();
 
+        _securityProxy.Dispose();
         _connectionLock.Dispose();
     }
 }
