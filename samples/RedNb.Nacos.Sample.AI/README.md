@@ -8,8 +8,9 @@ SDK (MCP, A2A, Prompt, Skill, AgentSpec) plus integration with
 ## Prerequisites
 
 - **.NET 10 SDK** (the sample targets `net10.0`)
-- A reachable **Nacos server 3.0+** (default `localhost:8848`; the gRPC port is
-  the HTTP port plus the configured offset, so 8848 → 9848)
+- A reachable **Nacos server 3.2.x** (the sample is verified on 3.2.4;
+  force-publish needs ≥ 3.2.1) — default `localhost:8848`; the gRPC port is
+  the HTTP port plus the configured offset, so 8848 → 9848
 - No LLM API key required — the default `EchoChatClient` ships with the sample
 
 The sample is written and verified against **Nacos 3.2.4** (see
@@ -21,8 +22,9 @@ The sample is written and verified against **Nacos 3.2.4** (see
 dotnet run --project samples/RedNb.Nacos.Sample.AI
 ```
 
-The process prints one line per section and a `--- Summary ---` block at the
-end, then exits 0 when every section reported `Ok`.
+The process prints one line per section, then prints a `--- Summary ---` block
+and exits 0; only a connection failure exits 2 — a section-level `Failed` is
+reported in the summary block, not in the exit code.
 
 ## What it demonstrates
 
@@ -100,7 +102,8 @@ or override with environment variables prefixed `REDNB_NACOS_` (nested keys use
 | `OpenAI:Model` | `gpt-4o-mini` | |
 | `Logging:LogLevel:Default` | `Information` | `trace`/`debug`/`information`/`warning`/`error` |
 
-The startup log prints the resolved provider, e.g. `ChatProvider: echo`.
+The startup log prints the configured provider, e.g. `ChatProvider: echo` (the
+`ChatClientFactory` fallback warning only appears on the config-driven path).
 
 The `openai` branch is only compiled when `OPENAI_PROVIDER` is defined:
 
@@ -136,9 +139,10 @@ operations; the sample delegates those calls to the gRPC `IAiService` instead.
 - **An integration section reports `Failed`** — those sections are
   self-contained (they publish/release their own artifact), so a failure means
   the registry or the wire path is broken rather than a missing prerequisite;
-  there is no "run the CRUD section first" ordering requirement. `Skipped`
-  currently comes only from `McpSamples`, when the server does not expose MCP
-  tool CRUD.
+  there is no "run the CRUD section first" ordering requirement. No section is
+  expected to report `Skipped` on Nacos 3.2.4 — the sample omits the MCP
+  tool-CRUD calls that used to trigger it, so an all-`Ok` summary is the
+  expected result.
 - **`Pipeline not approved` (HTTP 400) from your own publish call** — the
   3.2.4 AI pipeline plugin gates normal publish; use the force-publish route
   ([since=3.2.1]), as this sample does.
