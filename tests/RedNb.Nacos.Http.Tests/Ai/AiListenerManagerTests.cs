@@ -1,7 +1,7 @@
-using RedNb.Nacos.Client.Ai;
-using RedNb.Nacos.Core.Ai.Listener;
-using RedNb.Nacos.Core.Ai.Model.A2a;
-using RedNb.Nacos.Core.Ai.Model.Mcp;
+using RedNb.Nacos.Http.Ai;
+using RedNb.Nacos.Ai.Listener;
+using RedNb.Nacos.Ai.Models.A2a;
+using RedNb.Nacos.Ai.Models.Mcp;
 using Xunit;
 
 namespace RedNb.Nacos.Http.Tests.Ai;
@@ -96,7 +96,7 @@ public class AiListenerManagerTests
         var listener2 = new TestMcpServerListener();
         _manager.AddMcpListener("mcp-server", "1.0.0", listener1);
         _manager.AddMcpListener("mcp-server", "1.0.0", listener2);
-        
+
         var serverInfo = new McpServerDetailInfo();
 
         // Act
@@ -115,7 +115,7 @@ public class AiListenerManagerTests
         var normalListener = new TestMcpServerListener();
         _manager.AddMcpListener("mcp-server", "1.0.0", failingListener);
         _manager.AddMcpListener("mcp-server", "1.0.0", normalListener);
-        
+
         var serverInfo = new McpServerDetailInfo();
 
         // Act (should not throw)
@@ -191,7 +191,7 @@ public class AiListenerManagerTests
         var listener2 = new TestAgentCardListener();
         _manager.AddAgentListener("agent", "1.0.0", listener1);
         _manager.AddAgentListener("agent", "1.0.0", listener2);
-        
+
         var agentCard = new AgentCardDetailInfo();
 
         // Act

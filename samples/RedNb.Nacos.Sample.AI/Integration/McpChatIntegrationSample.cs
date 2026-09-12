@@ -8,9 +8,9 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Ai;
-using RedNb.Nacos.Core.Ai.Model.Mcp;
+using RedNb.Nacos;
+using RedNb.Nacos.Ai;
+using RedNb.Nacos.Ai.Models.Mcp;
 using RedNb.Nacos.Sample.AI.Chat;
 
 namespace RedNb.Nacos.Sample.AI.Integration;

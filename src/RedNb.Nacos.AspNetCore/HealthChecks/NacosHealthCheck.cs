@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Config;
+using RedNb.Nacos;
+using RedNb.Nacos.Config;
 
 namespace RedNb.Nacos.AspNetCore.HealthChecks;
 
@@ -52,14 +52,14 @@ public class NacosHealthCheck : IHealthCheck
             using var httpClient = new HttpClient();
             httpClient.Timeout = TimeSpan.FromSeconds(5);
 
-            var serverAddress = _options.ServerAddresses.Split(',')[0].Trim();
+            var serverAddress = _options.GetConsoleAddressList().First();
             if (!serverAddress.StartsWith("http"))
             {
                 serverAddress = $"http://{serverAddress}";
             }
 
             var response = await httpClient.GetAsync(
-                $"{serverAddress}/nacos/v1/console/health/readiness",
+                $"{_options.GetConsoleBaseUrl(serverAddress).TrimEnd('/')}/v3/console/health/readiness",
                 cancellationToken);
 
             if (response.IsSuccessStatusCode)

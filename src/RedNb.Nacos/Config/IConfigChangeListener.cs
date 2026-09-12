@@ -1,4 +1,4 @@
-namespace RedNb.Nacos.Core.Config;
+namespace RedNb.Nacos.Config;
 
 /// <summary>
 /// Configuration change listener interface.

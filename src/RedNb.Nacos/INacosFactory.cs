@@ -1,10 +1,10 @@
-using RedNb.Nacos.Core.Ai;
-using RedNb.Nacos.Core.Config;
-using RedNb.Nacos.Core.Lock;
-using RedNb.Nacos.Core.Maintainer;
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos.Ai;
+using RedNb.Nacos.Config;
+using RedNb.Nacos.Lock;
+using RedNb.Nacos.Administration;
+using RedNb.Nacos.Naming;
 
-namespace RedNb.Nacos.Core;
+namespace RedNb.Nacos;
 
 /// <summary>
 /// Factory interface for creating Nacos services.

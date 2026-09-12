@@ -1,7 +1,7 @@
 using FluentAssertions;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Naming;
-using RedNb.Nacos.GrpcClient;
+using RedNb.Nacos;
+using RedNb.Nacos.Naming;
+using RedNb.Nacos.Grpc;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -36,7 +36,7 @@ public class NamingSubscribePushTests : IAsyncLifetime
             ServerAddresses = NacosServerFixture.ServerAddress,
             Username = NacosServerFixture.Username,
             Password = NacosServerFixture.Password,
-            Namespace = "",
+            Namespace = NacosServerFixture.Namespace,
             DefaultTimeout = 5000
         };
         _service = await NacosGrpcFactory.CreateNamingServiceAsync(_options);

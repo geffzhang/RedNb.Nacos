@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos.Naming;
 using RedNb.Nacos.Naming.Cache;
 
 namespace RedNb.Nacos.Failover;

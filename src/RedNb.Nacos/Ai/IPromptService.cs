@@ -1,7 +1,7 @@
-using RedNb.Nacos.Core.Ai.Model;
-using RedNb.Nacos.Core.Ai.Model.Prompt;
+using RedNb.Nacos.Ai.Models;
+using RedNb.Nacos.Ai.Models.Prompt;
 
-namespace RedNb.Nacos.Core.Ai;
+namespace RedNb.Nacos.Ai;
 
 /// <summary>
 /// Nacos AI Prompt client service interface.
@@ -18,7 +18,7 @@ public interface IPromptService
     /// <param name="promptKey">Key of the prompt.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The prompt, or null when not found.</returns>
-    Task<Model.Prompt.Prompt?> GetPromptAsync(string promptKey, CancellationToken cancellationToken = default);
+    Task<Models.Prompt.Prompt?> GetPromptAsync(string promptKey, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets a specific version of a prompt.
@@ -27,7 +27,7 @@ public interface IPromptService
     /// <param name="version">Target version (null or empty for latest).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The prompt, or null when not found.</returns>
-    Task<Model.Prompt.Prompt?> GetPromptAsync(string promptKey, string? version, CancellationToken cancellationToken = default);
+    Task<Models.Prompt.Prompt?> GetPromptAsync(string promptKey, string? version, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the prompt version bound to a label, such as stable or canary.
@@ -36,7 +36,7 @@ public interface IPromptService
     /// <param name="label">Label name.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The prompt, or null when not found.</returns>
-    Task<Model.Prompt.Prompt?> GetPromptByLabelAsync(string promptKey, string label, CancellationToken cancellationToken = default);
+    Task<Models.Prompt.Prompt?> GetPromptByLabelAsync(string promptKey, string label, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Searches prompts with pagination (client API).
@@ -63,7 +63,7 @@ public interface IPromptService
     /// <param name="listener">Callback listener for prompt changes.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Current prompt when subscription succeeds.</returns>
-    Task<Model.Prompt.Prompt?> SubscribePromptAsync(string promptKey, AbstractNacosPromptListener listener, CancellationToken cancellationToken = default);
+    Task<Models.Prompt.Prompt?> SubscribePromptAsync(string promptKey, AbstractNacosPromptListener listener, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Subscribes to a prompt for a specific version or label.
@@ -74,7 +74,7 @@ public interface IPromptService
     /// <param name="listener">Callback listener for prompt changes.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Current prompt when subscription succeeds.</returns>
-    Task<Model.Prompt.Prompt?> SubscribePromptAsync(string promptKey, string? version, string? label, AbstractNacosPromptListener listener, CancellationToken cancellationToken = default);
+    Task<Models.Prompt.Prompt?> SubscribePromptAsync(string promptKey, string? version, string? label, AbstractNacosPromptListener listener, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Unsubscribes from a prompt for the latest version.

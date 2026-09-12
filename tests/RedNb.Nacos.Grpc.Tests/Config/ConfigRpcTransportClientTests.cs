@@ -1,7 +1,7 @@
 using System.Text.Json;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.GrpcClient;
-using RedNb.Nacos.GrpcClient.Config;
+using RedNb.Nacos;
+using RedNb.Nacos.Grpc;
+using RedNb.Nacos.Grpc.Config;
 using Xunit;
 
 namespace RedNb.Nacos.Grpc.Tests.Config;
@@ -11,7 +11,7 @@ namespace RedNb.Nacos.Grpc.Tests.Config;
 ///
 /// Uses a hand-rolled <see cref="FakeNacosGrpcClient"/> that overrides
 /// the virtual seam methods (<see cref="RequestAsync{TResponse}"/>,
-/// <see cref="SendStreamRequestAsync"/>, <see cref="SendStreamRequestWithResponseAsync{TResponse}"/>,
+/// <see cref="SendRequestAsync"/>, <see cref="SendRequestWithResponseAsync{TResponse}"/>,
 /// and <see cref="RegisterPushHandler"/>) to capture dispatched frames
 /// and the registered push handler, so the listen / fuzzy-watch / push-dispatch
 /// paths can be exercised without a live gRPC server.

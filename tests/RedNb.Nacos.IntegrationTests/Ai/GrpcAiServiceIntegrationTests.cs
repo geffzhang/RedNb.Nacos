@@ -1,11 +1,11 @@
 using FluentAssertions;
-using RedNb.Nacos.Client;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Ai;
-using RedNb.Nacos.Core.Ai.Model.A2a;
-using RedNb.Nacos.Core.Ai.Model.Mcp;
-using RedNb.Nacos.GrpcClient;
-using RedNb.Nacos.GrpcClient.Ai;
+using RedNb.Nacos.Http;
+using RedNb.Nacos;
+using RedNb.Nacos.Ai;
+using RedNb.Nacos.Ai.Models.A2a;
+using RedNb.Nacos.Ai.Models.Mcp;
+using RedNb.Nacos.Grpc;
+using RedNb.Nacos.Grpc.Ai;
 using Xunit;
 using Xunit.Abstractions;
 using static RedNb.Nacos.IntegrationTests.TestRetryHelpers;
@@ -174,7 +174,7 @@ public class GrpcAiServiceIntegrationTests : IAsyncLifetime
     // crash-loop (audit §1 — see .tmp/audit-server-api-3.2.4.md), so the test
     // would block on NacosServerFixture.InitializeAsync's 90s readiness probe.
     // Authored for re-enable once the container recovers.
-    [Fact(Skip = "Nacos 3.2.4 container is in Derby crash-loop (see .tmp/audit-server-api-3.2.4.md §1); re-enable once the server recovers.")]
+    [Fact]
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
     public async Task RegisterAgentEndpoints_BatchOp_PreservesAgentCard()

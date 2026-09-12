@@ -1,7 +1,7 @@
 using FluentAssertions;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Naming;
-using RedNb.Nacos.Core.Naming.Selector;
+using RedNb.Nacos;
+using RedNb.Nacos.Naming;
+using RedNb.Nacos.Naming.Selector;
 using Xunit;
 
 namespace RedNb.Nacos.Tests.Naming;

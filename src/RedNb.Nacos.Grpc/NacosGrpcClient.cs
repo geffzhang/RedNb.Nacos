@@ -3,16 +3,16 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
-using Grpc.Core;
-using Grpc.Net.Client;
+using global::Grpc.Core;
+using global::Grpc.Net.Client;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.GrpcClient.Config;
-using RedNb.Nacos.GrpcClient.Naming;
-using RedNb.Nacos.GrpcClient.Protos;
-using ProtoMetadata = RedNb.Nacos.GrpcClient.Protos.Metadata;
+using RedNb.Nacos;
+using RedNb.Nacos.Grpc.Config;
+using RedNb.Nacos.Grpc.Naming;
+using RedNb.Nacos.Grpc.Protos;
+using ProtoMetadata = RedNb.Nacos.Grpc.Protos.Metadata;
 
-namespace RedNb.Nacos.GrpcClient;
+namespace RedNb.Nacos.Grpc;
 
 /// <summary>
 /// gRPC client for Nacos server communication.
@@ -25,8 +25,8 @@ public class NacosGrpcClient : IAsyncDisposable
     private readonly string _clientId;
     private readonly string _module;
     private readonly JsonSerializerOptions _jsonOptions;
-    private readonly RedNb.Nacos.Client.Http.SecurityProxy _securityProxy;
-    
+    private readonly RedNb.Nacos.Http.Transport.SecurityProxy _securityProxy;
+
     /// <summary>
     /// The Nacos 3.x unary request method (<c>Request/request</c>, no proto package —
     /// the server registers the bare service name). Every client-to-server request,
@@ -59,6 +59,8 @@ public class NacosGrpcClient : IAsyncDisposable
 
     private volatile bool _connected;
     private volatile bool _disposed;
+    private readonly CancellationTokenSource _lifetimeCts = new();
+    private Task? _reconnectTask;
     private DateTime _lastActiveTime;
 
     /// <summary>
@@ -135,7 +137,7 @@ public class NacosGrpcClient : IAsyncDisposable
         _module = module;
         _clientId = Guid.NewGuid().ToString("N");
         _lastActiveTime = DateTime.UtcNow;
-        
+
         _jsonOptions = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -143,7 +145,7 @@ public class NacosGrpcClient : IAsyncDisposable
             PropertyNameCaseInsensitive = true
         };
 
-        _securityProxy = new RedNb.Nacos.Client.Http.SecurityProxy(options, logger);
+        _securityProxy = new RedNb.Nacos.Http.Transport.SecurityProxy(options, logger);
     }
 
     /// <summary>
@@ -166,6 +168,7 @@ public class NacosGrpcClient : IAsyncDisposable
     /// </summary>
     public virtual async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (_connected) return;
 
         await _connectionLock.WaitAsync(cancellationToken);
@@ -235,6 +238,7 @@ public class NacosGrpcClient : IAsyncDisposable
                 generation.KeepAliveTask = KeepAliveLoopAsync(generation, generation.Cts.Token);
 
                 _connected = true;
+                _reconnectTask ??= Task.Run(() => ReconnectLoopAsync(_lifetimeCts.Token));
                 _lastActiveTime = DateTime.UtcNow;
 
                 _logger?.LogInformation("Connected to Nacos gRPC server at {Address}, ConnectionId: {ConnectionId}",
@@ -249,7 +253,7 @@ public class NacosGrpcClient : IAsyncDisposable
             }
         }
 
-        throw new NacosException(NacosException.ServerError, 
+        throw new NacosException(NacosException.ServerError,
             $"Failed to connect to any Nacos gRPC server: {lastException?.Message}", lastException!);
     }
 
@@ -261,7 +265,7 @@ public class NacosGrpcClient : IAsyncDisposable
     {
         await EnsureConnectedAsync(cancellationToken);
 
-        return await SendStreamRequestWithResponseAsync<TResponse>(
+        return await SendRequestWithResponseAsync<TResponse>(
             type, request, TimeSpan.FromMilliseconds(_options.DefaultTimeout), cancellationToken);
     }
 
@@ -270,7 +274,7 @@ public class NacosGrpcClient : IAsyncDisposable
     /// name, Nacos 3.x serves every client request over the unary <c>Request/request</c>
     /// method — the bi-stream carries ConnectionSetup and server push only.
     /// </summary>
-    public virtual async Task SendStreamRequestAsync(string type, object request,
+    public virtual async Task SendRequestAsync(string type, object request,
         CancellationToken cancellationToken = default)
     {
         await EnsureConnectedAsync(cancellationToken);
@@ -286,7 +290,7 @@ public class NacosGrpcClient : IAsyncDisposable
     /// the response. The historical name is kept because the transport clients use it
     /// for the requests whose responses the caller inspects.
     /// </summary>
-    public virtual async Task<TResponse?> SendStreamRequestWithResponseAsync<TResponse>(string type, object request,
+    public virtual async Task<TResponse?> SendRequestWithResponseAsync<TResponse>(string type, object request,
         TimeSpan timeout, CancellationToken cancellationToken = default) where TResponse : class
     {
         await EnsureConnectedAsync(cancellationToken);
@@ -329,6 +333,14 @@ public class NacosGrpcClient : IAsyncDisposable
                 new CallOptions(deadline: deadline, cancellationToken: cancellationToken), payload);
 
             var response = await call.ResponseAsync;
+            if (response.Metadata?.Type == "ErrorResponse")
+            {
+                using var error = JsonDocument.Parse(response.Body.Value.ToStringUtf8());
+                var code = error.RootElement.TryGetProperty("errorCode", out var value) ? value.GetInt32() : NacosException.ServerError;
+                if (code == 301 && IsCurrent(generation)) _connected = false;
+                var message = error.RootElement.TryGetProperty("message", out var text) ? text.GetString() : "Nacos request rejected";
+                throw new NacosException(code, message ?? "Nacos request rejected");
+            }
 
             if (IsCurrent(generation))
             {
@@ -336,6 +348,10 @@ public class NacosGrpcClient : IAsyncDisposable
             }
 
             return response.Body?.Value.ToStringUtf8();
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled && cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(cancellationToken);
         }
         catch (RpcException ex) when (ex.StatusCode == StatusCode.Unavailable)
         {
@@ -450,8 +466,9 @@ public class NacosGrpcClient : IAsyncDisposable
         var completed = await Task.WhenAny(generation.SetupAck.Task, Task.Delay(ConnectionTimeoutMs, cancellationToken));
         if (completed != generation.SetupAck.Task)
         {
-            _logger?.LogWarning(
-                "Nacos did not acknowledge the gRPC connection setup within {Timeout}ms", ConnectionTimeoutMs);
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new NacosException(NacosException.ClientDisconnect,
+                "Nacos did not acknowledge the gRPC connection setup");
         }
     }
 
@@ -503,6 +520,10 @@ public class NacosGrpcClient : IAsyncDisposable
             {
                 _connected = false;
             }
+        }
+        finally
+        {
+            if (IsCurrent(generation)) _connected = false;
         }
     }
 
@@ -611,6 +632,20 @@ public class NacosGrpcClient : IAsyncDisposable
         }
     }
 
+    private async Task ReconnectLoopAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(ReconnectDelayMs, cancellationToken);
+                if (!_connected) await ConnectAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
+            catch (Exception ex) { _logger?.LogWarning(ex, "Reconnection attempt failed"); }
+        }
+    }
+
     private async Task KeepAliveLoopAsync(ConnectionGeneration generation, CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
@@ -651,6 +686,10 @@ public class NacosGrpcClient : IAsyncDisposable
             if (response?.IsSuccess == true && IsCurrent(generation))
             {
                 _lastActiveTime = DateTime.UtcNow;
+            }
+            else if (IsCurrent(generation))
+            {
+                _connected = false;
             }
         }
         catch (Exception ex)
@@ -706,7 +745,7 @@ public class NacosGrpcClient : IAsyncDisposable
         {
             await ConnectAsync(cancellationToken);
         }
-        
+
         if (!_connected)
         {
             throw new NacosException(NacosException.ClientDisconnect, "Not connected to Nacos server");
@@ -791,7 +830,7 @@ public class NacosGrpcClient : IAsyncDisposable
         {
             var hostName = System.Net.Dns.GetHostName();
             var addresses = System.Net.Dns.GetHostAddresses(hostName);
-            var ipv4 = addresses.FirstOrDefault(a => 
+            var ipv4 = addresses.FirstOrDefault(a =>
                 a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork &&
                 !System.Net.IPAddress.IsLoopback(a));
             return ipv4?.ToString() ?? "127.0.0.1";
@@ -806,6 +845,10 @@ public class NacosGrpcClient : IAsyncDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        await _lifetimeCts.CancelAsync();
+        if (_reconnectTask != null)
+            try { await _reconnectTask; } catch (OperationCanceledException) { }
+        _lifetimeCts.Dispose();
 
         // Cancels and awaits the current generation's loops, then disposes its
         // stream and channel.

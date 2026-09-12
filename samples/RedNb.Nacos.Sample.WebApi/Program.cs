@@ -2,18 +2,15 @@ using RedNb.Nacos.DependencyInjection;
 using RedNb.Nacos.AspNetCore.Configuration;
 using RedNb.Nacos.AspNetCore.HealthChecks;
 using RedNb.Nacos.AspNetCore.ServiceRegistry;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos;
+using RedNb.Nacos.Naming;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add Nacos configuration as a source
 builder.Configuration.AddNacosConfiguration(source =>
 {
-    source.Options.ServerAddresses = "localhost:8848";
-    source.Options.Username = "nacos";
-    source.Options.Password = "nacos";
-    source.Options.Namespace = "";
+    builder.Configuration.GetSection("Nacos").Bind(source.Options);
     source.ConfigItems.Add(new NacosConfigurationItem { DataId = "app-config", Group = "DEFAULT_GROUP" });
     source.ConfigItems.Add(new NacosConfigurationItem { DataId = "db-config", Group = "DEFAULT_GROUP", Optional = true });
 });
@@ -21,10 +18,7 @@ builder.Configuration.AddNacosConfiguration(source =>
 // Add Nacos services using DI extensions
 builder.Services.AddNacos(options =>
 {
-    options.ServerAddresses = "localhost:8848";
-    options.Username = "nacos";
-    options.Password = "nacos";
-    options.Namespace = "";
+    builder.Configuration.GetSection("Nacos").Bind(options);
     options.DefaultTimeout = 5000;
 });
 

@@ -1,5 +1,5 @@
 using FluentAssertions;
-using RedNb.Nacos.Core.Lock;
+using RedNb.Nacos.Lock;
 using Xunit;
 
 namespace RedNb.Nacos.Tests.Lock;

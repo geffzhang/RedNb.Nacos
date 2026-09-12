@@ -1,5 +1,5 @@
 using FluentAssertions;
-using RedNb.Nacos.Core.Config;
+using RedNb.Nacos.Config;
 using Xunit;
 
 namespace RedNb.Nacos.Tests.Config;

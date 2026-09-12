@@ -1,15 +1,15 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Client.Http;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Ai;
-using RedNb.Nacos.Core.Ai.Model;
-using RedNb.Nacos.Core.Ai.Model.AgentSpec;
-using AgentSpecModel = RedNb.Nacos.Core.Ai.Model.AgentSpec.AgentSpec;
+using RedNb.Nacos.Http.Transport;
+using RedNb.Nacos;
+using RedNb.Nacos.Ai;
+using RedNb.Nacos.Ai.Models;
+using RedNb.Nacos.Ai.Models.AgentSpec;
+using AgentSpecModel = RedNb.Nacos.Ai.Models.AgentSpec.AgentSpec;
 using RedNb.Nacos.Utils;
 
-namespace RedNb.Nacos.Client.Ai;
+namespace RedNb.Nacos.Http.Ai;
 
 /// <summary>
 /// Nacos AI AgentSpec service implementation using HTTP.
@@ -29,6 +29,16 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
     private readonly object _listenerLock = new();
     private readonly CancellationTokenSource _cts = new();
     private bool _disposed;
+    private readonly object _pollLock = new();
+    private Task? _pollTask;
+    private void EnsurePolling()
+    {
+        lock (_pollLock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _pollTask ??= Task.Run(() => StartPollingAsync(_cts.Token));
+        }
+    }
 
     private const string ClientBasePath = "v3/client/ai/agentspecs";
     private const string AdminBasePath = "v3/admin/ai/agentspecs";
@@ -53,7 +63,7 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
         _logger = logger;
         _namespaceId = options.Namespace ?? string.Empty;
 
-        _ = StartPollingAsync(_cts.Token);
+
     }
 
     #region AgentSpec Query
@@ -106,6 +116,7 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
     /// <inheritdoc />
     public async Task<AgentSpecModel?> SubscribeAgentSpecAsync(string agentSpecName, string? version, string? label, AbstractNacosAgentSpecListener listener, CancellationToken cancellationToken = default)
     {
+        EnsurePolling();
         ValidateAgentSpecName(agentSpecName);
         if (listener == null)
         {
@@ -428,7 +439,9 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
     {
         if (_disposed) return;
 
+        _disposed = true;
         await _cts.CancelAsync();
+        if (_pollTask != null) await _pollTask;
         _cts.Dispose();
         lock (_listenerLock)
         {

@@ -1,7 +1,7 @@
 using FluentAssertions;
 using Moq;
-using RedNb.Nacos.Client.Naming;
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos.Http.Naming;
+using RedNb.Nacos.Naming;
 using Xunit;
 
 namespace RedNb.Nacos.Http.Tests;
@@ -133,17 +133,17 @@ public class ServiceInfoHolderTests
     {
         // Arrange
         var holder = new ServiceInfoHolder();
-        var serviceInfo1 = new ServiceInfo 
-        { 
-            Name = "testService", 
-            GroupName = "DEFAULT_GROUP", 
-            Clusters = "cluster-a" 
+        var serviceInfo1 = new ServiceInfo
+        {
+            Name = "testService",
+            GroupName = "DEFAULT_GROUP",
+            Clusters = "cluster-a"
         };
-        var serviceInfo2 = new ServiceInfo 
-        { 
-            Name = "testService", 
-            GroupName = "DEFAULT_GROUP", 
-            Clusters = "cluster-b" 
+        var serviceInfo2 = new ServiceInfo
+        {
+            Name = "testService",
+            GroupName = "DEFAULT_GROUP",
+            Clusters = "cluster-b"
         };
 
         holder.UpdateServiceInfo(serviceInfo1);

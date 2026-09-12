@@ -1,7 +1,7 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos.Naming;
 using RedNb.Nacos.Failover;
 using Xunit;
 
@@ -278,7 +278,7 @@ public class FailoverReactorTests : IDisposable
         // Arrange
         var serviceInfo = new ServiceInfo { Name = "test-service" };
         _reactor.SetFailoverData("key", FailoverData<ServiceInfo>.CreateForNaming("key", serviceInfo));
-        
+
         FailoverDataChangedEventArgs<ServiceInfo>? eventArgs = null;
         _reactor.DataChanged += (sender, args) => eventArgs = args;
 

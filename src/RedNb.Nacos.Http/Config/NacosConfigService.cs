@@ -1,15 +1,15 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Client.Http;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Config;
-using RedNb.Nacos.Core.Config.Filter;
-using RedNb.Nacos.Core.Config.FuzzyWatch;
+using RedNb.Nacos.Http.Transport;
+using RedNb.Nacos;
+using RedNb.Nacos.Config;
+using RedNb.Nacos.Config.Filter;
+using RedNb.Nacos.Config.FuzzyWatch;
 using RedNb.Nacos.Monitor;
 using RedNb.Nacos.Utils;
 
-namespace RedNb.Nacos.Client.Config;
+namespace RedNb.Nacos.Http.Config;
 
 /// <summary>
 /// Nacos config service implementation using HTTP.
@@ -50,7 +50,7 @@ public class NacosConfigService : IConfigService
         _metricsMonitor.SetConnectionStatus(true);
     }
 
-    public async Task<string?> GetConfigAsync(string dataId, string group, long timeoutMs, 
+    public async Task<string?> GetConfigAsync(string dataId, string group, long timeoutMs,
         CancellationToken cancellationToken = default)
     {
         group = GetGroupOrDefault(group);
@@ -74,7 +74,7 @@ public class NacosConfigService : IConfigService
                 _isHealthy = true;
                 _metricsMonitor.SetConnectionStatus(true);
                 _metricsMonitor.RecordConfigRequestSuccess();
-                
+
                 // Apply filter chain for decryption
                 content = await ApplyGetFilterAsync(dataId, group, content, cancellationToken);
             }
@@ -102,7 +102,7 @@ public class NacosConfigService : IConfigService
             _isHealthy = false;
             _metricsMonitor.SetConnectionStatus(false);
             _metricsMonitor.RecordConfigRequestFailed();
-            
+
             // Try to get from local cache
             var cached = _localCache.GetSnapshot(dataId, group);
             if (cached != null)
@@ -117,7 +117,7 @@ public class NacosConfigService : IConfigService
         }
     }
 
-    public async Task<string?> GetConfigAndSignListenerAsync(string dataId, string group, long timeoutMs, 
+    public async Task<string?> GetConfigAndSignListenerAsync(string dataId, string group, long timeoutMs,
         IConfigChangeListener listener, CancellationToken cancellationToken = default)
     {
         var content = await GetConfigAsync(dataId, group, timeoutMs, cancellationToken);
@@ -125,28 +125,10 @@ public class NacosConfigService : IConfigService
         return content;
     }
 
-    public async Task AddListenerAsync(string dataId, string group, IConfigChangeListener listener, 
+    public async Task AddListenerAsync(string dataId, string group, IConfigChangeListener listener,
         CancellationToken cancellationToken = default)
     {
-        group = GetGroupOrDefault(group);
-        ValidateParams(dataId, group);
-        
-        _listenerManager.AddListener(dataId, group, GetTenant(), listener);
-        _metricsMonitor.SetListenConfigCount(_listenerManager.GetListeningConfigs().Count);
-        _logger?.LogDebug("Added listener for {DataId}@{Group}", dataId, group);
-        
-        // Initialize MD5 for the listener to enable proper change detection
-        try
-        {
-            var content = await GetConfigAsync(dataId, group, _options.DefaultTimeout, cancellationToken);
-            var md5 = content != null ? NacosUtils.GetMd5(content) : null;
-            _listenerManager.UpdateMd5(dataId, group, GetTenant(), md5);
-            _logger?.LogDebug("Initialized MD5 for {DataId}@{Group}: {Md5}", dataId, group, md5);
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogWarning(ex, "Failed to initialize MD5 for {DataId}@{Group}, listener may not detect first change", dataId, group);
-        }
+        throw new NotSupportedException("HTTP config listening is unavailable in Nacos 3.2.4. Use AddNacosConfig or NacosGrpcConfigService.");
     }
 
     public void RemoveListener(string dataId, string group, IConfigChangeListener listener)
@@ -157,13 +139,13 @@ public class NacosConfigService : IConfigService
         _logger?.LogDebug("Removed listener for {DataId}@{Group}", dataId, group);
     }
 
-    public async Task<bool> PublishConfigAsync(string dataId, string group, string content, 
+    public async Task<bool> PublishConfigAsync(string dataId, string group, string content,
         CancellationToken cancellationToken = default)
     {
         return await PublishConfigAsync(dataId, group, content, ConfigType.Default, cancellationToken);
     }
 
-    public async Task<bool> PublishConfigAsync(string dataId, string group, string content, string type, 
+    public async Task<bool> PublishConfigAsync(string dataId, string group, string content, string type,
         CancellationToken cancellationToken = default)
     {
         group = GetGroupOrDefault(group);
@@ -248,7 +230,7 @@ public class NacosConfigService : IConfigService
         return await PublishConfigAsync(dataId, group, content, type, cancellationToken);
     }
 
-    public async Task<bool> RemoveConfigAsync(string dataId, string group, 
+    public async Task<bool> RemoveConfigAsync(string dataId, string group,
         CancellationToken cancellationToken = default)
     {
         group = GetGroupOrDefault(group);
@@ -301,48 +283,45 @@ public class NacosConfigService : IConfigService
 
     #region Fuzzy Watch
 
-    public Task FuzzyWatchAsync(string groupNamePattern, IConfigFuzzyWatchEventWatcher watcher, 
+    public Task FuzzyWatchAsync(string groupNamePattern, IConfigFuzzyWatchEventWatcher watcher,
         CancellationToken cancellationToken = default)
     {
         return FuzzyWatchAsync("*", groupNamePattern, watcher, cancellationToken);
     }
 
-    public Task FuzzyWatchAsync(string dataIdPattern, string groupNamePattern, IConfigFuzzyWatchEventWatcher watcher, 
+    public Task FuzzyWatchAsync(string dataIdPattern, string groupNamePattern, IConfigFuzzyWatchEventWatcher watcher,
         CancellationToken cancellationToken = default)
     {
-        _fuzzyWatchManager.AddWatcher(dataIdPattern, groupNamePattern, GetTenant() ?? "", watcher);
-        _logger?.LogDebug("Added fuzzy watch for dataId={DataIdPattern}, group={GroupPattern}", 
-            dataIdPattern, groupNamePattern);
-        return Task.CompletedTask;
+        throw new NotSupportedException("Fuzzy Watch requires the gRPC service in Nacos 3.2.4.");
     }
 
-    public Task<ISet<string>> FuzzyWatchWithGroupKeysAsync(string groupNamePattern, 
+    public Task<ISet<string>> FuzzyWatchWithGroupKeysAsync(string groupNamePattern,
         IConfigFuzzyWatchEventWatcher watcher, CancellationToken cancellationToken = default)
     {
         return FuzzyWatchWithGroupKeysAsync("*", groupNamePattern, watcher, cancellationToken);
     }
 
-    public async Task<ISet<string>> FuzzyWatchWithGroupKeysAsync(string dataIdPattern, string groupNamePattern, 
+    public async Task<ISet<string>> FuzzyWatchWithGroupKeysAsync(string dataIdPattern, string groupNamePattern,
         IConfigFuzzyWatchEventWatcher watcher, CancellationToken cancellationToken = default)
     {
         await FuzzyWatchAsync(dataIdPattern, groupNamePattern, watcher, cancellationToken);
-        
+
         // Return current matching keys
         var matchingKeys = _fuzzyWatchManager.GetMatchingKeys(dataIdPattern, groupNamePattern, GetTenant() ?? "");
         return matchingKeys;
     }
 
-    public Task CancelFuzzyWatchAsync(string groupNamePattern, IConfigFuzzyWatchEventWatcher watcher, 
+    public Task CancelFuzzyWatchAsync(string groupNamePattern, IConfigFuzzyWatchEventWatcher watcher,
         CancellationToken cancellationToken = default)
     {
         return CancelFuzzyWatchAsync("*", groupNamePattern, watcher, cancellationToken);
     }
 
-    public Task CancelFuzzyWatchAsync(string dataIdPattern, string groupNamePattern, 
+    public Task CancelFuzzyWatchAsync(string dataIdPattern, string groupNamePattern,
         IConfigFuzzyWatchEventWatcher watcher, CancellationToken cancellationToken = default)
     {
         _fuzzyWatchManager.RemoveWatcher(dataIdPattern, groupNamePattern, GetTenant() ?? "", watcher);
-        _logger?.LogDebug("Cancelled fuzzy watch for dataId={DataIdPattern}, group={GroupPattern}", 
+        _logger?.LogDebug("Cancelled fuzzy watch for dataId={DataIdPattern}, group={GroupPattern}",
             dataIdPattern, groupNamePattern);
         return Task.CompletedTask;
     }
@@ -442,7 +421,7 @@ public class NacosConfigService : IConfigService
 
     #region Filter Chain Methods
 
-    private async Task<string?> ApplyGetFilterAsync(string dataId, string group, string? content, 
+    private async Task<string?> ApplyGetFilterAsync(string dataId, string group, string? content,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(content) || !_filterChainManager.HasFilters)
@@ -511,7 +490,7 @@ public class NacosConfigService : IConfigService
     public async ValueTask DisposeAsync()
     {
         if (_disposed) return;
-        
+
         await _cts.CancelAsync();
         _cts.Dispose();
         _httpClient.Dispose();

@@ -1,7 +1,7 @@
-using RedNb.Nacos.Core.Config.Filter;
-using RedNb.Nacos.Core.Config.FuzzyWatch;
+using RedNb.Nacos.Config.Filter;
+using RedNb.Nacos.Config.FuzzyWatch;
 
-namespace RedNb.Nacos.Core.Config;
+namespace RedNb.Nacos.Config;
 
 /// <summary>
 /// Config service interface for configuration management.

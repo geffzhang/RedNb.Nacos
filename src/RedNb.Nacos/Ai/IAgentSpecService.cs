@@ -1,7 +1,7 @@
-using RedNb.Nacos.Core.Ai.Model;
-using RedNb.Nacos.Core.Ai.Model.AgentSpec;
+using RedNb.Nacos.Ai.Models;
+using RedNb.Nacos.Ai.Models.AgentSpec;
 
-namespace RedNb.Nacos.Core.Ai;
+namespace RedNb.Nacos.Ai;
 
 /// <summary>
 /// Nacos AI AgentSpec client service interface.
@@ -18,7 +18,7 @@ public interface IAgentSpecService
     /// <param name="agentSpecName">Name of the AgentSpec.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The AgentSpec, or null when not found.</returns>
-    Task<Model.AgentSpec.AgentSpec?> GetAgentSpecAsync(string agentSpecName, CancellationToken cancellationToken = default);
+    Task<Models.AgentSpec.AgentSpec?> GetAgentSpecAsync(string agentSpecName, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets a specific version of an AgentSpec.
@@ -27,7 +27,7 @@ public interface IAgentSpecService
     /// <param name="version">Target version (null or empty for latest).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The AgentSpec, or null when not found.</returns>
-    Task<Model.AgentSpec.AgentSpec?> GetAgentSpecAsync(string agentSpecName, string? version, CancellationToken cancellationToken = default);
+    Task<Models.AgentSpec.AgentSpec?> GetAgentSpecAsync(string agentSpecName, string? version, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the AgentSpec version bound to a label, such as stable or canary.
@@ -36,7 +36,7 @@ public interface IAgentSpecService
     /// <param name="label">Label name.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The AgentSpec, or null when not found.</returns>
-    Task<Model.AgentSpec.AgentSpec?> GetAgentSpecByLabelAsync(string agentSpecName, string label, CancellationToken cancellationToken = default);
+    Task<Models.AgentSpec.AgentSpec?> GetAgentSpecByLabelAsync(string agentSpecName, string label, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Searches AgentSpecs with pagination (client API).
@@ -63,7 +63,7 @@ public interface IAgentSpecService
     /// <param name="listener">Callback listener for AgentSpec changes.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Current AgentSpec when subscription succeeds.</returns>
-    Task<Model.AgentSpec.AgentSpec?> SubscribeAgentSpecAsync(string agentSpecName, AbstractNacosAgentSpecListener listener, CancellationToken cancellationToken = default);
+    Task<Models.AgentSpec.AgentSpec?> SubscribeAgentSpecAsync(string agentSpecName, AbstractNacosAgentSpecListener listener, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Subscribes to an AgentSpec for a specific version or label.
@@ -74,7 +74,7 @@ public interface IAgentSpecService
     /// <param name="listener">Callback listener for AgentSpec changes.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Current AgentSpec when subscription succeeds.</returns>
-    Task<Model.AgentSpec.AgentSpec?> SubscribeAgentSpecAsync(string agentSpecName, string? version, string? label, AbstractNacosAgentSpecListener listener, CancellationToken cancellationToken = default);
+    Task<Models.AgentSpec.AgentSpec?> SubscribeAgentSpecAsync(string agentSpecName, string? version, string? label, AbstractNacosAgentSpecListener listener, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Unsubscribes from an AgentSpec for the latest version.
@@ -129,7 +129,7 @@ public interface IAgentSpecService
     /// <param name="version">Target version (null or empty for latest).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>AgentSpec detail.</returns>
-    Task<Model.AgentSpec.AgentSpec?> GetAgentSpecDetailAsync(string agentSpecName, string? version = null, CancellationToken cancellationToken = default);
+    Task<Models.AgentSpec.AgentSpec?> GetAgentSpecDetailAsync(string agentSpecName, string? version = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Uploads an AgentSpec file package.
@@ -152,7 +152,7 @@ public interface IAgentSpecService
     /// <param name="targetVersion">Target draft version (optional).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     Task CreateAgentSpecDraftAsync(
-        Model.AgentSpec.AgentSpec agentSpec,
+        Models.AgentSpec.AgentSpec agentSpec,
         string? basedOnVersion = null,
         string? targetVersion = null,
         CancellationToken cancellationToken = default);
@@ -165,7 +165,7 @@ public interface IAgentSpecService
     /// <param name="setAsLatest">Whether to set the draft as latest.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     Task UpdateAgentSpecDraftAsync(
-        Model.AgentSpec.AgentSpec agentSpec,
+        Models.AgentSpec.AgentSpec agentSpec,
         string version,
         bool setAsLatest = false,
         CancellationToken cancellationToken = default);

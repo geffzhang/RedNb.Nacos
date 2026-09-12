@@ -1,7 +1,7 @@
 using FluentAssertions;
-using RedNb.Nacos.Client.Naming;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos.Http.Naming;
+using RedNb.Nacos;
+using RedNb.Nacos.Naming;
 using Xunit;
 
 namespace RedNb.Nacos.Http.Tests.Naming;

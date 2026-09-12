@@ -1,4 +1,4 @@
-namespace RedNb.Nacos.Core.Lock;
+namespace RedNb.Nacos.Lock;
 
 /// <summary>
 /// Constants for distributed lock service.

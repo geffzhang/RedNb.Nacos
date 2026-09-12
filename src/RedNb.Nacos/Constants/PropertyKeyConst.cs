@@ -1,4 +1,4 @@
-namespace RedNb.Nacos.Core;
+namespace RedNb.Nacos;
 
 /// <summary>
 /// Property key constants for Nacos client configuration.

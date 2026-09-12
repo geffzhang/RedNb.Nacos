@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace RedNb.Nacos.Core.Naming;
+namespace RedNb.Nacos.Naming;
 
 /// <summary>
 /// Service information with instances, used in data pushing and cached for nacos-client.

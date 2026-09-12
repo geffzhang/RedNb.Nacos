@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos.Naming;
 
 namespace RedNb.Nacos.AspNetCore.ServiceRegistry;
 

@@ -1,7 +1,7 @@
 using System.Text.Json;
-using RedNb.Nacos.Core.Ai.Model.AgentSpec;
-using RedNb.Nacos.Core.Ai.Model.Prompt;
-using RedNb.Nacos.Core.Ai.Model.Skills;
+using RedNb.Nacos.Ai.Models.AgentSpec;
+using RedNb.Nacos.Ai.Models.Prompt;
+using RedNb.Nacos.Ai.Models.Skill;
 using Xunit;
 
 namespace RedNb.Nacos.Tests.Ai;
@@ -22,7 +22,7 @@ public class AiRegistryModelTests
     [Fact]
     public void Prompt_SerializesCorrectly()
     {
-        var prompt = new RedNb.Nacos.Core.Ai.Model.Prompt.Prompt
+        var prompt = new RedNb.Nacos.Ai.Models.Prompt.Prompt
         {
             PromptKey = "code-review",
             Version = "1.0.0",
@@ -35,7 +35,7 @@ public class AiRegistryModelTests
         };
 
         var json = JsonSerializer.Serialize(prompt, _jsonOptions);
-        var deserialized = JsonSerializer.Deserialize<RedNb.Nacos.Core.Ai.Model.Prompt.Prompt>(json, _jsonOptions);
+        var deserialized = JsonSerializer.Deserialize<RedNb.Nacos.Ai.Models.Prompt.Prompt>(json, _jsonOptions);
 
         Assert.NotNull(deserialized);
         Assert.Equal("code-review", deserialized.PromptKey);
@@ -60,7 +60,7 @@ public class AiRegistryModelTests
         }
         """;
 
-        var prompt = JsonSerializer.Deserialize<RedNb.Nacos.Core.Ai.Model.Prompt.Prompt>(json, _jsonOptions);
+        var prompt = JsonSerializer.Deserialize<RedNb.Nacos.Ai.Models.Prompt.Prompt>(json, _jsonOptions);
 
         Assert.NotNull(prompt);
         Assert.Equal("assistant", prompt.PromptKey);
@@ -72,7 +72,7 @@ public class AiRegistryModelTests
     [Fact]
     public void Prompt_Render_ReplacesVariables()
     {
-        var prompt = new RedNb.Nacos.Core.Ai.Model.Prompt.Prompt
+        var prompt = new RedNb.Nacos.Ai.Models.Prompt.Prompt
         {
             Template = "Hello {{name}}, welcome to {{place}}",
             Variables = new List<PromptVariable>
@@ -114,7 +114,7 @@ public class AiRegistryModelTests
     [Fact]
     public void NacosPromptEvent_ExposesPromptProperties()
     {
-        var prompt = new RedNb.Nacos.Core.Ai.Model.Prompt.Prompt { PromptKey = "p1", Version = "1.0.0" };
+        var prompt = new RedNb.Nacos.Ai.Models.Prompt.Prompt { PromptKey = "p1", Version = "1.0.0" };
         var evt = new NacosPromptEvent(prompt);
 
         Assert.Equal("p1", evt.PromptKey);
@@ -191,7 +191,7 @@ public class AiRegistryModelTests
     [Fact]
     public void AgentSpec_SerializesCorrectly()
     {
-        var agentSpec = new RedNb.Nacos.Core.Ai.Model.AgentSpec.AgentSpec
+        var agentSpec = new RedNb.Nacos.Ai.Models.AgentSpec.AgentSpec
         {
             NamespaceId = "public",
             Name = "travel-agent",
@@ -205,7 +205,7 @@ public class AiRegistryModelTests
         };
 
         var json = JsonSerializer.Serialize(agentSpec, _jsonOptions);
-        var deserialized = JsonSerializer.Deserialize<RedNb.Nacos.Core.Ai.Model.AgentSpec.AgentSpec>(json, _jsonOptions);
+        var deserialized = JsonSerializer.Deserialize<RedNb.Nacos.Ai.Models.AgentSpec.AgentSpec>(json, _jsonOptions);
 
         Assert.NotNull(deserialized);
         Assert.Equal("travel-agent", deserialized.Name);
@@ -238,7 +238,7 @@ public class AiRegistryModelTests
     [Fact]
     public void NacosAgentSpecEvent_ExposesResolvedVersion()
     {
-        var agentSpec = new RedNb.Nacos.Core.Ai.Model.AgentSpec.AgentSpec { Name = "a1" };
+        var agentSpec = new RedNb.Nacos.Ai.Models.AgentSpec.AgentSpec { Name = "a1" };
         var evt = new NacosAgentSpecEvent(agentSpec, "3.0.0");
 
         Assert.Equal("a1", evt.Name);

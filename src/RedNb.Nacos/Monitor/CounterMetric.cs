@@ -1,7 +1,7 @@
 namespace RedNb.Nacos.Monitor;
 
 /// <summary>
-/// Counter Ö¸±ê£¨ÀÛ»ı¼ÆÊıÆ÷£©
+/// Counter æŒ‡æ ‡ï¼ˆç´¯ç§¯è®¡æ•°å™¨ï¼‰
 /// </summary>
 public class CounterMetric
 {
@@ -9,22 +9,22 @@ public class CounterMetric
     private readonly object _lockObj = new();
 
     /// <summary>
-    /// Ö¸±êÃû³Æ
+    /// æŒ‡æ ‡åç§°
     /// </summary>
     public string Name { get; }
 
     /// <summary>
-    /// Ö¸±êÃèÊö
+    /// æŒ‡æ ‡æè¿°
     /// </summary>
     public string Description { get; }
 
     /// <summary>
-    /// ±êÇ©
+    /// æ ‡ç­¾
     /// </summary>
     public IReadOnlyDictionary<string, string>? Labels { get; }
 
     /// <summary>
-    /// µ±Ç°Öµ
+    /// å½“å‰å€¼
     /// </summary>
     public double Value
     {
@@ -35,7 +35,7 @@ public class CounterMetric
     }
 
     /// <summary>
-    /// ¹¹Ôìº¯Êı
+    /// æ„é€ å‡½æ•°
     /// </summary>
     public CounterMetric(string name, string description, IDictionary<string, string>? labels = null)
     {
@@ -45,7 +45,7 @@ public class CounterMetric
     }
 
     /// <summary>
-    /// Ôö¼Ó¼ÆÊı
+    /// å¢åŠ è®¡æ•°
     /// </summary>
     public void Increase(double value = 1)
     {
@@ -58,7 +58,7 @@ public class CounterMetric
     }
 
     /// <summary>
-    /// ÖØÖÃ¼ÆÊıÆ÷
+    /// é‡ç½®è®¡æ•°å™¨
     /// </summary>
     public void Reset()
     {
@@ -66,7 +66,7 @@ public class CounterMetric
     }
 
     /// <summary>
-    /// »ñÈ¡¿ìÕÕ
+    /// è·å–å¿«ç…§
     /// </summary>
     public CounterSnapshot GetSnapshot()
     {
@@ -81,7 +81,7 @@ public class CounterMetric
 }
 
 /// <summary>
-/// Counter ¿ìÕÕ
+/// Counter å¿«ç…§
 /// </summary>
 public class CounterSnapshot
 {

@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
-using RedNb.Nacos.Core.Config;
+using RedNb.Nacos.Config;
 using RedNb.Nacos.Utils;
 
-namespace RedNb.Nacos.Client.Config;
+namespace RedNb.Nacos.Http.Config;
 
 /// <summary>
 /// Manages config listeners and their states.

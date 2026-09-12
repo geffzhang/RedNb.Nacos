@@ -1,5 +1,5 @@
-using RedNb.Nacos.Core;
-using RedNb.Nacos.GrpcClient;
+using RedNb.Nacos;
+using RedNb.Nacos.Grpc;
 
 namespace RedNb.Nacos.Grpc.Tests;
 
@@ -7,8 +7,8 @@ namespace RedNb.Nacos.Grpc.Tests;
 /// Hand-rolled test double for <see cref="NacosGrpcClient"/>.
 ///
 /// Subclasses <see cref="NacosGrpcClient"/> and overrides the virtual seam methods
-/// (<see cref="RequestAsync{TResponse}"/>, <see cref="SendStreamRequestAsync"/>,
-/// <see cref="SendStreamRequestWithResponseAsync{TResponse}"/>,
+/// (<see cref="RequestAsync{TResponse}"/>, <see cref="SendRequestAsync"/>,
+/// <see cref="SendRequestWithResponseAsync{TResponse}"/>,
 /// <see cref="RegisterPushHandler"/>, and <see cref="ConnectAsync"/>) to capture
 /// every dispatched frame and the registered push handler, returning a
 /// configurable fake response for the unary request path. No real gRPC
@@ -29,8 +29,8 @@ internal sealed class FakeNacosGrpcClient : NacosGrpcClient
 
     /// <summary>
     /// Captures every stream-mode dispatch
-    /// (<see cref="SendStreamRequestAsync"/> and
-    /// <see cref="SendStreamRequestWithResponseAsync{TResponse}"/>),
+    /// (<see cref="SendRequestAsync"/> and
+    /// <see cref="SendRequestWithResponseAsync{TResponse}"/>),
     /// paired with the type and request body.
     /// </summary>
     public List<(string type, object request)> StreamCalls { get; } = new();
@@ -68,6 +68,12 @@ internal sealed class FakeNacosGrpcClient : NacosGrpcClient
     {
         Captured.Add((type, request));
 
+        if (request is RedNb.Nacos.Grpc.Naming.NamingFuzzyWatchRequest namingWatch)
+        {
+            EmitFuzzySync("NamingFuzzyWatchSyncRequest", namingWatch.GroupKeyPattern);
+            return Task.FromResult(Response as TResponse ?? (new RedNb.Nacos.Grpc.Naming.NamingFuzzyWatchResponse { ResultCode = 200 } as TResponse));
+        }
+
         if (Response is TResponse typed)
         {
             return Task.FromResult<TResponse?>(typed);
@@ -76,18 +82,30 @@ internal sealed class FakeNacosGrpcClient : NacosGrpcClient
         return Task.FromResult<TResponse?>(null);
     }
 
-    public override Task SendStreamRequestAsync(string type, object request,
+    public override Task SendRequestAsync(string type, object request,
         CancellationToken cancellationToken = default)
     {
         StreamCalls.Add((type, request));
         return Task.CompletedTask;
     }
 
-    public override Task<TResponse?> SendStreamRequestWithResponseAsync<TResponse>(string type, object request,
+    public override Task<TResponse?> SendRequestWithResponseAsync<TResponse>(string type, object request,
         TimeSpan timeout, CancellationToken cancellationToken = default) where TResponse : class
     {
         StreamCalls.Add((type, request));
-        return Task.FromResult<TResponse?>(default);
+        if (request is RedNb.Nacos.Grpc.Config.ConfigFuzzyWatchRequest watch)
+        {
+            EmitFuzzySync("ConfigFuzzyWatchSyncRequest", watch.GroupKeyPattern);
+            return Task.FromResult(Response as TResponse ?? (new RedNb.Nacos.Grpc.Config.ConfigFuzzyWatchResponse { ResultCode = 200 } as TResponse));
+        }
+        return Task.FromResult(Response as TResponse ??
+            (new RedNb.Nacos.Grpc.Config.ConfigBatchListenResponse { ResultCode = 200 } as TResponse));
+    }
+
+    private void EmitFuzzySync(string type, string pattern)
+    {
+        var body = System.Text.Json.JsonSerializer.Serialize(new { groupKeyPattern = pattern, syncType = "FINISH_FUZZY_WATCH_INIT_NOTIFY" });
+        foreach (var handler in PushHandlers.Values) handler(type, body);
     }
 
     public override void RegisterPushHandler(string handlerId, Action<string, string> handler)

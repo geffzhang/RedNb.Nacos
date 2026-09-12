@@ -1,4 +1,4 @@
-namespace RedNb.Nacos.Core.Config.Filter;
+namespace RedNb.Nacos.Config.Filter;
 
 /// <summary>
 /// Config context interface for passing data between filters.

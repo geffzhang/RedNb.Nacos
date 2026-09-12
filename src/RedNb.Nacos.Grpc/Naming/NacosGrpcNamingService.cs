@@ -1,13 +1,13 @@
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Naming;
-using RedNb.Nacos.Core.Naming.FuzzyWatch;
-using RedNb.Nacos.Core.Naming.Selector;
+using RedNb.Nacos;
+using RedNb.Nacos.Naming;
+using RedNb.Nacos.Naming.FuzzyWatch;
+using RedNb.Nacos.Naming.Selector;
 using RedNb.Nacos.Utils;
 
-namespace RedNb.Nacos.GrpcClient.Naming;
+namespace RedNb.Nacos.Grpc.Naming;
 
 /// <summary>
 /// Nacos naming service implementation using gRPC.
@@ -35,9 +35,12 @@ public class NacosGrpcNamingService : INamingService
     private readonly CancellationTokenSource _cts;
     private Task? _updateTask;
 
+    private readonly SemaphoreSlim _registrationLock = new(1, 1);
     private bool _disposed;
     private bool _isHealthy;
     private bool _initialized;
+    private readonly SemaphoreSlim _initializationLock = new(1, 1);
+    private string? _lastRedoConnectionId;
 
     /// <summary>
     /// Update interval for service info (milliseconds).
@@ -67,16 +70,23 @@ public class NacosGrpcNamingService : INamingService
     /// </summary>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        if (_initialized) return;
+        await _initializationLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_initialized) return;
 
-        await _grpcClient.ConnectAsync(cancellationToken);
-        _isHealthy = true;
-        _initialized = true;
+            await _grpcClient.ConnectAsync(cancellationToken);
+            _lastRedoConnectionId = _grpcClient.ConnectionId;
+            _isHealthy = true;
+            _initialized = true;
 
-        // Start background update task
-        _updateTask = UpdateServiceInfoLoopAsync(_cts.Token);
+            // Start background update task
+            _updateTask = UpdateServiceInfoLoopAsync(_cts.Token);
 
-        _logger?.LogInformation("NacosGrpcNamingService initialized");
+            _logger?.LogInformation("NacosGrpcNamingService initialized");
+
+        }
+        finally { _initializationLock.Release(); }
     }
 
     #region Instance Registration
@@ -127,61 +137,73 @@ public class NacosGrpcNamingService : INamingService
     public async Task RegisterInstanceAsync(string serviceName, string groupName, Instance instance,
         CancellationToken cancellationToken = default)
     {
-        await EnsureInitializedAsync(cancellationToken);
-
-        instance.Validate();
-        groupName = GetGroupOrDefault(groupName);
-
-        var namingInstance = NamingServiceInfoHolder.MapToNamingInstance(instance);
-
-        bool success;
-        if (instance.Ephemeral)
+        await _registrationLock.WaitAsync(cancellationToken);
+        try
         {
-            success = await _transportClient.RegisterInstanceAsync(
-                serviceName, groupName, GetNamespace(), namingInstance, cancellationToken);
-        }
-        else
-        {
-            success = await _transportClient.RegisterPersistentInstanceAsync(
-                serviceName, groupName, GetNamespace(), namingInstance, cancellationToken);
-        }
+            await EnsureInitializedAsync(cancellationToken);
 
-        if (!success)
-        {
-            throw new NacosException(NacosException.ServerError,
-                $"Failed to register instance {instance.Ip}:{instance.Port}");
+            instance.Validate();
+            groupName = GetGroupOrDefault(groupName);
+
+            var namingInstance = NamingServiceInfoHolder.MapToNamingInstance(instance);
+
+            bool success;
+            if (instance.Ephemeral)
+            {
+                success = await _transportClient.RegisterInstanceAsync(
+                    serviceName, groupName, GetNamespace(), namingInstance, cancellationToken);
+            }
+            else
+            {
+                success = await _transportClient.RegisterPersistentInstanceAsync(
+                    serviceName, groupName, GetNamespace(), namingInstance, cancellationToken);
+            }
+
+            if (!success)
+            {
+                throw new NacosException(NacosException.ServerError,
+                    $"Failed to register instance {instance.Ip}:{instance.Port}");
+            }
+
+            // Cache for redo
+            _redoService.CacheRegisteredInstance(serviceName, groupName, instance);
+
+            _logger?.LogInformation("Registered instance {Ip}:{Port} for service {Service}@{Group}",
+                instance.Ip, instance.Port, serviceName, groupName);
+
         }
-
-        // Cache for redo
-        _redoService.CacheRegisteredInstance(serviceName, groupName, instance);
-
-        _logger?.LogInformation("Registered instance {Ip}:{Port} for service {Service}@{Group}",
-            instance.Ip, instance.Port, serviceName, groupName);
+        finally { _registrationLock.Release(); }
     }
 
     public async Task BatchRegisterInstanceAsync(string serviceName, string groupName,
         List<Instance> instances, CancellationToken cancellationToken = default)
     {
-        await EnsureInitializedAsync(cancellationToken);
-
-        groupName = GetGroupOrDefault(groupName);
-
-        var namingInstances = instances.Select(NamingServiceInfoHolder.MapToNamingInstance).ToList();
-
-        var success = await _transportClient.BatchRegisterInstanceAsync(
-            serviceName, groupName, GetNamespace(), namingInstances, cancellationToken);
-
-        if (!success)
+        await _registrationLock.WaitAsync(cancellationToken);
+        try
         {
-            throw new NacosException(NacosException.ServerError,
-                $"Failed to batch register {instances.Count} instances");
+            await EnsureInitializedAsync(cancellationToken);
+
+            groupName = GetGroupOrDefault(groupName);
+
+            var namingInstances = instances.Select(NamingServiceInfoHolder.MapToNamingInstance).ToList();
+
+            var success = await _transportClient.BatchRegisterInstanceAsync(
+                serviceName, groupName, GetNamespace(), namingInstances, cancellationToken);
+
+            if (!success)
+            {
+                throw new NacosException(NacosException.ServerError,
+                    $"Failed to batch register {instances.Count} instances");
+            }
+
+            // Cache for redo
+            _redoService.CacheBatchRegisteredInstances(serviceName, groupName, instances);
+
+            _logger?.LogInformation("Batch registered {Count} instances for service {Service}@{Group}",
+                instances.Count, serviceName, groupName);
+
         }
-
-        // Cache for redo
-        _redoService.CacheBatchRegisteredInstances(serviceName, groupName, instances);
-
-        _logger?.LogInformation("Batch registered {Count} instances for service {Service}@{Group}",
-            instances.Count, serviceName, groupName);
+        finally { _registrationLock.Release(); }
     }
 
     public async Task BatchDeregisterInstanceAsync(string serviceName, string groupName,
@@ -246,35 +268,41 @@ public class NacosGrpcNamingService : INamingService
     public async Task DeregisterInstanceAsync(string serviceName, string groupName, Instance instance,
         CancellationToken cancellationToken = default)
     {
-        await EnsureInitializedAsync(cancellationToken);
-
-        groupName = GetGroupOrDefault(groupName);
-
-        var namingInstance = NamingServiceInfoHolder.MapToNamingInstance(instance);
-
-        bool success;
-        if (instance.Ephemeral)
+        await _registrationLock.WaitAsync(cancellationToken);
+        try
         {
-            success = await _transportClient.DeregisterInstanceAsync(
-                serviceName, groupName, GetNamespace(), namingInstance, cancellationToken);
-        }
-        else
-        {
-            success = await _transportClient.DeregisterPersistentInstanceAsync(
-                serviceName, groupName, GetNamespace(), namingInstance, cancellationToken);
-        }
+            await EnsureInitializedAsync(cancellationToken);
 
-        if (!success)
-        {
-            throw new NacosException(NacosException.ServerError,
-                $"Failed to deregister instance {instance.Ip}:{instance.Port}");
+            groupName = GetGroupOrDefault(groupName);
+
+            var namingInstance = NamingServiceInfoHolder.MapToNamingInstance(instance);
+
+            bool success;
+            if (instance.Ephemeral)
+            {
+                success = await _transportClient.DeregisterInstanceAsync(
+                    serviceName, groupName, GetNamespace(), namingInstance, cancellationToken);
+            }
+            else
+            {
+                success = await _transportClient.DeregisterPersistentInstanceAsync(
+                    serviceName, groupName, GetNamespace(), namingInstance, cancellationToken);
+            }
+
+            if (!success)
+            {
+                throw new NacosException(NacosException.ServerError,
+                    $"Failed to deregister instance {instance.Ip}:{instance.Port}");
+            }
+
+            // Remove from redo cache
+            _redoService.RemoveRegisteredInstance(serviceName, groupName, instance);
+
+            _logger?.LogInformation("Deregistered instance {Ip}:{Port} from service {Service}@{Group}",
+                instance.Ip, instance.Port, serviceName, groupName);
+
         }
-
-        // Remove from redo cache
-        _redoService.RemoveRegisteredInstance(serviceName, groupName, instance);
-
-        _logger?.LogInformation("Deregistered instance {Ip}:{Port} from service {Service}@{Group}",
-            instance.Ip, instance.Port, serviceName, groupName);
+        finally { _registrationLock.Release(); }
     }
 
     #endregion
@@ -914,6 +942,16 @@ public class NacosGrpcNamingService : INamingService
                     continue;
                 }
 
+                if (_lastRedoConnectionId != _grpcClient.ConnectionId)
+                {
+                    await _registrationLock.WaitAsync(cancellationToken);
+                    try { await _redoService.RedoAsync(cancellationToken); }
+                    finally { _registrationLock.Release(); }
+                    foreach (var entry in _fuzzyWatchers.Values)
+                        await _transportClient.SendFuzzyWatchAsync(GetNamespace(), entry.ServiceNamePattern, entry.GroupNamePattern, cancellationToken: cancellationToken);
+                    _lastRedoConnectionId = _grpcClient.ConnectionId;
+                }
+
                 // Update all subscribed services
                 foreach (var data in _redoService.GetSubscribedServices())
                 {
@@ -1106,14 +1144,11 @@ public class NacosGrpcNamingService : INamingService
     }
 
     /// <summary>
-    /// The namespace sent to the server. Always non-null: Nacos 3.2.4's naming
-    /// handlers dereference the request namespace (<c>Service.equals</c>) and throw
-    /// an NPE for a null one — the Java client sends an empty string for the default
-    /// namespace, so an unset namespace is normalized to <c>""</c>.
+    /// The namespace sent to Nacos 3.2.4; public must match the fuzzy index namespace.
     /// </summary>
     private string GetNamespace()
     {
-        return string.IsNullOrWhiteSpace(_options.Namespace) ? string.Empty : _options.Namespace;
+        return string.IsNullOrWhiteSpace(_options.Namespace) ? NacosConstants.DefaultNamespace : _options.Namespace;
     }
 
     private static string GetServiceKey(string serviceName, string groupName, string? clusters)

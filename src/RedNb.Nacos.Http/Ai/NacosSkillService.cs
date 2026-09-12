@@ -1,14 +1,14 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Client.Http;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Ai;
-using RedNb.Nacos.Core.Ai.Model;
-using RedNb.Nacos.Core.Ai.Model.Skills;
+using RedNb.Nacos.Http.Transport;
+using RedNb.Nacos;
+using RedNb.Nacos.Ai;
+using RedNb.Nacos.Ai.Models;
+using RedNb.Nacos.Ai.Models.Skill;
 using RedNb.Nacos.Utils;
 
-namespace RedNb.Nacos.Client.Ai;
+namespace RedNb.Nacos.Http.Ai;
 
 /// <summary>
 /// Nacos AI Skill service implementation using HTTP.
@@ -28,6 +28,16 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
     private readonly object _listenerLock = new();
     private readonly CancellationTokenSource _cts = new();
     private bool _disposed;
+    private readonly object _pollLock = new();
+    private Task? _pollTask;
+    private void EnsurePolling()
+    {
+        lock (_pollLock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _pollTask ??= Task.Run(() => StartPollingAsync(_cts.Token));
+        }
+    }
 
     private const string ClientBasePath = "v3/client/ai/skills";
     private const string AdminBasePath = "v3/admin/ai/skills";
@@ -52,7 +62,7 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
         _logger = logger;
         _namespaceId = options.Namespace ?? string.Empty;
 
-        _ = StartPollingAsync(_cts.Token);
+
     }
 
     #region Skill Download
@@ -107,6 +117,7 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
     /// <inheritdoc />
     public async Task<SkillPackage?> SubscribeSkillAsync(string skillName, string? version, string? label, AbstractNacosSkillListener listener, CancellationToken cancellationToken = default)
     {
+        EnsurePolling();
         ValidateSkillName(skillName);
         if (listener == null)
         {
@@ -447,7 +458,9 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
     {
         if (_disposed) return;
 
+        _disposed = true;
         await _cts.CancelAsync();
+        if (_pollTask != null) await _pollTask;
         _cts.Dispose();
         lock (_listenerLock)
         {

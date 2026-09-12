@@ -1,16 +1,16 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Ai;
-using RedNb.Nacos.Core.Ai.Listener;
-using RedNb.Nacos.Core.Ai.Model;
-using RedNb.Nacos.Core.Ai.Model.A2a;
-using RedNb.Nacos.Core.Ai.Model.Mcp;
-using RedNb.Nacos.Core.Ai.Model.Mcp.Import;
-using RedNb.Nacos.Core.Ai.Model.Mcp.Validation;
+using RedNb.Nacos;
+using RedNb.Nacos.Ai;
+using RedNb.Nacos.Ai.Listener;
+using RedNb.Nacos.Ai.Models;
+using RedNb.Nacos.Ai.Models.A2a;
+using RedNb.Nacos.Ai.Models.Mcp;
+using RedNb.Nacos.Ai.Models.Mcp.Import;
+using RedNb.Nacos.Ai.Models.Mcp.Validation;
 
-namespace RedNb.Nacos.GrpcClient.Ai;
+namespace RedNb.Nacos.Grpc.Ai;
 
 /// <summary>
 /// Nacos AI service implementation using gRPC.
@@ -22,16 +22,16 @@ public partial class NacosGrpcAiService : IAiService
     private readonly NacosGrpcClient _grpcClient;
     private readonly ILogger<NacosGrpcAiService>? _logger;
     private readonly string _namespaceId;
-    private readonly RedNb.Nacos.Client.Http.NacosHttpClient _registryHttpClient;
-    private readonly RedNb.Nacos.Client.Ai.NacosPromptService _promptService;
-    private readonly RedNb.Nacos.Client.Ai.NacosSkillService _skillService;
-    private readonly RedNb.Nacos.Client.Ai.NacosAgentSpecService _agentSpecService;
-    
+    private readonly RedNb.Nacos.Http.Transport.NacosHttpClient _registryHttpClient;
+    private readonly RedNb.Nacos.Http.Ai.NacosPromptService _promptService;
+    private readonly RedNb.Nacos.Http.Ai.NacosSkillService _skillService;
+    private readonly RedNb.Nacos.Http.Ai.NacosAgentSpecService _agentSpecService;
+
     private readonly ConcurrentDictionary<string, McpServerDetailInfo?> _mcpCache = new();
     private readonly ConcurrentDictionary<string, AgentCardDetailInfo?> _agentCache = new();
     private readonly ConcurrentDictionary<string, List<AbstractNacosMcpServerListener>> _mcpListeners = new();
     private readonly ConcurrentDictionary<string, List<AbstractNacosAgentCardListener>> _agentListeners = new();
-    
+
     private bool _disposed;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -60,14 +60,14 @@ public partial class NacosGrpcAiService : IAiService
         _options = options;
         _logger = logger;
         _grpcClient = grpcClient;
-        _namespaceId = options.Namespace ?? string.Empty;
+        _namespaceId = string.IsNullOrWhiteSpace(options.Namespace) ? NacosConstants.DefaultNamespace : options.Namespace;
 
         // Prompt / Skill / AgentSpec APIs are HTTP-only on the Nacos server side,
         // so they are served by dedicated HTTP services sharing one client.
-        _registryHttpClient = new RedNb.Nacos.Client.Http.NacosHttpClient(options, logger);
-        _promptService = new RedNb.Nacos.Client.Ai.NacosPromptService(_registryHttpClient, options, logger);
-        _skillService = new RedNb.Nacos.Client.Ai.NacosSkillService(_registryHttpClient, options, logger);
-        _agentSpecService = new RedNb.Nacos.Client.Ai.NacosAgentSpecService(_registryHttpClient, options, logger);
+        _registryHttpClient = new RedNb.Nacos.Http.Transport.NacosHttpClient(options, logger);
+        _promptService = new RedNb.Nacos.Http.Ai.NacosPromptService(_registryHttpClient, options, logger);
+        _skillService = new RedNb.Nacos.Http.Ai.NacosSkillService(_registryHttpClient, options, logger);
+        _agentSpecService = new RedNb.Nacos.Http.Ai.NacosAgentSpecService(_registryHttpClient, options, logger);
 
         // Register push handler
         _grpcClient.RegisterPushHandler(HandlePushMessage);
@@ -81,6 +81,9 @@ public partial class NacosGrpcAiService : IAiService
         await _grpcClient.ConnectAsync(cancellationToken);
         _logger?.LogInformation("NacosGrpcAiService initialized");
     }
+
+    internal string? ConnectionId => _grpcClient.ConnectionId;
+    internal bool IsConnected => _grpcClient.IsConnected;
 
     #region MCP Server Operations
 
@@ -461,7 +464,7 @@ public partial class NacosGrpcAiService : IAiService
             throw new NacosException(NacosException.ServerError, "Failed to register Agent endpoint");
         }
 
-        _logger?.LogInformation("Registered Agent endpoint {Address}:{Port} to {AgentName}", 
+        _logger?.LogInformation("Registered Agent endpoint {Address}:{Port} to {AgentName}",
             endpoint.Address, endpoint.Port, agentName);
     }
 
@@ -570,7 +573,7 @@ public partial class NacosGrpcAiService : IAiService
             throw new NacosException(NacosException.ServerError, "Failed to deregister Agent endpoint");
         }
 
-        _logger?.LogInformation("Deregistered Agent endpoint {Address}:{Port} from {AgentName}", 
+        _logger?.LogInformation("Deregistered Agent endpoint {Address}:{Port} from {AgentName}",
             endpoint.Address, endpoint.Port, agentName);
     }
 

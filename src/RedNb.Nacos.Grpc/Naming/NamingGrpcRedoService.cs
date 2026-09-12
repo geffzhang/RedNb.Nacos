@@ -1,8 +1,9 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos;
+using RedNb.Nacos.Naming;
 
-namespace RedNb.Nacos.GrpcClient.Naming;
+namespace RedNb.Nacos.Grpc.Naming;
 
 /// <summary>
 /// Manages redo operations for naming service after reconnection.
@@ -57,6 +58,13 @@ internal class NamingGrpcRedoService : IAsyncDisposable
     {
         var key = GetInstanceKey(serviceName, groupName, instance);
         _registeredInstances.TryRemove(key, out _);
+        var batchKey = GetServiceKey(serviceName, groupName);
+        if (_batchRegisteredInstances.TryGetValue(batchKey, out var batch))
+        {
+            var remaining = batch.Instances.Where(i => i.Ip != instance.Ip || i.Port != instance.Port || i.ClusterName != instance.ClusterName).ToList();
+            if (remaining.Count == 0) _batchRegisteredInstances.TryRemove(batchKey, out _);
+            else _batchRegisteredInstances[batchKey] = new BatchInstanceRedoData { ServiceName = serviceName, GroupName = groupName, Instances = remaining };
+        }
     }
 
     /// <summary>
@@ -162,9 +170,9 @@ internal class NamingGrpcRedoService : IAsyncDisposable
             try
             {
                 var data = kvp.Value;
-                var success = await _transportClient.RegisterInstanceAsync(
-                    data.ServiceName, data.GroupName, _namespace,
-                    data.Instance, cancellationToken);
+                var success = data.Instance.Ephemeral
+                    ? await _transportClient.RegisterInstanceAsync(data.ServiceName, data.GroupName, _namespace, data.Instance, cancellationToken)
+                    : await _transportClient.RegisterPersistentInstanceAsync(data.ServiceName, data.GroupName, _namespace, data.Instance, cancellationToken);
 
                 if (success)
                 {
@@ -173,13 +181,12 @@ internal class NamingGrpcRedoService : IAsyncDisposable
                 }
                 else
                 {
-                    _logger?.LogWarning("Redo: Failed to re-register instance {Ip}:{Port} for {Service}@{Group}",
-                        data.Instance.Ip, data.Instance.Port, data.ServiceName, data.GroupName);
+                    throw new NacosException(NacosException.ServerError, "Replay rejected");
                 }
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Redo: Error re-registering instance for key {Key}", kvp.Key);
+                throw new NacosException(NacosException.ServerError, "Registration replay failed", ex);
             }
         }
     }
@@ -202,13 +209,12 @@ internal class NamingGrpcRedoService : IAsyncDisposable
                 }
                 else
                 {
-                    _logger?.LogWarning("Redo: Failed to re-register batch instances for {Service}@{Group}",
-                        data.ServiceName, data.GroupName);
+                    throw new NacosException(NacosException.ServerError, "Replay rejected");
                 }
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Redo: Error re-registering batch instances for key {Key}", kvp.Key);
+                throw new NacosException(NacosException.ServerError, "Registration replay failed", ex);
             }
         }
     }
@@ -231,13 +237,12 @@ internal class NamingGrpcRedoService : IAsyncDisposable
                 }
                 else
                 {
-                    _logger?.LogWarning("Redo: Failed to re-subscribe to {Service}@{Group}",
-                        data.ServiceName, data.GroupName);
+                    throw new NacosException(NacosException.ServerError, "Replay rejected");
                 }
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Redo: Error re-subscribing to key {Key}", kvp.Key);
+                throw new NacosException(NacosException.ServerError, "Registration replay failed", ex);
             }
         }
     }
@@ -248,7 +253,7 @@ internal class NamingGrpcRedoService : IAsyncDisposable
 
     private static string GetInstanceKey(string serviceName, string groupName, Instance instance)
     {
-        return $"{groupName}@@{serviceName}@@{instance.Ip}@@{instance.Port}";
+        return $"{groupName}@@{serviceName}@@{instance.Ip}@@{instance.Port}@@{instance.ClusterName}";
     }
 
     private static string GetServiceKey(string serviceName, string groupName)

@@ -1,6 +1,6 @@
 using FluentAssertions;
-using RedNb.Nacos.Client.Http;
-using RedNb.Nacos.Core;
+using RedNb.Nacos.Http.Transport;
+using RedNb.Nacos;
 using Xunit;
 
 namespace RedNb.Nacos.Http.Tests;

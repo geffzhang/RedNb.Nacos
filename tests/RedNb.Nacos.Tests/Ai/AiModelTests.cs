@@ -1,6 +1,6 @@
-using RedNb.Nacos.Core.Ai;
-using RedNb.Nacos.Core.Ai.Model.A2a;
-using RedNb.Nacos.Core.Ai.Model.Mcp;
+using RedNb.Nacos.Ai;
+using RedNb.Nacos.Ai.Models.A2a;
+using RedNb.Nacos.Ai.Models.Mcp;
 using System.Text.Json;
 using Xunit;
 

@@ -1,329 +1,93 @@
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Lock;
-using RedNb.Nacos.GrpcClient;
-
+using RedNb.Nacos.Lock;
 namespace RedNb.Nacos.Grpc.Lock;
 
-/// <summary>
-/// gRPC implementation of the Nacos lock service.
-/// </summary>
-public class NacosGrpcLockService : ILockService
+/// <summary>Nacos 3.2.4 native mutex; no fencing or cross-process ownership guarantee is added.</summary>
+public sealed class NacosGrpcLockService : ILockService
 {
     private readonly NacosClientOptions _options;
-    private readonly NacosGrpcClient _grpcClient;
-    private readonly ILogger<NacosGrpcLockService>? _logger;
-    private readonly string _clientId;
-    private volatile bool _disposed;
-    private volatile string _serverStatus = "UP";
-
-    // Local lock tracking for reentrant support
-    private readonly Dictionary<string, int> _localLockCounts = new();
-    private readonly object _lockCountsLock = new();
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="NacosGrpcLockService"/> class.
-    /// </summary>
-    /// <param name="options">The Nacos client options.</param>
-    /// <param name="logger">The logger.</param>
+    private readonly NacosGrpcClient _client;
+    private readonly SemaphoreSlim _operations = new(1, 1);
+    private readonly Dictionary<string, (string Owner, DateTime Expires, string? Connection)> _leases = new();
+    private bool _disposed;
     public NacosGrpcLockService(NacosClientOptions options, ILogger<NacosGrpcLockService>? logger = null)
-    {
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _logger = logger;
-        _clientId = Guid.NewGuid().ToString("N");
-        _grpcClient = new NacosGrpcClient(options, logger);
-    }
-
-    /// <summary>
-    /// Initializes the gRPC connection.
-    /// </summary>
-    public async Task InitializeAsync(CancellationToken cancellationToken = default)
-    {
-        await _grpcClient.ConnectAsync(cancellationToken);
-        _logger?.LogInformation("Lock service gRPC connection established");
-    }
-
-    /// <inheritdoc/>
-    public async Task<bool> LockAsync(LockInstance instance, CancellationToken cancellationToken = default)
-    {
-        ThrowIfDisposed();
-        ValidateLockInstance(instance);
-
-        // Handle reentrant lock
-        if (instance.Reentrant)
-        {
-            lock (_lockCountsLock)
-            {
-                if (_localLockCounts.TryGetValue(instance.Key, out var count) && count > 0)
-                {
-                    _localLockCounts[instance.Key] = count + 1;
-                    _logger?.LogDebug("Reentrant lock acquired for key {Key}, count: {Count}", instance.Key, count + 1);
-                    return true;
-                }
-            }
-        }
-
-        return await RemoteTryLockAsync(instance, cancellationToken);
-    }
-
-    /// <inheritdoc/>
-    public async Task<bool> UnlockAsync(LockInstance instance, CancellationToken cancellationToken = default)
-    {
-        ThrowIfDisposed();
-        ValidateLockInstance(instance);
-
-        // Handle reentrant unlock
-        if (instance.Reentrant)
-        {
-            lock (_lockCountsLock)
-            {
-                if (_localLockCounts.TryGetValue(instance.Key, out var count))
-                {
-                    if (count > 1)
-                    {
-                        _localLockCounts[instance.Key] = count - 1;
-                        _logger?.LogDebug("Reentrant lock count decreased for key {Key}, count: {Count}", instance.Key, count - 1);
-                        return true;
-                    }
-                }
-            }
-        }
-
-        return await RemoteReleaseLockAsync(instance, cancellationToken);
-    }
-
-    /// <inheritdoc/>
+    { options.Validate(); _options = options; _client = new NacosGrpcClient(options, logger, "lock"); }
+    public Task InitializeAsync(CancellationToken cancellationToken = default) => _client.ConnectAsync(cancellationToken);
+    public Task<bool> LockAsync(LockInstance instance, CancellationToken cancellationToken = default) => RemoteTryLockAsync(instance, cancellationToken);
+    public Task<bool> UnlockAsync(LockInstance instance, CancellationToken cancellationToken = default) => RemoteReleaseLockAsync(instance, cancellationToken);
     public async Task<bool> TryLockAsync(LockInstance instance, TimeSpan timeout, CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
-        ValidateLockInstance(instance);
-
-        var deadline = DateTime.UtcNow.Add(timeout);
-        var retryInterval = TimeSpan.FromMilliseconds(LockConstants.RetryInterval);
-
-        while (DateTime.UtcNow < deadline)
+        var deadline = DateTime.UtcNow + timeout;
+        do
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (await LockAsync(instance, cancellationToken))
-            {
-                return true;
-            }
-
-            // Wait before retrying
-            var remainingTime = deadline - DateTime.UtcNow;
-            if (remainingTime <= TimeSpan.Zero)
-            {
-                break;
-            }
-
-            var waitTime = remainingTime < retryInterval ? remainingTime : retryInterval;
-            await Task.Delay(waitTime, cancellationToken);
-        }
-
-        _logger?.LogWarning("Failed to acquire lock for key {Key} within timeout {Timeout}", instance.Key, timeout);
+            if (await RemoteTryLockAsync(instance, cancellationToken)) return true;
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero) return false;
+            await Task.Delay(remaining < TimeSpan.FromMilliseconds(100) ? remaining : TimeSpan.FromMilliseconds(100), cancellationToken);
+        } while (DateTime.UtcNow < deadline);
         return false;
     }
-
-    /// <inheritdoc/>
     public async Task<bool> RemoteTryLockAsync(LockInstance instance, CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
-        ValidateLockInstance(instance);
-
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(instance);
+        ArgumentException.ThrowIfNullOrWhiteSpace(instance.Key);
+        if (instance.Reentrant) throw new NotSupportedException("The native Nacos mutex is not reentrant.");
+        await _operations.WaitAsync(cancellationToken);
         try
         {
-            instance.Owner ??= _clientId;
-            instance.NamespaceId ??= _options.Namespace;
-            instance.AcquireTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
-            if (instance.ExpireTime <= 0)
+            await _client.ConnectAsync(cancellationToken);
+            var ttl = instance.ExpireTime > 0 ? instance.ExpireTime : LockConstants.DefaultExpireTime;
+            var expires = DateTime.UtcNow.AddMilliseconds(ttl);
+            var acquired = await Execute(instance, "ACQUIRE", ttl, cancellationToken);
+            if (acquired)
             {
-                instance.ExpireTime = LockConstants.DefaultExpireTime;
+                instance.Owner ??= Guid.NewGuid().ToString("N");
+                _leases[Key(instance)] = (instance.Owner, expires, _client.ConnectionId);
             }
-
-            var request = new LockAcquireRequest
-            {
-                Key = instance.Key,
-                ExpireTime = instance.ExpireTime,
-                LockType = instance.LockType,
-                NamespaceId = instance.NamespaceId,
-                Owner = instance.Owner,
-                Params = instance.Params
-            };
-
-            var response = await _grpcClient.RequestAsync<LockAcquireResponse>(
-                LockConstants.GrpcLockAcquireType, request, cancellationToken);
-
-            if (response?.Success == true)
-            {
-                lock (_lockCountsLock)
-                {
-                    _localLockCounts[instance.Key] = 1;
-                }
-                _logger?.LogInformation("Lock acquired successfully for key {Key}", instance.Key);
-                return true;
-            }
-
-            _logger?.LogWarning("Failed to acquire lock for key {Key}: {Message}", instance.Key, response?.Message);
-            return false;
+            return acquired;
         }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, "Error acquiring lock for key {Key}", instance.Key);
-            throw new NacosException(NacosException.ServerError, $"Failed to acquire lock: {ex.Message}", ex);
-        }
+        finally { _operations.Release(); }
     }
-
-    /// <inheritdoc/>
     public async Task<bool> RemoteReleaseLockAsync(LockInstance instance, CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
-        ValidateLockInstance(instance);
-
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(instance);
+        await _operations.WaitAsync(cancellationToken);
         try
         {
-            instance.Owner ??= _clientId;
-            instance.NamespaceId ??= _options.Namespace;
-
-            var request = new LockReleaseRequest
-            {
-                Key = instance.Key,
-                LockType = instance.LockType,
-                NamespaceId = instance.NamespaceId,
-                Owner = instance.Owner
-            };
-
-            var response = await _grpcClient.RequestAsync<LockReleaseResponse>(
-                LockConstants.GrpcLockReleaseType, request, cancellationToken);
-
-            if (response?.Success == true)
-            {
-                lock (_lockCountsLock)
-                {
-                    _localLockCounts.Remove(instance.Key);
-                }
-                _logger?.LogInformation("Lock released successfully for key {Key}", instance.Key);
-                return true;
-            }
-
-            _logger?.LogWarning("Failed to release lock for key {Key}: {Message}", instance.Key, response?.Message);
-            return false;
+            await _client.ConnectAsync(cancellationToken);
+            var key = Key(instance);
+            if (!_leases.TryGetValue(key, out var lease) || lease.Owner != instance.Owner ||
+                lease.Expires <= DateTime.UtcNow || lease.Connection != _client.ConnectionId) return false;
+            var released = await Execute(instance, "RELEASE", 0, cancellationToken);
+            if (released) _leases.Remove(key);
+            return released;
         }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, "Error releasing lock for key {Key}", instance.Key);
-            throw new NacosException(NacosException.ServerError, $"Failed to release lock: {ex.Message}", ex);
-        }
+        finally { _operations.Release(); }
     }
-
-    /// <inheritdoc/>
-    public string GetServerStatus()
+    private string Key(LockInstance instance)
+        => (string.IsNullOrWhiteSpace(instance.NamespaceId ?? _options.Namespace) ? "public" : instance.NamespaceId ?? _options.Namespace) + "@@" + instance.Key;
+    private async Task<bool> Execute(LockInstance instance, string operation, long ttl, CancellationToken ct)
     {
-        return _serverStatus;
+        var response = await _client.RequestAsync<LockResponse>("LockOperationRequest", new
+        {
+            lockOperationEnum = operation,
+            lockInstance = new { key = Key(instance), expiredTime = ttl, lockType = instance.LockType == "nacos" ? "NACOS_LOCK" : instance.LockType, @params = instance.Params }
+        }, ct);
+        if (response?.ResultCode != 200)
+            throw new NacosException(response?.ErrorCode ?? NacosException.ServerError, response?.Message ?? "Lock operation failed");
+        return response.Result;
     }
-
-    /// <inheritdoc/>
-    public async Task ShutdownAsync(CancellationToken cancellationToken = default)
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _logger?.LogInformation("Shutting down gRPC lock service...");
-
-        // Release all held locks
-        List<string> keysToRelease;
-        lock (_lockCountsLock)
-        {
-            keysToRelease = _localLockCounts.Keys.ToList();
-        }
-
-        foreach (var key in keysToRelease)
-        {
-            try
-            {
-                var instance = new LockInstance { Key = key, Owner = _clientId };
-                await UnlockAsync(instance, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogWarning(ex, "Failed to release lock {Key} during shutdown", key);
-            }
-        }
-
-        _serverStatus = "DOWN";
-        _disposed = true;
-
-        _logger?.LogInformation("gRPC lock service shutdown completed");
-    }
-
-    /// <inheritdoc/>
+    public string GetServerStatus() => !_disposed && _client.IsConnected ? "UP" : "DOWN";
+    public async Task ShutdownAsync(CancellationToken cancellationToken = default) => await DisposeAsync();
     public async ValueTask DisposeAsync()
+    { if (_disposed) return; _disposed = true; await _client.DisposeAsync(); _leases.Clear(); }
+    private sealed class LockResponse
     {
-        if (!_disposed)
-        {
-            await ShutdownAsync();
-            await _grpcClient.DisposeAsync();
-        }
-        GC.SuppressFinalize(this);
-    }
-
-    private void ValidateLockInstance(LockInstance instance)
-    {
-        if (instance == null)
-        {
-            throw new ArgumentNullException(nameof(instance));
-        }
-
-        if (string.IsNullOrWhiteSpace(instance.Key))
-        {
-            throw new ArgumentException("Lock key cannot be null or empty", nameof(instance));
-        }
-    }
-
-    private void ThrowIfDisposed()
-    {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(NacosGrpcLockService));
-        }
-    }
-
-    #region gRPC Request/Response Models
-
-    private class LockAcquireRequest
-    {
-        public string Key { get; set; } = string.Empty;
-        public long ExpireTime { get; set; }
-        public string LockType { get; set; } = LockConstants.DefaultLockType;
-        public string? NamespaceId { get; set; }
-        public string? Owner { get; set; }
-        public Dictionary<string, object>? Params { get; set; }
-    }
-
-    private class LockAcquireResponse
-    {
-        public bool Success { get; set; }
+        public int ResultCode { get; set; }
+        public int ErrorCode { get; set; }
         public string? Message { get; set; }
-        public string? CurrentOwner { get; set; }
-        public long RemainingTtl { get; set; }
+        public bool Result { get; set; }
     }
-
-    private class LockReleaseRequest
-    {
-        public string Key { get; set; } = string.Empty;
-        public string LockType { get; set; } = LockConstants.DefaultLockType;
-        public string? NamespaceId { get; set; }
-        public string? Owner { get; set; }
-    }
-
-    private class LockReleaseResponse
-    {
-        public bool Success { get; set; }
-        public string? Message { get; set; }
-    }
-
-    #endregion
 }

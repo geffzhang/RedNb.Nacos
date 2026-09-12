@@ -1,8 +1,8 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core;
+using RedNb.Nacos;
 
-namespace RedNb.Nacos.GrpcClient.Config;
+namespace RedNb.Nacos.Grpc.Config;
 
 /// <summary>
 /// Config-specific gRPC transport client.
@@ -15,6 +15,7 @@ internal class ConfigRpcTransportClient : IAsyncDisposable
     private readonly ILogger? _logger;
     private readonly JsonSerializerOptions _jsonOptions;
     private bool _disposed;
+    private readonly FuzzyInitializationTracker _fuzzyInitialization = new();
 
     /// <summary>
     /// Event fired when a config change notification is received.
@@ -48,7 +49,7 @@ internal class ConfigRpcTransportClient : IAsyncDisposable
     /// <summary>
     /// Queries configuration from server.
     /// </summary>
-    public async Task<ConfigQueryResponse?> QueryConfigAsync(string dataId, string group, string? tenant, 
+    public async Task<ConfigQueryResponse?> QueryConfigAsync(string dataId, string group, string? tenant,
         string? tag = null, CancellationToken cancellationToken = default)
     {
         var request = new ConfigQueryRequest
@@ -122,7 +123,7 @@ internal class ConfigRpcTransportClient : IAsyncDisposable
         };
 
         // Listen operations need the response body (long-poll timeout applies)
-        return await _grpcClient.SendStreamRequestWithResponseAsync<ConfigBatchListenResponse>(
+        return await _grpcClient.SendRequestWithResponseAsync<ConfigBatchListenResponse>(
             ConfigBatchListenRequest.TYPE, request,
             TimeSpan.FromMilliseconds(_options.LongPollTimeout),
             cancellationToken);
@@ -140,7 +141,7 @@ internal class ConfigRpcTransportClient : IAsyncDisposable
             ConfigListenContexts = listenContexts
         };
 
-        await _grpcClient.SendStreamRequestAsync(ConfigBatchListenRequest.TYPE, request, cancellationToken);
+        await _grpcClient.SendRequestAsync(ConfigBatchListenRequest.TYPE, request, cancellationToken);
     }
 
     /// <summary>
@@ -156,10 +157,19 @@ internal class ConfigRpcTransportClient : IAsyncDisposable
             Contexts = contexts
         };
 
-        return await _grpcClient.SendStreamRequestWithResponseAsync<ConfigFuzzyWatchResponse>(
-            ConfigFuzzyWatchRequest.TYPE, request,
-            TimeSpan.FromMilliseconds(_options.DefaultTimeout),
-            cancellationToken);
+        var context = contexts.Single();
+        request.GroupKeyPattern = $"{(string.IsNullOrEmpty(_options.Namespace) ? "public" : _options.Namespace)}>>{context.GroupPattern}>>{context.DataIdPattern}";
+
+        var initial = watch ? _fuzzyInitialization.Begin(request.GroupKeyPattern) : null;
+        try
+        {
+            var response = await _grpcClient.SendRequestWithResponseAsync<ConfigFuzzyWatchResponse>(
+                ConfigFuzzyWatchRequest.TYPE, request, TimeSpan.FromMilliseconds(_options.DefaultTimeout), cancellationToken);
+            if (response?.IsSuccess == true && initial != null)
+                response.MatchedGroupKeys = (await initial.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken)).ToList();
+            return response;
+        }
+        finally { _fuzzyInitialization.Remove(request.GroupKeyPattern); }
     }
 
     /// <summary>
@@ -168,13 +178,12 @@ internal class ConfigRpcTransportClient : IAsyncDisposable
     public async Task SendFuzzyWatchAsync(List<ConfigFuzzyListenContext> contexts, bool watch = true,
         CancellationToken cancellationToken = default)
     {
-        var request = new ConfigFuzzyWatchRequest
+        foreach (var context in contexts)
         {
-            Watch = watch,
-            Contexts = contexts
-        };
-
-        await _grpcClient.SendStreamRequestAsync(ConfigFuzzyWatchRequest.TYPE, request, cancellationToken);
+            var response = await FuzzyWatchAsync([context], watch, cancellationToken);
+            if (response?.IsSuccess != true)
+                throw new NacosException(response?.ErrorCode ?? NacosException.ServerError, response?.Message ?? "Fuzzy watch rejected");
+        }
     }
 
     private void HandlePushMessage(string type, string body)
@@ -186,11 +195,14 @@ internal class ConfigRpcTransportClient : IAsyncDisposable
                 case ConfigChangeNotifyRequest.TYPE:
                     HandleConfigChangeNotify(body);
                     break;
-                    
+
                 case ConfigFuzzyWatchChangeNotifyRequest.TYPE:
                     HandleFuzzyWatchChangeNotify(body);
                     break;
-                    
+                case "ConfigFuzzyWatchSyncRequest":
+                    HandleFuzzyWatchChangeNotify(body);
+                    break;
+
                 default:
                     _logger?.LogDebug("Received unknown config push type: {Type}", type);
                     break;
@@ -209,7 +221,7 @@ internal class ConfigRpcTransportClient : IAsyncDisposable
             var request = JsonSerializer.Deserialize<ConfigChangeNotifyRequest>(body, _jsonOptions);
             if (request != null)
             {
-                _logger?.LogDebug("Received config change notify: {DataId}@{Group}", 
+                _logger?.LogDebug("Received config change notify: {DataId}@{Group}",
                     request.DataId, request.Group);
                 OnConfigChanged?.Invoke(request);
             }
@@ -224,10 +236,19 @@ internal class ConfigRpcTransportClient : IAsyncDisposable
     {
         try
         {
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+            _fuzzyInitialization.Process(root, "groupKey");
+            if (root.TryGetProperty("contexts", out var contexts))
+            {
+                foreach (var item in contexts.EnumerateArray()) EmitFuzzy(item, root);
+                return;
+            }
+            if (root.TryGetProperty("groupKey", out _)) { EmitFuzzy(root, root); return; }
             var request = JsonSerializer.Deserialize<ConfigFuzzyWatchChangeNotifyRequest>(body, _jsonOptions);
             if (request != null)
             {
-                _logger?.LogDebug("Received fuzzy watch change notify: {DataId}@{Group}, Type={ChangeType}", 
+                _logger?.LogDebug("Received fuzzy watch change notify: {DataId}@{Group}, Type={ChangeType}",
                     request.DataId, request.Group, request.ChangedType);
                 OnFuzzyWatchChanged?.Invoke(request);
             }
@@ -248,5 +269,20 @@ internal class ConfigRpcTransportClient : IAsyncDisposable
         OnFuzzyWatchChanged = null;
 
         return ValueTask.CompletedTask;
+    }
+
+    private void EmitFuzzy(JsonElement item, JsonElement root)
+    {
+        if (!item.TryGetProperty("groupKey", out var key)) return;
+        var parts = key.GetString()!.Split('+');
+        if (parts.Length < 2) return;
+        OnFuzzyWatchChanged?.Invoke(new ConfigFuzzyWatchChangeNotifyRequest
+        {
+            DataId = parts[0],
+            Group = parts[1],
+            Tenant = parts.Length > 2 ? parts[2] : "",
+            ChangedType = item.TryGetProperty("changeType", out var change) ? change.GetString()! : "ADD_CONFIG",
+            SyncType = root.TryGetProperty("syncType", out var sync) ? sync.GetString()! : "FUZZY_WATCH_RESOURCE_CHANGED"
+        });
     }
 }

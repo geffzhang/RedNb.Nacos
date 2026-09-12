@@ -1,8 +1,8 @@
 using FluentAssertions;
-using RedNb.Nacos.Client;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Naming;
-using RedNb.Nacos.Core.Naming.Selector;
+using RedNb.Nacos.Http;
+using RedNb.Nacos;
+using RedNb.Nacos.Naming;
+using RedNb.Nacos.Naming.Selector;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -25,10 +25,10 @@ public class NamingSelectorIntegrationTests : IAsyncLifetime
         _output = output;
         _options = new NacosClientOptions
         {
-            ServerAddresses = "localhost:8848",
-            Username = "nacos",
-            Password = "nacos",
-            Namespace = "",
+            ServerAddresses = NacosServerFixture.ServerAddress,
+            Username = NacosServerFixture.Username,
+            Password = NacosServerFixture.Password,
+            Namespace = NacosServerFixture.Namespace,
             DefaultTimeout = 5000
         };
         _factory = new NacosFactory();
@@ -146,7 +146,7 @@ public class NamingSelectorIntegrationTests : IAsyncLifetime
             // Get instances from specific cluster
             var clusterAInstances = await _namingService.GetAllInstancesAsync(
                 serviceName, new List<string> { "cluster-a" });
-            
+
             var clusterBInstances = await _namingService.GetAllInstancesAsync(
                 serviceName, new List<string> { "cluster-b" });
 

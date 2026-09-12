@@ -1,7 +1,7 @@
 using FluentAssertions;
-using RedNb.Nacos.Client;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Ai.Model.AgentSpec;
+using RedNb.Nacos.Http;
+using RedNb.Nacos;
+using RedNb.Nacos.Ai.Models.AgentSpec;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using WireMock.Server;

@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using RedNb.Nacos.Core.Config;
+using RedNb.Nacos.Config;
 
 namespace RedNb.Nacos.Sample.WebApi.Controllers;
 

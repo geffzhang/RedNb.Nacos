@@ -1,4 +1,4 @@
-namespace RedNb.Nacos.Core;
+namespace RedNb.Nacos;
 
 /// <summary>
 /// Common constants used throughout the Nacos SDK.

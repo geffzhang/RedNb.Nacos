@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace RedNb.Nacos.GrpcClient.Config;
+namespace RedNb.Nacos.Grpc.Config;
 
 #region Base Request/Response
 
@@ -318,14 +318,23 @@ public class ConfigFuzzyWatchRequest : ConfigRpcRequest
     /// <summary>
     /// Whether this is a watch (true) or unwatch (false) request.
     /// </summary>
-    [JsonPropertyName("watch")]
+    [JsonIgnore]
     public bool Watch { get; set; } = true;
 
     /// <summary>
     /// Fuzzy listen contexts.
     /// </summary>
-    [JsonPropertyName("contexts")]
+    [JsonIgnore]
     public List<ConfigFuzzyListenContext> Contexts { get; set; } = new();
+
+    [JsonPropertyName("watchType")]
+    public string WatchType => Watch ? "WATCH" : "CANCEL_WATCH";
+    [JsonPropertyName("groupKeyPattern")]
+    public string GroupKeyPattern { get; set; } = "";
+    [JsonPropertyName("receivedGroupKeys")]
+    public HashSet<string> ReceivedGroupKeys { get; set; } = new();
+    [JsonPropertyName("initializing")]
+    public bool Initializing { get; set; } = true;
 }
 
 /// <summary>

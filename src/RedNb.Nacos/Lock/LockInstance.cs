@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace RedNb.Nacos.Core.Lock;
+namespace RedNb.Nacos.Lock;
 
 /// <summary>
 /// Represents a distributed lock instance.

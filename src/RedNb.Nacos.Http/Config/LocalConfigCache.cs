@@ -1,7 +1,7 @@
-using RedNb.Nacos.Core;
+using RedNb.Nacos;
 using RedNb.Nacos.Utils;
 
-namespace RedNb.Nacos.Client.Config;
+namespace RedNb.Nacos.Http.Config;
 
 /// <summary>
 /// Local cache for configuration snapshots.
@@ -17,10 +17,10 @@ public class LocalConfigCache
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             ".nacos",
             "config",
-            string.IsNullOrWhiteSpace(options.Namespace) ? "default" : options.Namespace
+            CacheIdentity.For(options)
         );
         _cacheDir = baseDir;
-        
+
         if (!Directory.Exists(_cacheDir))
         {
             Directory.CreateDirectory(_cacheDir);
@@ -33,7 +33,7 @@ public class LocalConfigCache
     public void SaveSnapshot(string dataId, string group, string content)
     {
         var filePath = GetSnapshotPath(dataId, group);
-        
+
         lock (_lock)
         {
             try
@@ -58,7 +58,7 @@ public class LocalConfigCache
     public string? GetSnapshot(string dataId, string group)
     {
         var filePath = GetSnapshotPath(dataId, group);
-        
+
         lock (_lock)
         {
             try
@@ -73,7 +73,7 @@ public class LocalConfigCache
                 // Ignore cache read errors
             }
         }
-        
+
         return null;
     }
 
@@ -83,7 +83,7 @@ public class LocalConfigCache
     public void RemoveSnapshot(string dataId, string group)
     {
         var filePath = GetSnapshotPath(dataId, group);
-        
+
         lock (_lock)
         {
             try
@@ -106,7 +106,7 @@ public class LocalConfigCache
     public void SaveFailover(string dataId, string group, string content)
     {
         var filePath = GetFailoverPath(dataId, group);
-        
+
         lock (_lock)
         {
             try
@@ -131,7 +131,7 @@ public class LocalConfigCache
     public string? GetFailover(string dataId, string group)
     {
         var filePath = GetFailoverPath(dataId, group);
-        
+
         lock (_lock)
         {
             try
@@ -146,7 +146,7 @@ public class LocalConfigCache
                 // Ignore cache read errors
             }
         }
-        
+
         return null;
     }
 

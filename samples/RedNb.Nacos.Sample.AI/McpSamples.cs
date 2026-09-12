@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Ai;
-using RedNb.Nacos.Core.Ai.Model.Mcp;
+using RedNb.Nacos;
+using RedNb.Nacos.Ai;
+using RedNb.Nacos.Ai.Models.Mcp;
 using RedNb.Nacos.Sample.AI.Listeners;
 
 namespace RedNb.Nacos.Sample.AI;

@@ -1,7 +1,7 @@
 using FluentAssertions;
 using Moq;
-using RedNb.Nacos.Core.Maintainer;
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos.Administration;
+using RedNb.Nacos.Naming;
 using Xunit;
 
 namespace RedNb.Nacos.Tests.Maintainer;

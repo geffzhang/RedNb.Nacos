@@ -1,8 +1,8 @@
 using System.Net;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using RedNb.Nacos.Client.Http;
-using RedNb.Nacos.Core;
+using RedNb.Nacos.Http.Transport;
+using RedNb.Nacos;
 using Xunit;
 
 namespace RedNb.Nacos.Tests.Http;

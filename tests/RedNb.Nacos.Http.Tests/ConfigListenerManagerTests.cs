@@ -1,7 +1,7 @@
 using FluentAssertions;
 using Moq;
-using RedNb.Nacos.Client.Config;
-using RedNb.Nacos.Core.Config;
+using RedNb.Nacos.Http.Config;
+using RedNb.Nacos.Config;
 using Xunit;
 
 namespace RedNb.Nacos.Http.Tests;

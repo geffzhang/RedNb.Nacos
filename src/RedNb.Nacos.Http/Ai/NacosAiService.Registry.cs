@@ -1,9 +1,9 @@
-using RedNb.Nacos.Core.Ai.Model;
-using RedNb.Nacos.Core.Ai.Model.AgentSpec;
-using RedNb.Nacos.Core.Ai.Model.Prompt;
-using RedNb.Nacos.Core.Ai.Model.Skills;
+using RedNb.Nacos.Ai.Models;
+using RedNb.Nacos.Ai.Models.AgentSpec;
+using RedNb.Nacos.Ai.Models.Prompt;
+using RedNb.Nacos.Ai.Models.Skill;
 
-namespace RedNb.Nacos.Client.Ai;
+namespace RedNb.Nacos.Http.Ai;
 
 /// <summary>
 /// Prompt, Skill and AgentSpec operations of <see cref="NacosAiService"/>.
@@ -14,15 +14,15 @@ public partial class NacosAiService
     #region Prompt Query
 
     /// <inheritdoc />
-    public Task<Core.Ai.Model.Prompt.Prompt?> GetPromptAsync(string promptKey, CancellationToken cancellationToken = default)
+    public Task<global::RedNb.Nacos.Ai.Models.Prompt.Prompt?> GetPromptAsync(string promptKey, CancellationToken cancellationToken = default)
         => _promptService.GetPromptAsync(promptKey, cancellationToken);
 
     /// <inheritdoc />
-    public Task<Core.Ai.Model.Prompt.Prompt?> GetPromptAsync(string promptKey, string? version, CancellationToken cancellationToken = default)
+    public Task<global::RedNb.Nacos.Ai.Models.Prompt.Prompt?> GetPromptAsync(string promptKey, string? version, CancellationToken cancellationToken = default)
         => _promptService.GetPromptAsync(promptKey, version, cancellationToken);
 
     /// <inheritdoc />
-    public Task<Core.Ai.Model.Prompt.Prompt?> GetPromptByLabelAsync(string promptKey, string label, CancellationToken cancellationToken = default)
+    public Task<global::RedNb.Nacos.Ai.Models.Prompt.Prompt?> GetPromptByLabelAsync(string promptKey, string label, CancellationToken cancellationToken = default)
         => _promptService.GetPromptByLabelAsync(promptKey, label, cancellationToken);
 
     /// <inheritdoc />
@@ -34,11 +34,11 @@ public partial class NacosAiService
     #region Prompt Subscription
 
     /// <inheritdoc />
-    public Task<Core.Ai.Model.Prompt.Prompt?> SubscribePromptAsync(string promptKey, AbstractNacosPromptListener listener, CancellationToken cancellationToken = default)
+    public Task<global::RedNb.Nacos.Ai.Models.Prompt.Prompt?> SubscribePromptAsync(string promptKey, AbstractNacosPromptListener listener, CancellationToken cancellationToken = default)
         => _promptService.SubscribePromptAsync(promptKey, listener, cancellationToken);
 
     /// <inheritdoc />
-    public Task<Core.Ai.Model.Prompt.Prompt?> SubscribePromptAsync(string promptKey, string? version, string? label, AbstractNacosPromptListener listener, CancellationToken cancellationToken = default)
+    public Task<global::RedNb.Nacos.Ai.Models.Prompt.Prompt?> SubscribePromptAsync(string promptKey, string? version, string? label, AbstractNacosPromptListener listener, CancellationToken cancellationToken = default)
         => _promptService.SubscribePromptAsync(promptKey, version, label, listener, cancellationToken);
 
     /// <inheritdoc />
@@ -242,15 +242,15 @@ public partial class NacosAiService
     #region AgentSpec Query
 
     /// <inheritdoc />
-    public Task<Core.Ai.Model.AgentSpec.AgentSpec?> GetAgentSpecAsync(string agentSpecName, CancellationToken cancellationToken = default)
+    public Task<global::RedNb.Nacos.Ai.Models.AgentSpec.AgentSpec?> GetAgentSpecAsync(string agentSpecName, CancellationToken cancellationToken = default)
         => _agentSpecService.GetAgentSpecAsync(agentSpecName, cancellationToken);
 
     /// <inheritdoc />
-    public Task<Core.Ai.Model.AgentSpec.AgentSpec?> GetAgentSpecAsync(string agentSpecName, string? version, CancellationToken cancellationToken = default)
+    public Task<global::RedNb.Nacos.Ai.Models.AgentSpec.AgentSpec?> GetAgentSpecAsync(string agentSpecName, string? version, CancellationToken cancellationToken = default)
         => _agentSpecService.GetAgentSpecAsync(agentSpecName, version, cancellationToken);
 
     /// <inheritdoc />
-    public Task<Core.Ai.Model.AgentSpec.AgentSpec?> GetAgentSpecByLabelAsync(string agentSpecName, string label, CancellationToken cancellationToken = default)
+    public Task<global::RedNb.Nacos.Ai.Models.AgentSpec.AgentSpec?> GetAgentSpecByLabelAsync(string agentSpecName, string label, CancellationToken cancellationToken = default)
         => _agentSpecService.GetAgentSpecByLabelAsync(agentSpecName, label, cancellationToken);
 
     /// <inheritdoc />
@@ -262,11 +262,11 @@ public partial class NacosAiService
     #region AgentSpec Subscription
 
     /// <inheritdoc />
-    public Task<Core.Ai.Model.AgentSpec.AgentSpec?> SubscribeAgentSpecAsync(string agentSpecName, AbstractNacosAgentSpecListener listener, CancellationToken cancellationToken = default)
+    public Task<global::RedNb.Nacos.Ai.Models.AgentSpec.AgentSpec?> SubscribeAgentSpecAsync(string agentSpecName, AbstractNacosAgentSpecListener listener, CancellationToken cancellationToken = default)
         => _agentSpecService.SubscribeAgentSpecAsync(agentSpecName, listener, cancellationToken);
 
     /// <inheritdoc />
-    public Task<Core.Ai.Model.AgentSpec.AgentSpec?> SubscribeAgentSpecAsync(string agentSpecName, string? version, string? label, AbstractNacosAgentSpecListener listener, CancellationToken cancellationToken = default)
+    public Task<global::RedNb.Nacos.Ai.Models.AgentSpec.AgentSpec?> SubscribeAgentSpecAsync(string agentSpecName, string? version, string? label, AbstractNacosAgentSpecListener listener, CancellationToken cancellationToken = default)
         => _agentSpecService.SubscribeAgentSpecAsync(agentSpecName, version, label, listener, cancellationToken);
 
     /// <inheritdoc />
@@ -290,7 +290,7 @@ public partial class NacosAiService
         => _agentSpecService.GetAgentSpecMetaAsync(agentSpecName, cancellationToken);
 
     /// <inheritdoc />
-    public Task<Core.Ai.Model.AgentSpec.AgentSpec?> GetAgentSpecDetailAsync(string agentSpecName, string? version = null, CancellationToken cancellationToken = default)
+    public Task<global::RedNb.Nacos.Ai.Models.AgentSpec.AgentSpec?> GetAgentSpecDetailAsync(string agentSpecName, string? version = null, CancellationToken cancellationToken = default)
         => _agentSpecService.GetAgentSpecDetailAsync(agentSpecName, version, cancellationToken);
 
     /// <inheritdoc />
@@ -298,11 +298,11 @@ public partial class NacosAiService
         => _agentSpecService.UploadAgentSpecAsync(content, fileName, overwrite, cancellationToken);
 
     /// <inheritdoc />
-    public Task CreateAgentSpecDraftAsync(Core.Ai.Model.AgentSpec.AgentSpec agentSpec, string? basedOnVersion = null, string? targetVersion = null, CancellationToken cancellationToken = default)
+    public Task CreateAgentSpecDraftAsync(global::RedNb.Nacos.Ai.Models.AgentSpec.AgentSpec agentSpec, string? basedOnVersion = null, string? targetVersion = null, CancellationToken cancellationToken = default)
         => _agentSpecService.CreateAgentSpecDraftAsync(agentSpec, basedOnVersion, targetVersion, cancellationToken);
 
     /// <inheritdoc />
-    public Task UpdateAgentSpecDraftAsync(Core.Ai.Model.AgentSpec.AgentSpec agentSpec, string version, bool setAsLatest = false, CancellationToken cancellationToken = default)
+    public Task UpdateAgentSpecDraftAsync(global::RedNb.Nacos.Ai.Models.AgentSpec.AgentSpec agentSpec, string version, bool setAsLatest = false, CancellationToken cancellationToken = default)
         => _agentSpecService.UpdateAgentSpecDraftAsync(agentSpec, version, setAsLatest, cancellationToken);
 
     /// <inheritdoc />

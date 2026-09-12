@@ -1,17 +1,17 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Client.Http;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Ai;
-using RedNb.Nacos.Core.Ai.Listener;
-using RedNb.Nacos.Core.Ai.Model;
-using RedNb.Nacos.Core.Ai.Model.A2a;
-using RedNb.Nacos.Core.Ai.Model.Mcp;
-using RedNb.Nacos.Core.Ai.Model.Mcp.Import;
-using RedNb.Nacos.Core.Ai.Model.Mcp.Validation;
+using RedNb.Nacos.Http.Transport;
+using RedNb.Nacos;
+using RedNb.Nacos.Ai;
+using RedNb.Nacos.Ai.Listener;
+using RedNb.Nacos.Ai.Models;
+using RedNb.Nacos.Ai.Models.A2a;
+using RedNb.Nacos.Ai.Models.Mcp;
+using RedNb.Nacos.Ai.Models.Mcp.Import;
+using RedNb.Nacos.Ai.Models.Mcp.Validation;
 using RedNb.Nacos.Utils;
 
-namespace RedNb.Nacos.Client.Ai;
+namespace RedNb.Nacos.Http.Ai;
 
 /// <summary>
 /// Nacos AI service implementation using HTTP.
@@ -30,6 +30,16 @@ public partial class NacosAiService : IAiService
     private readonly NacosSkillService _skillService;
     private readonly NacosAgentSpecService _agentSpecService;
     private bool _disposed;
+    private readonly object _pollLock = new();
+    private Task? _pollTask;
+    private void EnsurePolling()
+    {
+        lock (_pollLock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _pollTask ??= Task.Run(() => StartPollingAsync(_cts.Token));
+        }
+    }
 
     // API paths
     private const string McpBasePath = "v3/console/ai/mcp";
@@ -62,7 +72,7 @@ public partial class NacosAiService : IAiService
         _agentSpecService = new NacosAgentSpecService(_legacyHttpClient, options, logger);
 
         // Start background polling for subscriptions
-        _ = StartPollingAsync(_cts.Token);
+
     }
 
     #region MCP Server Operations
@@ -126,10 +136,13 @@ public partial class NacosAiService : IAiService
             throw new NacosException(NacosException.InvalidParam, "serverSpecification.VersionDetail.Version is required");
         }
 
+        var existing = await GetMcpServerAsync(serverSpecification.Name!, cancellationToken);
+        var wireSpec = JsonSerializer.Deserialize<McpServerBasicInfo>(JsonSerializer.Serialize(serverSpecification, JsonOptions), JsonOptions)!;
+        wireSpec.Id ??= existing?.Id;
         var parameters = new Dictionary<string, string?>
         {
-            { "mcpName", serverSpecification.Name },
-            { "serverSpecification", JsonSerializer.Serialize(serverSpecification, JsonOptions) }
+            { "mcpName", wireSpec.Name },
+            { "serverSpecification", JsonSerializer.Serialize(wireSpec, JsonOptions) }
         };
 
         // The console release controller binds McpDetailForm fields named
@@ -151,10 +164,12 @@ public partial class NacosAiService : IAiService
 
         var body = NacosUtils.BuildQueryString(parameters);
         var headers = BuildNamespaceHeaders();
-        var response = await _httpClient.PostWithHeadersAsync(McpBasePath, null, body, headers, _options.DefaultTimeout, cancellationToken);
+        var response = existing == null
+            ? await _httpClient.PostWithHeadersAsync(McpBasePath, null, body, headers, _options.DefaultTimeout, cancellationToken)
+            : await _httpClient.PutWithHeadersAsync(McpBasePath, null, body, headers, _options.DefaultTimeout, cancellationToken);
 
         var result = JsonSerializer.Deserialize<ApiResult<string>>(response ?? "{}", JsonOptions);
-        return result?.Data ?? string.Empty;
+        return existing?.Id ?? result?.Data ?? string.Empty;
     }
 
     /// <inheritdoc />
@@ -188,6 +203,7 @@ public partial class NacosAiService : IAiService
     /// <inheritdoc />
     public async Task<McpServerDetailInfo?> SubscribeMcpServerAsync(string mcpName, string? version, AbstractNacosMcpServerListener listener, CancellationToken cancellationToken = default)
     {
+        EnsurePolling();
         ValidateMcpName(mcpName);
         if (listener == null)
         {
@@ -553,7 +569,11 @@ public partial class NacosAiService : IAiService
 
         var body = NacosUtils.BuildQueryString(parameters);
         var headers = BuildNamespaceHeaders();
-        await _httpClient.PostWithHeadersAsync(A2aBasePath, null, body, headers, _options.DefaultTimeout, cancellationToken);
+        var existing = await GetAgentCardAsync(agentCard.Name!, cancellationToken);
+        if (existing == null)
+            await _httpClient.PostWithHeadersAsync(A2aBasePath, null, body, headers, _options.DefaultTimeout, cancellationToken);
+        else
+            await _httpClient.PutWithHeadersAsync(A2aBasePath, null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     #endregion
@@ -646,6 +666,7 @@ public partial class NacosAiService : IAiService
     /// <inheritdoc />
     public async Task<AgentCardDetailInfo?> SubscribeAgentCardAsync(string agentName, string? version, AbstractNacosAgentCardListener listener, CancellationToken cancellationToken = default)
     {
+        EnsurePolling();
         ValidateAgentName(agentName);
         if (listener == null)
         {
@@ -830,7 +851,9 @@ public partial class NacosAiService : IAiService
     {
         if (_disposed) return;
 
+        _disposed = true;
         await _cts.CancelAsync();
+        if (_pollTask != null) await _pollTask;
         _cts.Dispose();
         await _promptService.DisposeAsync();
         await _skillService.DisposeAsync();

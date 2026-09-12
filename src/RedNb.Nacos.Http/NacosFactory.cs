@@ -1,17 +1,17 @@
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Client.Ai;
-using RedNb.Nacos.Client.Config;
-using RedNb.Nacos.Client.Naming;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Ai;
-using RedNb.Nacos.Core.Config;
-using RedNb.Nacos.Core.Lock;
-using RedNb.Nacos.Core.Maintainer;
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos.Http.Ai;
+using RedNb.Nacos.Http.Config;
+using RedNb.Nacos.Http.Naming;
+using RedNb.Nacos;
+using RedNb.Nacos.Ai;
+using RedNb.Nacos.Config;
+using RedNb.Nacos.Lock;
+using RedNb.Nacos.Administration;
+using RedNb.Nacos.Naming;
 using RedNb.Nacos.Http.Lock;
-using RedNb.Nacos.Http.Maintainer;
+using RedNb.Nacos.Http.Administration;
 
-namespace RedNb.Nacos.Client;
+namespace RedNb.Nacos.Http;
 
 /// <summary>
 /// Factory for creating Nacos service instances.

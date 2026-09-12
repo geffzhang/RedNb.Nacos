@@ -1,4 +1,4 @@
-namespace RedNb.Nacos.Core.Naming;
+namespace RedNb.Nacos.Naming;
 
 /// <summary>
 /// Preserved metadata keys for instance configuration.

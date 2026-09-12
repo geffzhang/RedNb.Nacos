@@ -1,5 +1,5 @@
 using FluentAssertions;
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos.Naming;
 using RedNb.Nacos.Failover;
 using Xunit;
 

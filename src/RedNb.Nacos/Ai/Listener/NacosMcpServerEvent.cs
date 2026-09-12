@@ -1,6 +1,6 @@
-using RedNb.Nacos.Core.Ai.Model.Mcp;
+using RedNb.Nacos.Ai.Models.Mcp;
 
-namespace RedNb.Nacos.Core.Ai.Listener;
+namespace RedNb.Nacos.Ai.Listener;
 
 /// <summary>
 /// Event for MCP server changes.

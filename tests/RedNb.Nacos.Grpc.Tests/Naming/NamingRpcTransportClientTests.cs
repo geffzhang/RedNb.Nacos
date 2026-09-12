@@ -1,7 +1,7 @@
 using System.Text.Json;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.GrpcClient;
-using RedNb.Nacos.GrpcClient.Naming;
+using RedNb.Nacos;
+using RedNb.Nacos.Grpc;
+using RedNb.Nacos.Grpc.Naming;
 using Xunit;
 
 namespace RedNb.Nacos.Grpc.Tests.Naming;
@@ -11,7 +11,7 @@ namespace RedNb.Nacos.Grpc.Tests.Naming;
 ///
 /// Uses a hand-rolled <see cref="FakeNacosGrpcClient"/> that overrides
 /// the virtual seam methods (<see cref="NacosGrpcClient.RequestAsync{TResponse}"/>,
-/// <see cref="NacosGrpcClient.SendStreamRequestAsync"/>, and
+/// <see cref="NacosGrpcClient.SendRequestAsync"/>, and
 /// <see cref="NacosGrpcClient.RegisterPushHandler"/>) to capture dispatched
 /// frames and the registered push handler, so the query / subscribe /
 /// unsubscribe / fuzzy-watch / service-change-push paths can be exercised
@@ -188,8 +188,7 @@ public class NamingRpcTransportClientTests
         var fake = new FakeNacosGrpcClient(options);
         var client = new NamingRpcTransportClient(fake, options);
 
-        // Act: fire-and-forget stream variant should land in StreamCalls,
-        // not in Captured (the unary seam).
+        // Nacos 3.2.4 accepts this operation on the unary request method.
         await client.SendFuzzyWatchAsync(
             ns: "default",
             serviceNamePattern: "svc.*",
@@ -199,16 +198,18 @@ public class NamingRpcTransportClientTests
             cancellationToken: default);
 
         // Assert
-        Assert.Single(fake.StreamCalls);
-        Assert.Empty(fake.Captured);
+        Assert.Single(fake.Captured);
+        Assert.Empty(fake.StreamCalls);
 
-        var captured = fake.StreamCalls[0];
+        var captured = fake.Captured[0];
         Assert.Equal(NamingFuzzyWatchRequest.TYPE, captured.type);
 
         var payload = Assert.IsType<NamingFuzzyWatchRequest>(captured.request);
         Assert.Equal("svc.*", payload.ServiceNamePattern);
         Assert.Equal("G.*", payload.GroupNamePattern);
         Assert.False(payload.Initializing);
+        Assert.Equal("default>>G.*>>svc.*", payload.GroupKeyPattern);
+        Assert.Equal("WATCH", payload.WatchType);
     }
 
     [Fact]

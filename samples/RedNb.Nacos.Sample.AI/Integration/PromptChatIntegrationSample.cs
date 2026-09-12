@@ -1,7 +1,7 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core.Ai;
-using RedNb.Nacos.Core.Ai.Model.Prompt;
+using RedNb.Nacos.Ai;
+using RedNb.Nacos.Ai.Models.Prompt;
 using RedNb.Nacos.Sample.AI.Chat;
 
 namespace RedNb.Nacos.Sample.AI.Integration;

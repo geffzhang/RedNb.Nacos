@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core.Ai;
-using RedNb.Nacos.Core.Ai.Model.Prompt;
+using RedNb.Nacos.Ai;
+using RedNb.Nacos.Ai.Models.Prompt;
 
 namespace RedNb.Nacos.Sample.AI;
 

@@ -1,4 +1,4 @@
-namespace RedNb.Nacos.Core.Ai.Listener;
+namespace RedNb.Nacos.Ai.Listener;
 
 /// <summary>
 /// Marker interface for Nacos AI events.

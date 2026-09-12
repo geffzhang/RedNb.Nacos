@@ -1,4 +1,4 @@
-namespace RedNb.Nacos.Core.Ai.Listener;
+namespace RedNb.Nacos.Ai.Listener;
 
 /// <summary>
 /// Abstract base class for agent card event listeners.

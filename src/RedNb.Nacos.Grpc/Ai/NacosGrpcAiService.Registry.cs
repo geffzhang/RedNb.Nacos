@@ -1,11 +1,11 @@
-using RedNb.Nacos.Core.Ai.Model;
-using RedNb.Nacos.Core.Ai.Model.AgentSpec;
-using RedNb.Nacos.Core.Ai.Model.Prompt;
-using RedNb.Nacos.Core.Ai.Model.Skills;
-using PromptModel = RedNb.Nacos.Core.Ai.Model.Prompt.Prompt;
-using AgentSpecModel = RedNb.Nacos.Core.Ai.Model.AgentSpec.AgentSpec;
+using RedNb.Nacos.Ai.Models;
+using RedNb.Nacos.Ai.Models.AgentSpec;
+using RedNb.Nacos.Ai.Models.Prompt;
+using RedNb.Nacos.Ai.Models.Skill;
+using PromptModel = RedNb.Nacos.Ai.Models.Prompt.Prompt;
+using AgentSpecModel = RedNb.Nacos.Ai.Models.AgentSpec.AgentSpec;
 
-namespace RedNb.Nacos.GrpcClient.Ai;
+namespace RedNb.Nacos.Grpc.Ai;
 
 /// <summary>
 /// Prompt, Skill and AgentSpec operations of <see cref="NacosGrpcAiService"/>.

@@ -1,7 +1,7 @@
 using FluentAssertions;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Config;
-using RedNb.Nacos.GrpcClient;
+using RedNb.Nacos;
+using RedNb.Nacos.Config;
+using RedNb.Nacos.Grpc;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -35,7 +35,7 @@ public class ConfigListenerPushTests : IAsyncLifetime
             ServerAddresses = NacosServerFixture.ServerAddress,
             Username = NacosServerFixture.Username,
             Password = NacosServerFixture.Password,
-            Namespace = "",
+            Namespace = NacosServerFixture.Namespace,
             DefaultTimeout = 5000
         };
         _service = await NacosGrpcFactory.CreateConfigServiceAsync(_options);

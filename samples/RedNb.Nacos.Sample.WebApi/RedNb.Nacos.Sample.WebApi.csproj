@@ -1,19 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
-
-  <PropertyGroup>
+  <PropertyGroup><IsPackable>false</IsPackable>
     <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
   </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\RedNb.Nacos.AspNetCore\RedNb.Nacos.AspNetCore.csproj" />
     <ProjectReference Include="..\..\src\RedNb.Nacos.Http\RedNb.Nacos.Http.csproj" />
     <ProjectReference Include="..\..\src\RedNb.Nacos.Grpc\RedNb.Nacos.Grpc.csproj" />
   </ItemGroup>
-
   <ItemGroup>
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
   </ItemGroup>
-
 </Project>

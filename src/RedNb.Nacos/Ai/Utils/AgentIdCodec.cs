@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace RedNb.Nacos.Core.Ai.Utils;
+namespace RedNb.Nacos.Ai.Utils;
 
 /// <summary>
 /// Agent ID codec interface for encoding/decoding agent names.

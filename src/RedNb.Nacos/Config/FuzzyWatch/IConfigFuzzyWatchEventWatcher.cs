@@ -1,4 +1,4 @@
-namespace RedNb.Nacos.Core.Config.FuzzyWatch;
+namespace RedNb.Nacos.Config.FuzzyWatch;
 
 /// <summary>
 /// Interface for watching fuzzy configuration changes.

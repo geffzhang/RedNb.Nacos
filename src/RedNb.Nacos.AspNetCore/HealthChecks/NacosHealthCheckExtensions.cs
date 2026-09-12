@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Config;
+using RedNb.Nacos;
+using RedNb.Nacos.Config;
 
 namespace RedNb.Nacos.AspNetCore.HealthChecks;
 

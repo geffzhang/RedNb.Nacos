@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace RedNb.Nacos.Core.Config.Filter;
+namespace RedNb.Nacos.Config.Filter;
 
 /// <summary>
 /// AES encryption config filter for encrypting/decrypting config content.

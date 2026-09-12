@@ -1,13 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Client.Config;
-using RedNb.Nacos.Client.Naming;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Config;
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos.Http.Config;
+using RedNb.Nacos.Http.Naming;
+using RedNb.Nacos;
+using RedNb.Nacos.Config;
+using RedNb.Nacos.Naming;
 
-namespace RedNb.Nacos.Client;
+namespace RedNb.Nacos.Http;
 
 /// <summary>
 /// Extension methods for registering Nacos services with dependency injection.
@@ -20,13 +20,13 @@ public static class NacosServiceCollectionExtensions
     /// <param name="services">The service collection.</param>
     /// <param name="configureOptions">Action to configure options.</param>
     /// <returns>The service collection.</returns>
-    public static IServiceCollection AddNacos(this IServiceCollection services, 
+    public static IServiceCollection AddNacos(this IServiceCollection services,
         Action<NacosClientOptions> configureOptions)
     {
         services.Configure(configureOptions);
-        
+
         services.TryAddSingleton<INacosFactory, NacosFactory>();
-        
+
         services.TryAddSingleton<IConfigService>(sp =>
         {
             var options = new NacosClientOptions();
@@ -51,7 +51,7 @@ public static class NacosServiceCollectionExtensions
     /// <summary>
     /// Adds only Nacos config service to the service collection.
     /// </summary>
-    public static IServiceCollection AddNacosConfig(this IServiceCollection services, 
+    public static IServiceCollection AddNacosConfig(this IServiceCollection services,
         Action<NacosClientOptions> configureOptions)
     {
         services.Configure(configureOptions);
@@ -71,7 +71,7 @@ public static class NacosServiceCollectionExtensions
     /// <summary>
     /// Adds only Nacos naming service to the service collection.
     /// </summary>
-    public static IServiceCollection AddNacosNaming(this IServiceCollection services, 
+    public static IServiceCollection AddNacosNaming(this IServiceCollection services,
         Action<NacosClientOptions> configureOptions)
     {
         services.Configure(configureOptions);
@@ -91,7 +91,7 @@ public static class NacosServiceCollectionExtensions
     /// <summary>
     /// Adds Nacos client with pre-configured options.
     /// </summary>
-    public static IServiceCollection AddNacos(this IServiceCollection services, 
+    public static IServiceCollection AddNacos(this IServiceCollection services,
         string serverAddresses, string? username = null, string? password = null, string? @namespace = null)
     {
         return services.AddNacos(options =>

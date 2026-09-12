@@ -2,7 +2,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core.Ai;
+using RedNb.Nacos.Ai;
 
 namespace RedNb.Nacos.Sample.AI;
 

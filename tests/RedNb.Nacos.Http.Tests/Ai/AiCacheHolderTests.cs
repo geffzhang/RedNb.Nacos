@@ -1,6 +1,6 @@
-using RedNb.Nacos.Client.Ai;
-using RedNb.Nacos.Core.Ai.Model.A2a;
-using RedNb.Nacos.Core.Ai.Model.Mcp;
+using RedNb.Nacos.Http.Ai;
+using RedNb.Nacos.Ai.Models.A2a;
+using RedNb.Nacos.Ai.Models.Mcp;
 using Xunit;
 
 namespace RedNb.Nacos.Http.Tests.Ai;

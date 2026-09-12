@@ -1,7 +1,7 @@
 using System.Text.Json;
 using FluentAssertions;
-using RedNb.Nacos.Client;
-using RedNb.Nacos.Core;
+using RedNb.Nacos.Http;
+using RedNb.Nacos;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using WireMock.Server;

@@ -1,7 +1,7 @@
 using FluentAssertions;
-using RedNb.Nacos.Client;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos.Http;
+using RedNb.Nacos;
+using RedNb.Nacos.Naming;
 using System.Text.Json;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;

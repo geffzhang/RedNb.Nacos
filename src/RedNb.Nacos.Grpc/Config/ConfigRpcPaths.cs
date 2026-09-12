@@ -1,4 +1,4 @@
-namespace RedNb.Nacos.GrpcClient.Config;
+namespace RedNb.Nacos.Grpc.Config;
 
 /// <summary>
 /// gRPC Metadata.type strings used by Config requests and responses (they travel

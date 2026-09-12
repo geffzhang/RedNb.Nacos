@@ -1,8 +1,8 @@
-using RedNb.Nacos.Core.Ai.Listener;
-using RedNb.Nacos.Core.Ai.Model;
-using RedNb.Nacos.Core.Ai.Model.A2a;
+using RedNb.Nacos.Ai.Listener;
+using RedNb.Nacos.Ai.Models;
+using RedNb.Nacos.Ai.Models.A2a;
 
-namespace RedNb.Nacos.Core.Ai;
+namespace RedNb.Nacos.Ai;
 
 /// <summary>
 /// Nacos A2A (Agent-to-Agent) client service interface.

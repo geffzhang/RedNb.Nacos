@@ -1,7 +1,7 @@
-using RedNb.Nacos.Core.Ai.Model;
-using RedNb.Nacos.Core.Ai.Model.Skills;
+using RedNb.Nacos.Ai.Models;
+using RedNb.Nacos.Ai.Models.Skill;
 
-namespace RedNb.Nacos.Core.Ai;
+namespace RedNb.Nacos.Ai;
 
 /// <summary>
 /// Nacos AI Skill client service interface.

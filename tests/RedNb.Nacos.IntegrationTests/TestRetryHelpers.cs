@@ -1,4 +1,4 @@
-using RedNb.Nacos.Core;
+using RedNb.Nacos;
 using Xunit.Abstractions;
 
 namespace RedNb.Nacos.IntegrationTests;

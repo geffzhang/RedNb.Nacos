@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core.Ai.Listener;
+using RedNb.Nacos.Ai.Listener;
 
 namespace RedNb.Nacos.Sample.AI.Listeners;
 

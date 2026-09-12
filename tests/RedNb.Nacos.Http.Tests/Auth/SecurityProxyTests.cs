@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
 using FluentAssertions;
-using RedNb.Nacos.Client.Http;
-using RedNb.Nacos.Core;
+using RedNb.Nacos.Http.Transport;
+using RedNb.Nacos;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using WireMock.Server;
@@ -34,59 +34,16 @@ public class SecurityProxyTests : IDisposable
     }
 
     [Fact]
-    public async Task GetAccessTokenAsync_WithAccessKeySecretKey_SignsRequestAndReturnsToken()
+    public async Task GetAccessTokenAsync_WithAccessKeySecretKey_RejectsUnsupportedDefaultPlugin()
     {
-        // Arrange
-        const string accessKey = "ak";
-        const string secretKey = "sk";
-        var options = new NacosClientOptions
+        using var proxy = new SecurityProxy(new NacosClientOptions
         {
             ServerAddresses = $"localhost:{_server.Port}",
-            AccessKey = accessKey,
-            SecretKey = secretKey
-        };
-
-        // WireMock will match the AK/SK-shaped URL: a POST to /v3/auth/user/login
-        // with the accessKey query param. If the request shape is wrong, this
-        // stub won't match and WireMock will return a 404 — the test fails.
-        _server
-            .Given(Request.Create()
-                .WithPath("/nacos/v3/auth/user/login")
-                .WithParam("accessKey", accessKey)
-                .UsingPost())
-            .RespondWith(Response.Create()
-                .WithStatusCode(200)
-                .WithBody("{\"accessToken\":\"ak-token\",\"tokenTtl\":18000}"));
-
-        var proxy = new SecurityProxy(options);
-
-        // Act
-        var token = await proxy.GetAccessTokenAsync();
-
-        // Assert: we got the token back
-        token.Should().Be("ak-token");
-
-        // Assert: exactly one login was sent and it was the AK/SK form
-        _server.LogEntries.Should().HaveCount(1);
-        var entry = _server.LogEntries.Single();
-        var urlString = entry.RequestMessage.Url;
-        var captured = ParseUrl(urlString);
-        captured.AbsolutePath.Should().Be("/nacos/v3/auth/user/login");
-
-        var queryParams = ParseQueryString(captured.Query);
-        queryParams.Should().ContainKey("accessKey").WhoseValue.Should().Be(accessKey);
-        queryParams.Should().ContainKey("timestamp");
-        queryParams.Should().ContainKey("signature");
-
-        // Assert: signature = Base64(HMAC-SHA1(secretKey, accessKey + timestamp))
-        var timestamp = queryParams["timestamp"];
-        var expectedSignature = ComputeExpectedSignature(accessKey, secretKey, timestamp);
-        queryParams["signature"].Should().Be(expectedSignature,
-            "the AK/SK signature must be Base64(HMAC-SHA1(secretKey, accessKey + timestamp))");
-
-        // Assert: no form body was sent
-        entry.RequestMessage.Body.Should().BeNullOrEmpty(
-            "the AK/SK login path encodes everything in the query string, not the body");
+            AccessKey = "ak",
+            SecretKey = "sk"
+        });
+        await Assert.ThrowsAsync<NotSupportedException>(() => proxy.GetAccessTokenAsync());
+        Assert.Empty(_server.LogEntries);
     }
 
     [Fact]
@@ -131,7 +88,7 @@ public class SecurityProxyTests : IDisposable
     }
 
     [Fact]
-    public async Task GetAccessTokenAsync_WithBothCredentialSets_AkSkWins()
+    public async Task GetAccessTokenAsync_WithBothCredentialSets_UsernamePasswordWins()
     {
         // Arrange
         var options = new NacosClientOptions
@@ -149,7 +106,7 @@ public class SecurityProxyTests : IDisposable
         _server
             .Given(Request.Create()
                 .WithPath("/nacos/v3/auth/user/login")
-                .WithParam("accessKey", "ak")
+                .WithBody("username=alice&password=wonderland")
                 .UsingPost())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)

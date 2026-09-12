@@ -1,10 +1,10 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos;
+using RedNb.Nacos.Naming;
 
-namespace RedNb.Nacos.GrpcClient.Naming;
+namespace RedNb.Nacos.Grpc.Naming;
 
 /// <summary>
 /// Holds and manages service information cache.

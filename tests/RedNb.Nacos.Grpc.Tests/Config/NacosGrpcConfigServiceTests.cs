@@ -1,9 +1,9 @@
 using System.Text.Json;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Config;
-using RedNb.Nacos.Core.Config.FuzzyWatch;
-using RedNb.Nacos.GrpcClient;
-using RedNb.Nacos.GrpcClient.Config;
+using RedNb.Nacos;
+using RedNb.Nacos.Config;
+using RedNb.Nacos.Config.FuzzyWatch;
+using RedNb.Nacos.Grpc;
+using RedNb.Nacos.Grpc.Config;
 using RedNb.Nacos.Utils;
 using Xunit;
 

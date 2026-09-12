@@ -1,8 +1,8 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core;
+using RedNb.Nacos;
 
-namespace RedNb.Nacos.GrpcClient.Naming;
+namespace RedNb.Nacos.Grpc.Naming;
 
 /// <summary>
 /// Naming-specific gRPC transport client.
@@ -15,6 +15,7 @@ internal class NamingRpcTransportClient : IAsyncDisposable
     private readonly ILogger? _logger;
     private readonly JsonSerializerOptions _jsonOptions;
     private bool _disposed;
+    private readonly FuzzyInitializationTracker _fuzzyInitialization = new();
 
     /// <summary>
     /// Event fired when a service change notification is received.
@@ -273,8 +274,17 @@ internal class NamingRpcTransportClient : IAsyncDisposable
             ReceivedGroupKeys = receivedGroupKeys ?? new HashSet<string>()
         };
 
-        return await _grpcClient.RequestAsync<NamingFuzzyWatchResponse>(
-            NamingFuzzyWatchRequest.TYPE, request, cancellationToken);
+        var initial = initializing ? _fuzzyInitialization.Begin(request.GroupKeyPattern) : null;
+        try
+        {
+            var response = await _grpcClient.RequestAsync<NamingFuzzyWatchResponse>(NamingFuzzyWatchRequest.TYPE, request, cancellationToken);
+            if (response?.IsSuccess == true && initial != null)
+                response.ServiceChangedList = (await initial.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken))
+                    .Select(key => key.Split("@@")).Where(p => p.Length == 3)
+                    .Select(p => new NamingFuzzyWatchChangeItem { Namespace = p[0], GroupName = p[1], ServiceName = p[2], ChangedType = "ADD_SERVICE" }).ToList();
+            return response;
+        }
+        finally { _fuzzyInitialization.Remove(request.GroupKeyPattern); }
     }
 
     /// <summary>
@@ -294,7 +304,8 @@ internal class NamingRpcTransportClient : IAsyncDisposable
             ReceivedGroupKeys = receivedGroupKeys ?? new HashSet<string>()
         };
 
-        await _grpcClient.SendStreamRequestAsync(NamingFuzzyWatchRequest.TYPE, request, cancellationToken);
+        var response = await FuzzyWatchAsync(ns, serviceNamePattern, groupNamePattern, receivedGroupKeys, initializing, cancellationToken);
+        if (response?.IsSuccess != true) throw new NacosException(response?.ErrorCode ?? NacosException.ServerError, response?.Message ?? "Fuzzy watch rejected");
     }
 
     /// <summary>
@@ -341,7 +352,7 @@ internal class NamingRpcTransportClient : IAsyncDisposable
                     {
                         HandleNotifySubscriber(body);
                     }
-                    else if (type.Contains("FuzzyWatch") && type.Contains("Notify"))
+                    else if (type.Contains("FuzzyWatch") && (type.Contains("Notify") || type.Contains("Sync")))
                     {
                         HandleFuzzyWatchNotify(body);
                     }
@@ -380,6 +391,15 @@ internal class NamingRpcTransportClient : IAsyncDisposable
     {
         try
         {
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+            _fuzzyInitialization.Process(root, "serviceKey");
+            if (root.TryGetProperty("contexts", out var contexts))
+            {
+                foreach (var item in contexts.EnumerateArray()) EmitFuzzy(item, root);
+                return;
+            }
+            if (root.TryGetProperty("serviceKey", out _)) { EmitFuzzy(root, root); return; }
             var request = JsonSerializer.Deserialize<NamingFuzzyWatchNotifyRequest>(body, _jsonOptions);
             if (request != null)
             {
@@ -407,5 +427,20 @@ internal class NamingRpcTransportClient : IAsyncDisposable
         OnReconnected = null;
 
         return ValueTask.CompletedTask;
+    }
+
+    private void EmitFuzzy(JsonElement item, JsonElement root)
+    {
+        if (!item.TryGetProperty("serviceKey", out var key)) return;
+        var parts = key.GetString()!.Split("@@");
+        if (parts.Length != 3) return;
+        OnFuzzyWatchChanged?.Invoke(new NamingFuzzyWatchNotifyRequest
+        {
+            Namespace = parts[0],
+            GroupName = parts[1],
+            ServiceName = parts[2],
+            ChangedType = item.TryGetProperty("changedType", out var change) ? change.GetString()! : "ADD_SERVICE",
+            SyncType = root.TryGetProperty("syncType", out var sync) ? sync.GetString()! : "FUZZY_WATCH_RESOURCE_CHANGED"
+        });
     }
 }

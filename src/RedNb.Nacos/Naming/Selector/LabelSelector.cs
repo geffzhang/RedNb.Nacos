@@ -1,4 +1,4 @@
-namespace RedNb.Nacos.Core.Naming.Selector;
+namespace RedNb.Nacos.Naming.Selector;
 
 /// <summary>
 /// A selector that filters instances based on metadata labels.

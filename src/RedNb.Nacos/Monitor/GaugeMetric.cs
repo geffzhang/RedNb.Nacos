@@ -1,7 +1,7 @@
 namespace RedNb.Nacos.Monitor;
 
 /// <summary>
-/// Gauge Ö¸±ê£¨µ±Ç°ÖµÖ¸±ê£©
+/// Gauge æŒ‡æ ‡ï¼ˆå½“å‰å€¼æŒ‡æ ‡ï¼‰
 /// </summary>
 public class GaugeMetric
 {
@@ -9,22 +9,22 @@ public class GaugeMetric
     private readonly object _lockObj = new();
 
     /// <summary>
-    /// Ö¸±êÃû³Æ
+    /// æŒ‡æ ‡åç§°
     /// </summary>
     public string Name { get; }
 
     /// <summary>
-    /// Ö¸±êÃèÊö
+    /// æŒ‡æ ‡æè¿°
     /// </summary>
     public string Description { get; }
 
     /// <summary>
-    /// ±êÇ©
+    /// æ ‡ç­¾
     /// </summary>
     public IReadOnlyDictionary<string, string>? Labels { get; }
 
     /// <summary>
-    /// µ±Ç°Öµ
+    /// å½“å‰å€¼
     /// </summary>
     public double Value
     {
@@ -35,7 +35,7 @@ public class GaugeMetric
     }
 
     /// <summary>
-    /// ¹¹Ôìº¯Êı
+    /// æ„é€ å‡½æ•°
     /// </summary>
     public GaugeMetric(string name, string description, IDictionary<string, string>? labels = null)
     {
@@ -45,7 +45,7 @@ public class GaugeMetric
     }
 
     /// <summary>
-    /// ÉèÖÃÖµ
+    /// è®¾ç½®å€¼
     /// </summary>
     public void Set(double value)
     {
@@ -53,7 +53,7 @@ public class GaugeMetric
     }
 
     /// <summary>
-    /// Ôö¼ÓÖµ
+    /// å¢åŠ å€¼
     /// </summary>
     public void Increase(double value = 1)
     {
@@ -61,7 +61,7 @@ public class GaugeMetric
     }
 
     /// <summary>
-    /// ¼õÉÙÖµ
+    /// å‡å°‘å€¼
     /// </summary>
     public void Decrease(double value = 1)
     {
@@ -69,7 +69,7 @@ public class GaugeMetric
     }
 
     /// <summary>
-    /// »ñÈ¡¿ìÕÕ
+    /// è·å–å¿«ç…§
     /// </summary>
     public GaugeSnapshot GetSnapshot()
     {
@@ -84,7 +84,7 @@ public class GaugeMetric
 }
 
 /// <summary>
-/// Gauge ¿ìÕÕ
+/// Gauge å¿«ç…§
 /// </summary>
 public class GaugeSnapshot
 {
@@ -95,7 +95,7 @@ public class GaugeSnapshot
 }
 
 /// <summary>
-/// À©Õ¹·½·¨
+/// æ‰©å±•æ–¹æ³•
 /// </summary>
 internal static class DictionaryExtensions
 {

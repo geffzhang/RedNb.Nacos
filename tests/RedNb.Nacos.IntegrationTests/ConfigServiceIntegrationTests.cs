@@ -1,7 +1,7 @@
 using FluentAssertions;
-using RedNb.Nacos.Client;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Config;
+using RedNb.Nacos.Grpc;
+using RedNb.Nacos;
+using RedNb.Nacos.Config;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -17,26 +17,26 @@ public class ConfigServiceIntegrationTests : IAsyncLifetime
     private readonly ITestOutputHelper _output;
     private IConfigService? _configService;
     private readonly NacosClientOptions _options;
-    private readonly NacosFactory _factory;
+    private readonly NacosGrpcFactory _factory;
 
     public ConfigServiceIntegrationTests(ITestOutputHelper output)
     {
         _output = output;
         _options = new NacosClientOptions
         {
-            ServerAddresses = "localhost:8848",
-            Username = "nacos",
-            Password = "nacos",
-            Namespace = "",
+            ServerAddresses = NacosServerFixture.ServerAddress,
+            Username = NacosServerFixture.Username,
+            Password = NacosServerFixture.Password,
+            Namespace = NacosServerFixture.Namespace,
             DefaultTimeout = 5000
         };
-        _factory = new NacosFactory();
+        _factory = new NacosGrpcFactory();
     }
 
-    public Task InitializeAsync()
+    public async Task InitializeAsync()
     {
-        _configService = _factory.CreateConfigService(_options);
-        return Task.CompletedTask;
+        _configService = await NacosGrpcFactory.CreateConfigServiceAsync(_options);
+
     }
 
     public async Task DisposeAsync()
@@ -159,7 +159,7 @@ public class ConfigServiceIntegrationTests : IAsyncLifetime
         var group = "DEFAULT_GROUP";
         var content1 = "initial content";
         var content2 = "updated content";
-        
+
         var tcs = new TaskCompletionSource<ConfigInfo>();
         var listener = new TestConfigChangeListener(info =>
         {

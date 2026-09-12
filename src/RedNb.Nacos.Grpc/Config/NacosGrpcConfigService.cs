@@ -1,13 +1,13 @@
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Config;
-using RedNb.Nacos.Core.Config.Filter;
-using RedNb.Nacos.Core.Config.FuzzyWatch;
+using RedNb.Nacos;
+using RedNb.Nacos.Config;
+using RedNb.Nacos.Config.Filter;
+using RedNb.Nacos.Config.FuzzyWatch;
 using RedNb.Nacos.Utils;
 
-namespace RedNb.Nacos.GrpcClient.Config;
+namespace RedNb.Nacos.Grpc.Config;
 
 /// <summary>
 /// Nacos config service implementation using gRPC.
@@ -19,26 +19,28 @@ public class NacosGrpcConfigService : IConfigService
     private readonly NacosGrpcClient _grpcClient;
     private readonly ConfigRpcTransportClient _transportClient;
     private readonly ILogger<NacosGrpcConfigService>? _logger;
-    
+
     // Listener management
     private readonly ConcurrentDictionary<string, ConfigCacheData> _configCache = new();
     private readonly ConfigFilterChainManager _filterChainManager;
-    
+
     // Fuzzy watch management
     private readonly ConcurrentDictionary<string, FuzzyWatchEntry> _fuzzyWatchers = new();
     private readonly ConcurrentDictionary<string, HashSet<string>> _knownConfigs = new();
-    
+
     // Local cache for failover
-    private readonly LocalConfigCache _localCache;
-    
+    private readonly ConfigSnapshotStore _localCache;
+
     // Background task management
     private readonly CancellationTokenSource _cts;
     private Task? _listenTask;
     private readonly SemaphoreSlim _listenLock = new(1, 1);
-    
+
     private bool _disposed;
     private bool _isHealthy;
     private bool _initialized;
+    private readonly SemaphoreSlim _initializationLock = new(1, 1);
+    private string? _fuzzyConnectionId;
 
     /// <summary>
     /// Interval for checking config changes (milliseconds).
@@ -62,7 +64,7 @@ public class NacosGrpcConfigService : IConfigService
         _logger = logger;
         _grpcClient = grpcClient;
         _transportClient = new ConfigRpcTransportClient(_grpcClient, options, logger);
-        _localCache = new LocalConfigCache(options);
+        _localCache = new ConfigSnapshotStore(options);
         _filterChainManager = new ConfigFilterChainManager();
         _cts = new CancellationTokenSource();
 
@@ -76,63 +78,78 @@ public class NacosGrpcConfigService : IConfigService
     /// </summary>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        if (_initialized) return;
-        
-        await _grpcClient.ConnectAsync(cancellationToken);
-        _isHealthy = true;
-        _initialized = true;
+        await _initializationLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_initialized) return;
 
-        // Start background listen task
-        _listenTask = ListenConfigLoopAsync(_cts.Token);
-        
-        _logger?.LogInformation("NacosGrpcConfigService initialized");
+            await _grpcClient.ConnectAsync(cancellationToken);
+            _fuzzyConnectionId = _grpcClient.ConnectionId;
+            _isHealthy = true;
+            _initialized = true;
+
+            // Start background listen task
+            _listenTask = ListenConfigLoopAsync(_cts.Token);
+
+            _logger?.LogInformation("NacosGrpcConfigService initialized");
+
+        }
+        finally { _initializationLock.Release(); }
     }
 
     #region IConfigService Implementation
 
-    public async Task<string?> GetConfigAsync(string dataId, string group, long timeoutMs, 
+    public async Task<string?> GetConfigAsync(string dataId, string group, long timeoutMs,
         CancellationToken cancellationToken = default)
     {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs > 0 ? timeoutMs : _options.DefaultTimeout));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        cancellationToken = linked.Token;
         await EnsureInitializedAsync(cancellationToken);
-        
+
         group = GetGroupOrDefault(group);
         var tenant = GetTenant();
 
         try
         {
-            // Check cache first
-            var cacheKey = GetCacheKey(dataId, group, tenant);
-            if (_configCache.TryGetValue(cacheKey, out var cached) && cached.Content != null)
-            {
-                return cached.Content;
-            }
-
             // Query from server
-            var response = await _transportClient.QueryConfigAsync(dataId, group, tenant, 
+            var response = await _transportClient.QueryConfigAsync(dataId, group, tenant,
                 cancellationToken: cancellationToken);
 
             if (response?.IsSuccess == true && response.Content != null)
             {
                 var content = response.Content;
-                
+
                 // Apply filters (decrypt if needed)
-                content = await ApplyFiltersOnGetAsync(dataId, group, tenant, content, 
+                content = await ApplyFiltersOnGetAsync(dataId, group, tenant, content,
                     response.EncryptedDataKey, cancellationToken);
 
                 // Update cache
-                UpdateCache(dataId, group, tenant, content, response.Md5, response.ContentType, 
+                UpdateCache(dataId, group, tenant, content, response.Md5, response.ContentType,
                     response.EncryptedDataKey, response.LastModified);
 
                 // Save to local cache for failover
                 _localCache.SaveSnapshot(dataId, group, content);
-                
+
                 _isHealthy = true;
                 return content;
             }
 
-            // Try local cache as failover
-            return _localCache.GetSnapshot(dataId, group);
+            if (response?.ErrorCode == NacosException.NotFound || response?.ErrorCode == 300)
+            {
+                _localCache.RemoveSnapshot(dataId, group);
+                if (_configCache.TryGetValue(GetCacheKey(dataId, group, tenant), out var entry))
+                {
+                    entry.Content = null;
+                    entry.Md5 = null;
+                }
+                return null;
+            }
+            throw new NacosException(response?.ErrorCode ?? NacosException.ServerError,
+                response?.Message ?? "Empty config response");
         }
+        catch (OperationCanceledException) { throw; }
+        catch (NacosException ex) when (ex.ErrorCode is 401 or 403) { throw; }
         catch (Exception ex)
         {
             _logger?.LogWarning(ex, "Failed to get config {DataId}@{Group} from gRPC server", dataId, group);
@@ -150,7 +167,7 @@ public class NacosGrpcConfigService : IConfigService
         }
     }
 
-    public async Task<string?> GetConfigAndSignListenerAsync(string dataId, string group, long timeoutMs, 
+    public async Task<string?> GetConfigAndSignListenerAsync(string dataId, string group, long timeoutMs,
         IConfigChangeListener listener, CancellationToken cancellationToken = default)
     {
         var content = await GetConfigAsync(dataId, group, timeoutMs, cancellationToken);
@@ -158,11 +175,11 @@ public class NacosGrpcConfigService : IConfigService
         return content;
     }
 
-    public async Task AddListenerAsync(string dataId, string group, IConfigChangeListener listener, 
+    public async Task AddListenerAsync(string dataId, string group, IConfigChangeListener listener,
         CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken);
-        
+
         group = GetGroupOrDefault(group);
         var tenant = GetTenant();
         var cacheKey = GetCacheKey(dataId, group, tenant);
@@ -204,7 +221,7 @@ public class NacosGrpcConfigService : IConfigService
         if (_configCache.TryGetValue(cacheKey, out var cacheData))
         {
             cacheData.RemoveListener(listener);
-            
+
             // If no more listeners, remove from cache and send unlisten
             if (!cacheData.HasListeners)
             {
@@ -216,17 +233,17 @@ public class NacosGrpcConfigService : IConfigService
         _logger?.LogDebug("Removed gRPC listener for {DataId}@{Group}", dataId, group);
     }
 
-    public async Task<bool> PublishConfigAsync(string dataId, string group, string content, 
+    public async Task<bool> PublishConfigAsync(string dataId, string group, string content,
         CancellationToken cancellationToken = default)
     {
         return await PublishConfigAsync(dataId, group, content, ConfigType.Default, cancellationToken);
     }
 
-    public async Task<bool> PublishConfigAsync(string dataId, string group, string content, string type, 
+    public async Task<bool> PublishConfigAsync(string dataId, string group, string content, string type,
         CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken);
-        
+
         group = GetGroupOrDefault(group);
         var tenant = GetTenant();
 
@@ -244,17 +261,17 @@ public class NacosGrpcConfigService : IConfigService
         return result;
     }
 
-    public async Task<bool> PublishConfigCasAsync(string dataId, string group, string content, string casMd5, 
+    public async Task<bool> PublishConfigCasAsync(string dataId, string group, string content, string casMd5,
         CancellationToken cancellationToken = default)
     {
         return await PublishConfigCasAsync(dataId, group, content, casMd5, ConfigType.Default, cancellationToken);
     }
 
-    public async Task<bool> PublishConfigCasAsync(string dataId, string group, string content, string casMd5, 
+    public async Task<bool> PublishConfigCasAsync(string dataId, string group, string content, string casMd5,
         string type, CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken);
-        
+
         group = GetGroupOrDefault(group);
         var tenant = GetTenant();
 
@@ -272,11 +289,11 @@ public class NacosGrpcConfigService : IConfigService
         return result;
     }
 
-    public async Task<bool> RemoveConfigAsync(string dataId, string group, 
+    public async Task<bool> RemoveConfigAsync(string dataId, string group,
         CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken);
-        
+
         group = GetGroupOrDefault(group);
         var tenant = GetTenant();
 
@@ -285,10 +302,10 @@ public class NacosGrpcConfigService : IConfigService
         if (result)
         {
             _localCache.RemoveSnapshot(dataId, group);
-            
+
             var cacheKey = GetCacheKey(dataId, group, tenant);
             _configCache.TryRemove(cacheKey, out _);
-            
+
             _logger?.LogDebug("Removed config {DataId}@{Group}", dataId, group);
         }
 
@@ -310,17 +327,17 @@ public class NacosGrpcConfigService : IConfigService
 
     #region Fuzzy Watch Implementation
 
-    public Task FuzzyWatchAsync(string groupNamePattern, IConfigFuzzyWatchEventWatcher watcher, 
+    public Task FuzzyWatchAsync(string groupNamePattern, IConfigFuzzyWatchEventWatcher watcher,
         CancellationToken cancellationToken = default)
     {
         return FuzzyWatchAsync("*", groupNamePattern, watcher, cancellationToken);
     }
 
-    public async Task FuzzyWatchAsync(string dataIdPattern, string groupNamePattern, 
+    public async Task FuzzyWatchAsync(string dataIdPattern, string groupNamePattern,
         IConfigFuzzyWatchEventWatcher watcher, CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken);
-        
+
         var tenant = GetTenant() ?? "";
         var watchKey = GetFuzzyWatchKey(dataIdPattern, groupNamePattern, tenant);
 
@@ -340,24 +357,24 @@ public class NacosGrpcConfigService : IConfigService
             GroupPattern = groupNamePattern
         };
 
-        await _transportClient.SendFuzzyWatchAsync(new List<ConfigFuzzyListenContext> { context }, 
+        await _transportClient.SendFuzzyWatchAsync(new List<ConfigFuzzyListenContext> { context },
             true, cancellationToken);
 
-        _logger?.LogDebug("Added fuzzy watch for dataId={DataIdPattern}, group={GroupPattern}", 
+        _logger?.LogDebug("Added fuzzy watch for dataId={DataIdPattern}, group={GroupPattern}",
             dataIdPattern, groupNamePattern);
     }
 
-    public Task<ISet<string>> FuzzyWatchWithGroupKeysAsync(string groupNamePattern, 
+    public Task<ISet<string>> FuzzyWatchWithGroupKeysAsync(string groupNamePattern,
         IConfigFuzzyWatchEventWatcher watcher, CancellationToken cancellationToken = default)
     {
         return FuzzyWatchWithGroupKeysAsync("*", groupNamePattern, watcher, cancellationToken);
     }
 
-    public async Task<ISet<string>> FuzzyWatchWithGroupKeysAsync(string dataIdPattern, string groupNamePattern, 
+    public async Task<ISet<string>> FuzzyWatchWithGroupKeysAsync(string dataIdPattern, string groupNamePattern,
         IConfigFuzzyWatchEventWatcher watcher, CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken);
-        
+
         var tenant = GetTenant() ?? "";
         var watchKey = GetFuzzyWatchKey(dataIdPattern, groupNamePattern, tenant);
 
@@ -377,7 +394,7 @@ public class NacosGrpcConfigService : IConfigService
             GroupPattern = groupNamePattern
         };
 
-        var response = await _transportClient.FuzzyWatchAsync(new List<ConfigFuzzyListenContext> { context }, 
+        var response = await _transportClient.FuzzyWatchAsync(new List<ConfigFuzzyListenContext> { context },
             true, cancellationToken);
 
         var matchedKeys = new HashSet<string>();
@@ -390,19 +407,19 @@ public class NacosGrpcConfigService : IConfigService
             }
         }
 
-        _logger?.LogDebug("Added fuzzy watch with keys for dataId={DataIdPattern}, group={GroupPattern}, matched={Count}", 
+        _logger?.LogDebug("Added fuzzy watch with keys for dataId={DataIdPattern}, group={GroupPattern}, matched={Count}",
             dataIdPattern, groupNamePattern, matchedKeys.Count);
 
         return matchedKeys;
     }
 
-    public Task CancelFuzzyWatchAsync(string groupNamePattern, IConfigFuzzyWatchEventWatcher watcher, 
+    public Task CancelFuzzyWatchAsync(string groupNamePattern, IConfigFuzzyWatchEventWatcher watcher,
         CancellationToken cancellationToken = default)
     {
         return CancelFuzzyWatchAsync("*", groupNamePattern, watcher, cancellationToken);
     }
 
-    public async Task CancelFuzzyWatchAsync(string dataIdPattern, string groupNamePattern, 
+    public async Task CancelFuzzyWatchAsync(string dataIdPattern, string groupNamePattern,
         IConfigFuzzyWatchEventWatcher watcher, CancellationToken cancellationToken = default)
     {
         var tenant = GetTenant() ?? "";
@@ -411,7 +428,7 @@ public class NacosGrpcConfigService : IConfigService
         if (_fuzzyWatchers.TryGetValue(watchKey, out var entry))
         {
             entry.RemoveWatcher(watcher);
-            
+
             if (!entry.HasWatchers)
             {
                 _fuzzyWatchers.TryRemove(watchKey, out _);
@@ -423,12 +440,12 @@ public class NacosGrpcConfigService : IConfigService
                     GroupPattern = groupNamePattern
                 };
 
-                await _transportClient.SendFuzzyWatchAsync(new List<ConfigFuzzyListenContext> { context }, 
+                await _transportClient.SendFuzzyWatchAsync(new List<ConfigFuzzyListenContext> { context },
                     false, cancellationToken);
             }
         }
 
-        _logger?.LogDebug("Cancelled fuzzy watch for dataId={DataIdPattern}, group={GroupPattern}", 
+        _logger?.LogDebug("Cancelled fuzzy watch for dataId={DataIdPattern}, group={GroupPattern}",
             dataIdPattern, groupNamePattern);
     }
 
@@ -454,9 +471,12 @@ public class NacosGrpcConfigService : IConfigService
             {
                 await Task.Delay(ListenCheckIntervalMs, cancellationToken);
 
-                if (!_grpcClient.IsConnected)
+                await _grpcClient.ConnectAsync(cancellationToken);
+                if (_fuzzyConnectionId != _grpcClient.ConnectionId)
                 {
-                    continue;
+                    foreach (var entry in _fuzzyWatchers.Values)
+                        await _transportClient.SendFuzzyWatchAsync([new() { DataIdPattern = entry.DataIdPattern, GroupPattern = entry.GroupPattern }], true, cancellationToken);
+                    _fuzzyConnectionId = _grpcClient.ConnectionId;
                 }
 
                 // Re-register all listeners
@@ -479,7 +499,7 @@ public class NacosGrpcConfigService : IConfigService
         _logger?.LogInformation("Config listen loop stopped");
     }
 
-    private async Task SendListenRequestAsync(List<ConfigCacheData> cacheDataList, bool listen, 
+    private async Task SendListenRequestAsync(List<ConfigCacheData> cacheDataList, bool listen,
         CancellationToken cancellationToken)
     {
         if (cacheDataList.Count == 0) return;
@@ -495,7 +515,16 @@ public class NacosGrpcConfigService : IConfigService
                 Md5 = c.Md5 ?? ""
             }).ToList();
 
-            await _transportClient.SendBatchListenAsync(contexts, listen, cancellationToken);
+            var response = await _transportClient.BatchListenAsync(contexts, listen, cancellationToken);
+            if (response?.IsSuccess != true)
+                throw new NacosException(response?.ErrorCode ?? NacosException.ServerError,
+                    response?.Message ?? "Empty config listen response");
+            if (listen && response.ChangedConfigs != null)
+            {
+                foreach (var changed in response.ChangedConfigs)
+                    if (_configCache.TryGetValue(GetCacheKey(changed.DataId, changed.Group, changed.Tenant), out var cached))
+                        await RefreshConfigAsync(cached);
+            }
         }
         finally
         {
@@ -511,7 +540,7 @@ public class NacosGrpcConfigService : IConfigService
         }
         catch (Exception ex)
         {
-            _logger?.LogWarning(ex, "Failed to send unlisten request for {DataId}@{Group}", 
+            _logger?.LogWarning(ex, "Failed to send unlisten request for {DataId}@{Group}",
                 cacheData.DataId, cacheData.Group);
         }
     }
@@ -542,9 +571,9 @@ public class NacosGrpcConfigService : IConfigService
         try
         {
             var content = request.Content!;
-            
+
             // Apply filters (decrypt if needed)
-            content = await ApplyFiltersOnGetAsync(cacheData.DataId, cacheData.Group, cacheData.Tenant, 
+            content = await ApplyFiltersOnGetAsync(cacheData.DataId, cacheData.Group, cacheData.Tenant,
                 content, request.EncryptedDataKey, CancellationToken.None);
 
             var oldMd5 = cacheData.Md5;
@@ -567,7 +596,7 @@ public class NacosGrpcConfigService : IConfigService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error processing content push for {DataId}@{Group}", 
+            _logger?.LogError(ex, "Error processing content push for {DataId}@{Group}",
                 cacheData.DataId, cacheData.Group);
         }
     }
@@ -579,12 +608,22 @@ public class NacosGrpcConfigService : IConfigService
             var response = await _transportClient.QueryConfigAsync(
                 cacheData.DataId, cacheData.Group, cacheData.Tenant, cancellationToken: CancellationToken.None);
 
+            if (response?.ErrorCode is 300 or 404)
+            {
+                var hadContent = cacheData.Content != null;
+                cacheData.Content = null;
+                cacheData.Md5 = null;
+                _localCache.RemoveSnapshot(cacheData.DataId, cacheData.Group);
+                if (hadContent) NotifyListeners(cacheData, null, null);
+                return;
+            }
+
             if (response?.IsSuccess == true && response.Content != null)
             {
                 var content = response.Content;
-                
+
                 // Apply filters (decrypt if needed)
-                content = await ApplyFiltersOnGetAsync(cacheData.DataId, cacheData.Group, cacheData.Tenant, 
+                content = await ApplyFiltersOnGetAsync(cacheData.DataId, cacheData.Group, cacheData.Tenant,
                     content, response.EncryptedDataKey, CancellationToken.None);
 
                 var oldMd5 = cacheData.Md5;
@@ -608,12 +647,12 @@ public class NacosGrpcConfigService : IConfigService
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error refreshing config {DataId}@{Group}", 
+            _logger?.LogError(ex, "Error refreshing config {DataId}@{Group}",
                 cacheData.DataId, cacheData.Group);
         }
     }
 
-    private void NotifyListeners(ConfigCacheData cacheData, string content, string? md5)
+    private void NotifyListeners(ConfigCacheData cacheData, string? content, string? md5)
     {
         var configInfo = new ConfigInfo
         {
@@ -635,7 +674,7 @@ public class NacosGrpcConfigService : IConfigService
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Error notifying listener for {DataId}@{Group}", 
+                _logger?.LogError(ex, "Error notifying listener for {DataId}@{Group}",
                     cacheData.DataId, cacheData.Group);
             }
         }
@@ -643,7 +682,7 @@ public class NacosGrpcConfigService : IConfigService
 
     private void HandleFuzzyWatchChangeNotify(ConfigFuzzyWatchChangeNotifyRequest request)
     {
-        _logger?.LogDebug("Received fuzzy watch change notify for {DataId}@{Group}, Type={ChangeType}", 
+        _logger?.LogDebug("Received fuzzy watch change notify for {DataId}@{Group}, Type={ChangeType}",
             request.DataId, request.Group, request.ChangedType);
 
         // Update known configs
@@ -665,7 +704,7 @@ public class NacosGrpcConfigService : IConfigService
                 continue;
             }
 
-            if (MatchesPattern(request.DataId, entry.DataIdPattern) && 
+            if (MatchesPattern(request.DataId, entry.DataIdPattern) &&
                 MatchesPattern(request.Group, entry.GroupPattern))
             {
                 var changeEvent = ConfigFuzzyWatchChangeEvent.Build(
@@ -682,7 +721,7 @@ public class NacosGrpcConfigService : IConfigService
                         var scheduler = watcher.Scheduler;
                         if (scheduler != null)
                         {
-                            Task.Factory.StartNew(() => watcher.OnEvent(changeEvent), 
+                            Task.Factory.StartNew(() => watcher.OnEvent(changeEvent),
                                 CancellationToken.None, TaskCreationOptions.None, scheduler);
                         }
                         else
@@ -692,7 +731,7 @@ public class NacosGrpcConfigService : IConfigService
                     }
                     catch (Exception ex)
                     {
-                        _logger?.LogError(ex, "Error notifying fuzzy watcher for {DataId}@{Group}", 
+                        _logger?.LogError(ex, "Error notifying fuzzy watcher for {DataId}@{Group}",
                             request.DataId, request.Group);
                     }
                 }
@@ -700,12 +739,12 @@ public class NacosGrpcConfigService : IConfigService
         }
     }
 
-    private void UpdateCache(string dataId, string group, string? tenant, string content, 
+    private void UpdateCache(string dataId, string group, string? tenant, string content,
         string? md5, string? type, string? encryptedDataKey, long lastModified)
     {
         var cacheKey = GetCacheKey(dataId, group, tenant);
         var cacheData = _configCache.GetOrAdd(cacheKey, _ => new ConfigCacheData(dataId, group, tenant));
-        
+
         cacheData.Content = content;
         cacheData.Md5 = md5 ?? NacosUtils.GetMd5(content);
         cacheData.Type = type;
@@ -721,9 +760,9 @@ public class NacosGrpcConfigService : IConfigService
             return content;
         }
 
-        var request = new Core.Config.Filter.ConfigRequest(dataId, group, tenant, content);
+        var request = new global::RedNb.Nacos.Config.Filter.ConfigRequest(dataId, group, tenant, content);
         request.EncryptedDataKey = encryptedDataKey;
-        var response = new Core.Config.Filter.ConfigResponse { Content = content };
+        var response = new global::RedNb.Nacos.Config.Filter.ConfigResponse { Content = content };
         response.EncryptedDataKey = encryptedDataKey;
 
         await _filterChainManager.DoFilterAsync(request, response, cancellationToken);
@@ -739,9 +778,9 @@ public class NacosGrpcConfigService : IConfigService
             return new FilterResult(content, null);
         }
 
-        var request = new Core.Config.Filter.ConfigRequest(dataId, group, tenant, content);
+        var request = new global::RedNb.Nacos.Config.Filter.ConfigRequest(dataId, group, tenant, content);
         request.PutParameter(ConfigRequestKeys.Type, type);
-        var response = new Core.Config.Filter.ConfigResponse { Content = content };
+        var response = new global::RedNb.Nacos.Config.Filter.ConfigResponse { Content = content };
 
         await _filterChainManager.DoFilterAsync(request, response, cancellationToken);
 
@@ -751,11 +790,11 @@ public class NacosGrpcConfigService : IConfigService
     private static bool MatchesPattern(string value, string pattern)
     {
         if (pattern == "*") return true;
-        
+
         var regexPattern = "^" + Regex.Escape(pattern)
             .Replace("\\*", ".*")
             .Replace("\\?", ".") + "$";
-        
+
         return Regex.IsMatch(value, regexPattern, RegexOptions.IgnoreCase);
     }
 
@@ -794,7 +833,7 @@ public class NacosGrpcConfigService : IConfigService
         _disposed = true;
 
         await _cts.CancelAsync();
-        
+
         // Wait for listen task
         if (_listenTask != null)
         {
@@ -803,10 +842,10 @@ public class NacosGrpcConfigService : IConfigService
 
         await _transportClient.DisposeAsync();
         await _grpcClient.DisposeAsync();
-        
+
         _cts.Dispose();
         _listenLock.Dispose();
-        
+
         _logger?.LogInformation("NacosGrpcConfigService disposed");
     }
 
@@ -913,81 +952,4 @@ public class NacosGrpcConfigService : IConfigService
     }
 
     #endregion
-}
-
-/// <summary>
-/// Local config cache for failover.
-/// </summary>
-internal class LocalConfigCache
-{
-    private readonly string _cacheDir;
-
-    public LocalConfigCache(NacosClientOptions options)
-    {
-        _cacheDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "nacos", "config", options.Namespace ?? "public");
-        
-        if (!Directory.Exists(_cacheDir))
-        {
-            Directory.CreateDirectory(_cacheDir);
-        }
-    }
-
-    public void SaveSnapshot(string dataId, string group, string content)
-    {
-        try
-        {
-            var fileName = GetFileName(dataId, group);
-            var filePath = Path.Combine(_cacheDir, fileName);
-            File.WriteAllText(filePath, content);
-        }
-        catch
-        {
-            // Ignore cache save errors
-        }
-    }
-
-    public string? GetSnapshot(string dataId, string group)
-    {
-        try
-        {
-            var fileName = GetFileName(dataId, group);
-            var filePath = Path.Combine(_cacheDir, fileName);
-            
-            if (File.Exists(filePath))
-            {
-                return File.ReadAllText(filePath);
-            }
-        }
-        catch
-        {
-            // Ignore cache read errors
-        }
-        
-        return null;
-    }
-
-    public void RemoveSnapshot(string dataId, string group)
-    {
-        try
-        {
-            var fileName = GetFileName(dataId, group);
-            var filePath = Path.Combine(_cacheDir, fileName);
-            
-            if (File.Exists(filePath))
-            {
-                File.Delete(filePath);
-            }
-        }
-        catch
-        {
-            // Ignore cache delete errors
-        }
-    }
-
-    private static string GetFileName(string dataId, string group)
-    {
-        return $"{group}@@{dataId}".Replace("/", "_").Replace("\\", "_");
-    }
 }

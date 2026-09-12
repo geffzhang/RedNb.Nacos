@@ -16,10 +16,11 @@ public class NacosIntegrationCollection : ICollectionFixture<NacosServerFixture>
 /// </summary>
 public class NacosServerFixture : IAsyncLifetime
 {
-    public const string ServerAddress = "localhost:8848";
-    public const string ConsoleAddress = "localhost:8080";
-    public const string Username = "nacos";
-    public const string Password = "nacos";
+    public static string ServerAddress => Environment.GetEnvironmentVariable("NACOS_TEST_SERVER") ?? "localhost:8848";
+    public static string ConsoleAddress => Environment.GetEnvironmentVariable("NACOS_TEST_CONSOLE") ?? "localhost:8080";
+    public static string Username => Environment.GetEnvironmentVariable("NACOS_TEST_USERNAME") ?? "nacos";
+    public static string Password => Environment.GetEnvironmentVariable("NACOS_TEST_PASSWORD") ?? "nacos";
+    public static string Namespace => Environment.GetEnvironmentVariable("NACOS_TEST_NAMESPACE") ?? "";
 
     // Nacos 3.2.4 boots slower than 3.1.x due to dist module initialization,
     // so the readiness probe is given a generous start_period budget (matches
@@ -64,7 +65,7 @@ public class NacosServerFixture : IAsyncLifetime
             {
                 using var httpClient = new HttpClient { Timeout = probeTimeout };
                 var response = await httpClient.GetAsync(
-                    $"http://localhost:8080/v3/console/health/readiness");
+                    $"{(ConsoleAddress.Contains("://") ? ConsoleAddress : "http://" + ConsoleAddress).TrimEnd('/')}/v3/console/health/readiness");
                 if (response.IsSuccessStatusCode)
                 {
                     Console.WriteLine($"Nacos server is ready (attempt {attempt})");

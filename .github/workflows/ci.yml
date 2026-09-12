@@ -1,0 +1,64 @@
+name: SDK validation
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NACOS_TEST_SERVER: localhost:8848
+      NACOS_TEST_CONSOLE: localhost:8080
+      NACOS_TEST_USERNAME: nacos
+      NACOS_TEST_PASSWORD: nacos
+      NACOS_TEST_FAULT_CONTAINER: rednb-nacos-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Start isolated Nacos 3.2.4
+        shell: bash
+        run: |
+          docker run -d --name rednb-nacos-ci \
+            -e MODE=standalone -e NACOS_AUTH_ENABLE=true \
+            -e NACOS_AUTH_ADMIN_ENABLE=true -e NACOS_AUTH_CONSOLE_ENABLE=true \
+            -e NACOS_AUTH_TOKEN="$(openssl rand -base64 48 | tr -d '\n')" \
+            -e NACOS_AUTH_IDENTITY_KEY=ci -e NACOS_AUTH_IDENTITY_VALUE="$(openssl rand -hex 24)" \
+            -p 127.0.0.1:8080:8080 -p 127.0.0.1:8848:8848 -p 127.0.0.1:9848:9848 \
+            nacos/nacos-server:v3.2.4
+          ready=false
+          for i in $(seq 1 90); do
+            if curl -fsS http://localhost:8080/v3/console/health/readiness; then ready=true; break; fi
+            sleep 2
+          done
+          test "$ready" = true
+          curl -fsS -X POST http://localhost:8848/nacos/v3/auth/user/admin -d password=nacos
+      - run: dotnet restore RedNb.Nacos.sln
+      - run: dotnet build RedNb.Nacos.sln --no-restore -c Release
+      - name: Unit and live integration tests
+        run: dotnet test RedNb.Nacos.sln --no-build -c Release -m:1 -p:TestTfmsInParallel=false --logger trx --results-directory artifacts/test-results
+      - name: Reject empty test runs
+        run: python3 scripts/verify-test-results.py artifacts/test-results --minimum-runs 9
+      - name: Validate packages
+        run: |
+          dotnet pack RedNb.Nacos.sln --no-build -c Release -o artifacts/packages
+          python3 scripts/verify-packages.py artifacts/packages
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-results
+          path: artifacts/
+      - name: Container logs
+        if: failure()
+        run: docker logs rednb-nacos-ci
+      - name: Stop test container
+        if: always()
+        run: docker rm -f rednb-nacos-ci

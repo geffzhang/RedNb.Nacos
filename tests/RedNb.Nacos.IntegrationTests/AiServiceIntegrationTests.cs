@@ -1,10 +1,10 @@
 using FluentAssertions;
-using RedNb.Nacos.Client;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Ai;
-using RedNb.Nacos.Core.Ai.Listener;
-using RedNb.Nacos.Core.Ai.Model.A2a;
-using RedNb.Nacos.Core.Ai.Model.Mcp;
+using RedNb.Nacos.Http;
+using RedNb.Nacos;
+using RedNb.Nacos.Ai;
+using RedNb.Nacos.Ai.Listener;
+using RedNb.Nacos.Ai.Models.A2a;
+using RedNb.Nacos.Ai.Models.Mcp;
 using Xunit;
 using Xunit.Abstractions;
 using static RedNb.Nacos.IntegrationTests.TestRetryHelpers;
@@ -369,15 +369,41 @@ public class AiServiceIntegrationTests : IAsyncLifetime
 
     // ---------- MCP Server (subscribe — covered separately) ----------
 
-    [Fact(Skip = "Polling-based; covered by manual smoke test. Polling interval is 10s.")]
+    [Fact]
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
-    public async Task SubscribeAgentCard_ReceivesUpdates() { /* kept for reference; see Task 7 for gRPC subscribe */ }
+    public async Task SubscribeAgentCard_ReceivesUpdates()
+    {
+        var name = "audit-agent-watch-" + Guid.NewGuid().ToString("N");
+        var received = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var listener = new TestAgentCardListener(e => { if (e.AgentCard.Version == "1.0.1") received.TrySetResult(true); });
+        await _aiService!.ReleaseAgentCardAsync(new AgentCard { Name = name, Version = "1.0.0", ProtocolVersion = "0.3.7", PreferredTransport = "jsonrpc", Url = "http://127.0.0.1:9999" });
+        try
+        {
+            await _aiService.SubscribeAgentCardAsync(name, listener);
+            await _aiService.ReleaseAgentCardAsync(new AgentCard { Name = name, Version = "1.0.1", ProtocolVersion = "0.3.7", PreferredTransport = "jsonrpc", Url = "http://127.0.0.1:9999" }, AiConstants.A2a.A2aEndpointTypeService, true);
+            await received.Task.WaitAsync(TimeSpan.FromSeconds(35));
+        }
+        finally { await _aiService.UnsubscribeAgentCardAsync(name, listener); await DeleteWithRetryAsync(_output, () => _aiService.DeleteAgentAsync(name)); }
+    }
 
-    [Fact(Skip = "Polling-based; covered by manual smoke test. Polling interval is 10s.")]
+    [Fact]
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
-    public async Task SubscribeMcpServer_ReceivesUpdates() { /* kept for reference */ }
+    public async Task SubscribeMcpServer_ReceivesUpdates()
+    {
+        var name = "audit-mcp-watch-" + Guid.NewGuid().ToString("N");
+        var received = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var listener = new TestMcpServerListener(e => { if (e.McpServerDetailInfo.VersionDetail?.Version == "1.0.1") received.TrySetResult(true); });
+        await _aiService!.ReleaseMcpServerAsync(new McpServerBasicInfo { Name = name, Protocol = "stdio", VersionDetail = new ServerVersionDetail { Version = "1.0.0" } }, null);
+        try
+        {
+            await _aiService.SubscribeMcpServerAsync(name, listener);
+            await _aiService.ReleaseMcpServerAsync(new McpServerBasicInfo { Name = name, Protocol = "stdio", VersionDetail = new ServerVersionDetail { Version = "1.0.1" } }, null);
+            await received.Task.WaitAsync(TimeSpan.FromSeconds(35));
+        }
+        finally { await _aiService.UnsubscribeMcpServerAsync(name, listener); await DeleteWithRetryAsync(_output, () => _aiService.DeleteMcpServerAsync(name)); }
+    }
 
     // ---------- Test Listeners (unchanged) ----------
 

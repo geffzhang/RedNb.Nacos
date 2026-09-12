@@ -1,4 +1,4 @@
-namespace RedNb.Nacos.Core.Ai;
+namespace RedNb.Nacos.Ai;
 
 /// <summary>
 /// AI module constants for Nacos.

@@ -1,158 +1,94 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Ai;
-using RedNb.Nacos.Core.Config;
-using RedNb.Nacos.Core.Naming;
-using RedNb.Nacos.Client;
-using RedNb.Nacos.Client.Ai;
-using RedNb.Nacos.Client.Config;
-using RedNb.Nacos.Client.Naming;
+using Microsoft.Extensions.Options;
+using RedNb.Nacos;
+using RedNb.Nacos.Config;
+using RedNb.Nacos.Naming;
+using RedNb.Nacos.Ai;
+using RedNb.Nacos.Grpc;
+using RedNb.Nacos.Grpc.Config;
+using RedNb.Nacos.Grpc.Naming;
+using RedNb.Nacos.Grpc.Ai;
 
 namespace RedNb.Nacos.DependencyInjection;
 
-/// <summary>
-/// Extension methods for registering Nacos services with dependency injection.
-/// </summary>
+/// <summary>Recommended Nacos registration. Runtime Config/Naming use gRPC; AI routes by capability.</summary>
 public static class NacosServiceCollectionExtensions
 {
-    /// <summary>
-    /// Adds Nacos HTTP client services to the service collection.
-    /// Includes both Config and Naming services.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="configureOptions">Action to configure Nacos client options.</param>
-    /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddNacos(
-        this IServiceCollection services, 
-        Action<NacosClientOptions> configureOptions)
+    private static void Configure(IServiceCollection services, Action<NacosClientOptions> configure)
+        => services.AddOptions<NacosClientOptions>().Configure(configure)
+            .Validate(options => { options.Validate(); return true; }).ValidateOnStart();
+
+    private static NacosClientOptions Options(IServiceProvider services)
+        => services.GetRequiredService<IOptions<NacosClientOptions>>().Value;
+
+    /// <summary>Registers lazy Config and Naming services; AI and management remain opt-in.</summary>
+    public static IServiceCollection AddNacos(this IServiceCollection services, Action<NacosClientOptions> configureOptions)
     {
-        services.Configure(configureOptions);
-        
-        services.TryAddSingleton<INacosFactory, NacosFactory>();
-        
-        services.TryAddSingleton<IConfigService>(sp =>
-        {
-            var options = new NacosClientOptions();
-            configureOptions(options);
-            var loggerFactory = sp.GetService<ILoggerFactory>();
-            var logger = loggerFactory?.CreateLogger<NacosConfigService>();
-            return new NacosConfigService(options, logger);
-        });
-
-        services.TryAddSingleton<INamingService>(sp =>
-        {
-            var options = new NacosClientOptions();
-            configureOptions(options);
-            var loggerFactory = sp.GetService<ILoggerFactory>();
-            var logger = loggerFactory?.CreateLogger<NacosNamingService>();
-            return new NacosNamingService(options, logger);
-        });
-
+        Configure(services, configureOptions);
+        services.TryAddSingleton<INacosFactory>(sp => new NacosGrpcFactory(sp));
+        RegisterConfig(services);
+        RegisterNaming(services);
         return services;
     }
 
-    /// <summary>
-    /// Adds only Nacos config service to the service collection.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="configureOptions">Action to configure Nacos client options.</param>
-    /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddNacosConfig(
-        this IServiceCollection services, 
-        Action<NacosClientOptions> configureOptions)
+    private static void RegisterConfig(IServiceCollection services)
+        => services.TryAddSingleton<IConfigService>(sp => new NacosGrpcConfigService(Options(sp), sp.GetService<ILogger<NacosGrpcConfigService>>()));
+
+    private static void RegisterNaming(IServiceCollection services)
+        => services.TryAddSingleton<INamingService>(sp => new NacosGrpcNamingService(Options(sp), sp.GetService<ILogger<NacosGrpcNamingService>>()));
+
+    /// <summary>Registers only the configuration service.</summary>
+    public static IServiceCollection AddNacosConfig(this IServiceCollection services, Action<NacosClientOptions> configureOptions)
     {
-        services.Configure(configureOptions);
-
-        services.TryAddSingleton<IConfigService>(sp =>
-        {
-            var options = new NacosClientOptions();
-            configureOptions(options);
-            var loggerFactory = sp.GetService<ILoggerFactory>();
-            var logger = loggerFactory?.CreateLogger<NacosConfigService>();
-            return new NacosConfigService(options, logger);
-        });
-
-        return services;
+        Configure(services, configureOptions); RegisterConfig(services); return services;
     }
 
-    /// <summary>
-    /// Adds only Nacos naming service to the service collection.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="configureOptions">Action to configure Nacos client options.</param>
-    /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddNacosNaming(
-        this IServiceCollection services, 
-        Action<NacosClientOptions> configureOptions)
+    /// <summary>Registers only the naming service.</summary>
+    public static IServiceCollection AddNacosNaming(this IServiceCollection services, Action<NacosClientOptions> configureOptions)
     {
-        services.Configure(configureOptions);
-
-        services.TryAddSingleton<INamingService>(sp =>
-        {
-            var options = new NacosClientOptions();
-            configureOptions(options);
-            var loggerFactory = sp.GetService<ILoggerFactory>();
-            var logger = loggerFactory?.CreateLogger<NacosNamingService>();
-            return new NacosNamingService(options, logger);
-        });
-
-        return services;
+        Configure(services, configureOptions); RegisterNaming(services); return services;
     }
 
-    /// <summary>
-    /// Adds the Nacos AI registry service to the service collection.
-    /// The registered <see cref="IAiService"/> covers MCP, A2A, Prompt, Skill and AgentSpec
-    /// operations; the narrower interfaces resolve to the same singleton instance.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="configureOptions">Action to configure Nacos client options.</param>
-    /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddNacosAi(
-        this IServiceCollection services,
-        Action<NacosClientOptions> configureOptions)
+    /// <summary>Registers the AI facade and narrow interfaces with a shared singleton.</summary>
+    public static IServiceCollection AddNacosAi(this IServiceCollection services, Action<NacosClientOptions> configureOptions)
     {
-        services.Configure(configureOptions);
-
-        services.TryAddSingleton<IAiService>(sp =>
-        {
-            var options = new NacosClientOptions();
-            configureOptions(options);
-            var loggerFactory = sp.GetService<ILoggerFactory>();
-            var logger = loggerFactory?.CreateLogger<NacosAiService>();
-            return new NacosAiService(options, logger);
-        });
-
+        Configure(services, configureOptions);
+        services.TryAddSingleton<IAiService>(sp => new NacosAiClient(Options(sp)));
+        services.TryAddSingleton<IA2aService>(sp => sp.GetRequiredService<IAiService>());
         services.TryAddSingleton<IPromptService>(sp => sp.GetRequiredService<IAiService>());
         services.TryAddSingleton<ISkillService>(sp => sp.GetRequiredService<IAiService>());
         services.TryAddSingleton<IAgentSpecService>(sp => sp.GetRequiredService<IAiService>());
-
         return services;
     }
 
-    /// <summary>
-    /// Adds Nacos client with pre-configured connection settings.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="serverAddresses">Nacos server addresses (comma-separated).</param>
-    /// <param name="username">Optional username for authentication.</param>
-    /// <param name="password">Optional password for authentication.</param>
-    /// <param name="namespace">Optional namespace (tenant) identifier.</param>
-    /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddNacos(
-        this IServiceCollection services, 
-        string serverAddresses, 
-        string? username = null, 
-        string? password = null, 
-        string? @namespace = null)
+    /// <summary>Registers v3 namespace administration as an opt-in capability.</summary>
+    public static IServiceCollection AddNacosAdministration(this IServiceCollection services, Action<NacosClientOptions> configureOptions)
     {
-        return services.AddNacos(options =>
-        {
-            options.ServerAddresses = serverAddresses;
-            options.Username = username;
-            options.Password = password;
-            options.Namespace = @namespace ?? string.Empty;
-        });
+        Configure(services, configureOptions);
+        services.TryAddSingleton<RedNb.Nacos.Administration.IAdministrationService>(sp => new RedNb.Nacos.Http.Administration.NacosAdministrationService(Options(sp)));
+        return services;
     }
+
+    /// <summary>Registers an isolated named client. Resolve using GetRequiredKeyedService with this name.</summary>
+    public static IServiceCollection AddNacos(this IServiceCollection services, string name, Action<NacosClientOptions> configureOptions)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        services.AddOptions<NacosClientOptions>(name).Configure(configureOptions)
+            .Validate(options => { options.Validate(); return true; }).ValidateOnStart();
+        services.AddKeyedSingleton<IConfigService>(name, (sp, _) => new NacosGrpcConfigService(sp.GetRequiredService<IOptionsMonitor<NacosClientOptions>>().Get(name)));
+        services.AddKeyedSingleton<INamingService>(name, (sp, _) => new NacosGrpcNamingService(sp.GetRequiredService<IOptionsMonitor<NacosClientOptions>>().Get(name)));
+        services.AddKeyedSingleton<IAiService>(name, (sp, _) => new NacosAiClient(sp.GetRequiredService<IOptionsMonitor<NacosClientOptions>>().Get(name)));
+        return services;
+    }
+
+    /// <summary>Registers the default client from explicit connection options.</summary>
+    public static IServiceCollection AddNacos(this IServiceCollection services, string serverAddresses,
+        string? username = null, string? password = null, string? @namespace = null)
+        => services.AddNacos(options =>
+        {
+            options.ServerAddresses = serverAddresses; options.Username = username;
+            options.Password = password; options.Namespace = @namespace ?? "";
+        });
 }

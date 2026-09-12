@@ -1,4 +1,4 @@
-namespace RedNb.Nacos.Core.Naming.Selector;
+namespace RedNb.Nacos.Naming.Selector;
 
 /// <summary>
 /// Interface for custom instance selection logic.

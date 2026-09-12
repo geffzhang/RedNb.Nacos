@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos;
+using RedNb.Nacos.Naming;
 
-namespace RedNb.Nacos.Client.Naming;
+namespace RedNb.Nacos.Http.Naming;
 
 /// <summary>
 /// Holds and caches service information.
@@ -58,6 +58,9 @@ public class ServiceInfoHolder
         // Expired or missing — caller should refresh via QueryServiceAsync.
         return null;
     }
+
+    internal ServiceInfo? GetSnapshot(string serviceName, string groupName, string clusters)
+        => _serviceInfoMap.GetValueOrDefault(GetServiceKey(serviceName, groupName, clusters));
 
     /// <summary>
     /// Processes service info from server, returns true if changed.
@@ -133,7 +136,13 @@ public class ServiceInfoHolder
         var oldIps = oldInfo.Hosts.Select(h => h.ToInetAddr()).OrderBy(x => x).ToList();
         var newIps = newInfo.Hosts.Select(h => h.ToInetAddr()).OrderBy(x => x).ToList();
 
-        return !oldIps.SequenceEqual(newIps);
+        if (!oldIps.SequenceEqual(newIps)) return true;
+        var previous = oldInfo.Hosts.OrderBy(i => i.ToInetAddr()).ToList();
+        var current = newInfo.Hosts.OrderBy(i => i.ToInetAddr()).ToList();
+        return previous.Zip(current).Any(pair =>
+            pair.First.Healthy != pair.Second.Healthy || pair.First.Enabled != pair.Second.Enabled ||
+            pair.First.Weight != pair.Second.Weight || pair.First.ClusterName != pair.Second.ClusterName ||
+            !pair.First.Metadata.OrderBy(k => k.Key).SequenceEqual(pair.Second.Metadata.OrderBy(k => k.Key)));
     }
 
     private void SaveToDisk(ServiceInfo serviceInfo)

@@ -23,87 +23,8 @@ dotnet run --project samples/RedNb.Nacos.Sample.AI
 
 进程逐章节打印一行结果，随后打印 `--- Summary ---` 汇总块并返回退出码：
 
-- **0** ——运行正常结束；各章节结果（包括 `Failed`）都在汇总块中。部分章节
-  失败仍然退出 0。
-- **2** ——运行没有取得任何进展：启动路径上的连接失败，或**所有**章节都报告
-  `Failed`（例如 Nacos 不可达——登录是各章节惰性进行的，因此服务器宕机时
-  逐章节体现失败，而不是在启动路径上抛异常）。
-
-## 演示内容
-
-共八个章节，按顺序运行：
-
-- `McpSamples` ——发布 MCP 服务器（Streamable HTTP 协议元数据 + `REF` 端点
-  规格）→ 列表 → 详情 → 通过 HTTP 长轮询通道订阅/退订 → **仅 gRPC** 的端点
-  注册/注销 → 删除。MCP 工具 CRUD 在 Nacos 3.2.4 上未开放，示例跳过。
-- `A2aSamples` ——发布 Agent Card → **仅 gRPC** 的批量端点注册
-  （`RegisterAgentEndpointsAsync`，一次往返注册两个端点）→ 列表 → 详情 →
-  订阅 → 退订 → **仅 gRPC** 的端点注销 → 删除。
-- `PromptSamples` ——草稿 → 提交审核 → **force-publish** → 上线 → 客户端读取
-  + `Render()` → 列表 → 下线 → 删除。
-- `SkillSamples` ——在内存中构建最小 skill ZIP（含 YAML front matter 的
-  `SKILL.md`）→ 上传 → 提交审核 → **force-publish** → 上线 → 按版本下载
-  （校验 md5 与条目结构）→ 下线 → 删除。
-- `AgentSpecSamples` ——在内存中构建最小 AgentSpec ZIP（`manifest.json` +
-  `AGENTS.md`）→ 上传（落库版本 `0.0.1`）→ 提交审核 → **force-publish** →
-  上线 → 按版本与 `latest` 标签回读 → 下线 → 删除。
-- `Integration/PromptChatIntegrationSample` ——发布一个一次性 Prompt，将其
-  模板渲染为 system message 交给 `IChatClient`（echo 客户端）——注册中心
-  模板到聊天请求的闭环。
-- `Integration/McpChatIntegrationSample` ——进程内托管真实 MCP 服务器
-  （临时端口上的 Streamable HTTP），发布到 MCP 注册中心并注册真实端点，
-  再从 **Nacos** 回读端点，用 `ModelContextProtocol.McpClient` 拨号，在线
-  调用 `get_weather`，然后把发现的工具接入 `IChatClient`
-  （`UseFunctionInvocation`）。
-- `Integration/AgentsAISamples` ——三个子演示，各自独立出结果：
-  1. **MCP** ——同样的托管/发布/发现/拨号闭环，但把发现的工具接入运行在
-     echo 客户端上的 Microsoft.Agents.AI `ChatClientAgent`。
-  2. **Skill** ——内联、代码定义的 `AgentInlineSkill` 通过
-     `AgentSkillsProviderBuilder` 提供给 `ChatClientAgent`。完全离线：不访问
-     Nacos，也不需要模型凭据。
-  3. **A2A** ——发布一次性卡片，从注册中心回读卡片 JSON，将存储的 0.3.7
-     形态映射到 A2A 1.0 协议卡片，并由此构建 `AIAgent`（`AsAIAgent`）与
-     `A2AClientFactory` 客户端，打印传输元数据。没有 A2A 在线往返：这需要
-     托管的 A2A agent，而托管包（`Microsoft.Agents.AI.Hosting.A2A*`）不在
-     本示例锁定的包集合内——代码注释中已说明。
-
-### force-publish 与 AI pipeline 插件
-
-原生 Nacos 3.2.4 自带默认 AI pipeline 插件
-（`nacos-default-ai-pipeline-plugin-3.2.4.jar`），把普通发布拦在一道审批
-之后，而原版服务器没有暴露任何审批 API——直接调用 publish 会失败并返回
-`Pipeline not approved`（HTTP 400）。因此 Prompt、Skill、AgentSpec 章节改用
-`ForcePublish*Async`（[since=3.2.1]），即官方文档中的无人值守旁路，效果
-与 `reviewing → online` 相同。
-
-### 自包含的集成章节
-
-`PromptChat`、`McpChat`、`AgentsAI` 不依赖其他章节创建的产物：各自发布
-带时间戳的 Prompt、MCP 服务器或 Agent Card，并在 `finally` 中清理（逐步
-保护，清理失败不会掩盖运行结果）。它们的 `MCP`/`A2A` 注册中心读取即
-"发现"时刻——端点或卡片取自 Nacos 的返回值，而不是本地变量。
-
-## 配置
-
-`Program.cs` 从输出目录读取 `appsettings.json`。可直接编辑该文件，或用
-前缀为 `REDNB_NACOS_` 的环境变量覆盖（嵌套键用 `__`，如
-`REDNB_NACOS_Nacos__ServerAddresses`）。
-
-| 键 | 默认值 | 说明 |
-|---|---|---|
-| `Nacos:ServerAddresses` | `localhost:8848` | 逗号分隔的 `host:port` 列表 |
-| `Nacos:GrpcPortOffset` | `1000` | gRPC 端口 = HTTP 端口 + 偏移量（8848 → 9848） |
-| `Nacos:Username` / `Password` | `nacos` / `nacos` | |
-| `Nacos:Namespace` | （空 = `public`） | |
-| `ChatProvider` | `echo` | `echo` 或 `openai`，由 `Chat/ChatClientFactory.cs` 解析；未知值或缺少 `OpenAI:ApiKey` 时回退到 echo 并告警（运行时各章节直接构造 `EchoChatClient`，`ChatProvider`/`OpenAI:*` 仅由工厂读取——配置驱动路径由 `tests/RedNb.Nacos.Sample.AI.Tests` 覆盖） |
-| `OpenAI:ApiKey` | （空） | 仅 `openai` 分支读取 |
-| `OpenAI:Model` | `gpt-4o-mini` | |
-| `Logging:LogLevel:Default` | `Information` | `trace`/`debug`/`information`/`warning`/`error` |
-
-启动日志打印配置的 provider，例如 `ChatProvider: echo`（`ChatClientFactory`
-的回退告警只出现在配置驱动路径上）。
-
-`openai` 分支仅在定义了 `OPENAI_PROVIDER` 时编译：
+- **0** ——所有执行章节均未失败。
+- **2** ——启动失败、没有执行结果，或任意章节报告 Failed。
 
 ```bash
 dotnet run --project samples/RedNb.Nacos.Sample.AI -p:DefineConstants=OPENAI_PROVIDER
@@ -164,3 +85,4 @@ HTTP 通道的 `IAiService` 对仅 gRPC 的操作抛出 `NacosException(ServerEr
 ```
 
 任何一项无法勾选都视为回归——发布前必须修复。
+

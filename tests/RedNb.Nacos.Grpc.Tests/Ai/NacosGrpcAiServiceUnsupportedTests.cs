@@ -1,8 +1,8 @@
 using FluentAssertions;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Ai.Listener;
-using RedNb.Nacos.Core.Ai.Model.Mcp;
-using RedNb.Nacos.GrpcClient.Ai;
+using RedNb.Nacos;
+using RedNb.Nacos.Ai.Listener;
+using RedNb.Nacos.Ai.Models.Mcp;
+using RedNb.Nacos.Grpc.Ai;
 using Xunit;
 
 namespace RedNb.Nacos.Grpc.Tests.Ai;

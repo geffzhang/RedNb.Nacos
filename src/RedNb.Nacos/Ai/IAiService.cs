@@ -1,10 +1,10 @@
-using RedNb.Nacos.Core.Ai.Listener;
-using RedNb.Nacos.Core.Ai.Model;
-using RedNb.Nacos.Core.Ai.Model.Mcp;
-using RedNb.Nacos.Core.Ai.Model.Mcp.Import;
-using RedNb.Nacos.Core.Ai.Model.Mcp.Validation;
+using RedNb.Nacos.Ai.Listener;
+using RedNb.Nacos.Ai.Models;
+using RedNb.Nacos.Ai.Models.Mcp;
+using RedNb.Nacos.Ai.Models.Mcp.Import;
+using RedNb.Nacos.Ai.Models.Mcp.Validation;
 
-namespace RedNb.Nacos.Core.Ai;
+namespace RedNb.Nacos.Ai;
 
 /// <summary>
 /// Nacos AI client service interface.

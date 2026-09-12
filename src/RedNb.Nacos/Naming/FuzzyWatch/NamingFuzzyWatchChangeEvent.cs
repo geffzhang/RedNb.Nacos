@@ -1,4 +1,4 @@
-namespace RedNb.Nacos.Core.Naming.FuzzyWatch;
+namespace RedNb.Nacos.Naming.FuzzyWatch;
 
 /// <summary>
 /// Service change type for fuzzy watch.

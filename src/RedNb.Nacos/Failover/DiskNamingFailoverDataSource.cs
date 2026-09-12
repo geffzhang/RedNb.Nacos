@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos.Naming;
 
 namespace RedNb.Nacos.Failover;
 

@@ -1,8 +1,8 @@
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core.Config;
-using RedNb.Nacos.Client.Config;
+using RedNb.Nacos.Config;
+using RedNb.Nacos.Grpc.Config;
 
 namespace RedNb.Nacos.AspNetCore.Configuration;
 
@@ -17,6 +17,8 @@ public class NacosConfigurationProvider : ConfigurationProvider, IDisposable
     private readonly Dictionary<string, ConfigChangeListener> _listeners = new();
     private readonly ILogger? _logger;
     private bool _disposed;
+    private readonly object _dataLock = new();
+    private readonly Dictionary<string, Dictionary<string, string?>> _sourceData = new();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="NacosConfigurationProvider"/> class.
@@ -25,7 +27,9 @@ public class NacosConfigurationProvider : ConfigurationProvider, IDisposable
     public NacosConfigurationProvider(NacosConfigurationSource source)
     {
         _source = source ?? throw new ArgumentNullException(nameof(source));
-        _configService = new NacosConfigService(_source.Options, null);
+        _logger = source.LoggerFactory?.CreateLogger<NacosConfigurationProvider>();
+        _source.Options.Validate();
+        _configService = new NacosGrpcConfigService(_source.Options, null);
     }
 
     /// <inheritdoc />
@@ -54,7 +58,9 @@ public class NacosConfigurationProvider : ConfigurationProvider, IDisposable
                     continue;
                 }
 
-                ParseConfiguration(data, config, item.ConfigType);
+                var itemData = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+                ParseConfiguration(itemData, config, item.ConfigType);
+                lock (_dataLock) _sourceData[$"{item.DataId}@@{item.Group}"] = itemData;
 
                 // Setup listener for reload if enabled
                 if (_source.ReloadOnChange)
@@ -69,7 +75,7 @@ public class NacosConfigurationProvider : ConfigurationProvider, IDisposable
             }
         }
 
-        Data = data;
+        RebuildData();
     }
 
     private void ParseConfiguration(Dictionary<string, string?> data, string content, string configType)
@@ -158,12 +164,12 @@ public class NacosConfigurationProvider : ConfigurationProvider, IDisposable
         var listener = new ConfigChangeListener(item.ConfigType, newConfig =>
         {
             var data = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-            ParseConfiguration(data, newConfig, item.ConfigType);
-
-            // Merge with existing data
-            foreach (var kvp in data)
+            if (newConfig != null) ParseConfiguration(data, newConfig, item.ConfigType);
+            lock (_dataLock)
             {
-                Data[kvp.Key] = kvp.Value;
+                if (_disposed) return;
+                _sourceData[key] = data;
+                RebuildData();
             }
 
             OnReload();
@@ -205,9 +211,9 @@ public class NacosConfigurationProvider : ConfigurationProvider, IDisposable
     private class ConfigChangeListener : IConfigChangeListener
     {
         private readonly string _configType;
-        private readonly Action<string> _onChange;
+        private readonly Action<string?> _onChange;
 
-        public ConfigChangeListener(string configType, Action<string> onChange)
+        public ConfigChangeListener(string configType, Action<string?> onChange)
         {
             _configType = configType;
             _onChange = onChange;
@@ -215,10 +221,19 @@ public class NacosConfigurationProvider : ConfigurationProvider, IDisposable
 
         public void OnReceiveConfigInfo(ConfigInfo configInfo)
         {
-            if (configInfo.Content != null)
-            {
-                _onChange(configInfo.Content);
-            }
+            _onChange(configInfo.Content);
+        }
+    }
+
+    private void RebuildData()
+    {
+        lock (_dataLock)
+        {
+            var merged = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in _source.ConfigItems)
+                if (_sourceData.TryGetValue($"{item.DataId}@@{item.Group}", out var values))
+                    foreach (var pair in values) merged[pair.Key] = pair.Value;
+            Data = merged;
         }
     }
 }

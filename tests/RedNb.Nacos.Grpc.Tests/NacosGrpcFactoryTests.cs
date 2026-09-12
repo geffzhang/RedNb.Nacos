@@ -1,12 +1,12 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Ai;
-using RedNb.Nacos.Core.Config;
-using RedNb.Nacos.Core.Lock;
-using RedNb.Nacos.Core.Maintainer;
-using RedNb.Nacos.Core.Naming;
-using RedNb.Nacos.GrpcClient;
+using RedNb.Nacos;
+using RedNb.Nacos.Ai;
+using RedNb.Nacos.Config;
+using RedNb.Nacos.Lock;
+using RedNb.Nacos.Administration;
+using RedNb.Nacos.Naming;
+using RedNb.Nacos.Grpc;
 using Xunit;
 
 namespace RedNb.Nacos.Grpc.Tests;

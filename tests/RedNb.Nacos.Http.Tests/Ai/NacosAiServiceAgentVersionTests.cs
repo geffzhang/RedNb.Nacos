@@ -1,6 +1,6 @@
 using FluentAssertions;
-using RedNb.Nacos.Client.Ai;
-using RedNb.Nacos.Core;
+using RedNb.Nacos.Http.Ai;
+using RedNb.Nacos;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using WireMock.Server;

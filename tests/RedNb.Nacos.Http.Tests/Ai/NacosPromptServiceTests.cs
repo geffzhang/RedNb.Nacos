@@ -1,8 +1,8 @@
 using FluentAssertions;
-using RedNb.Nacos.Client;
-using RedNb.Nacos.Client.Ai;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Ai.Model.Prompt;
+using RedNb.Nacos.Http;
+using RedNb.Nacos.Http.Ai;
+using RedNb.Nacos;
+using RedNb.Nacos.Ai.Models.Prompt;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using WireMock.Server;

@@ -1,6 +1,6 @@
 using FluentAssertions;
 using Moq;
-using RedNb.Nacos.Core.Lock;
+using RedNb.Nacos.Lock;
 using Xunit;
 
 namespace RedNb.Nacos.Tests.Lock;
@@ -347,9 +347,9 @@ public class LockServiceTests
 
         // Act - Acquire lock
         var acquired = await _mockLockService.Object.LockAsync(instance);
-        
+
         // Act - Do work (simulated)
-        
+
         // Act - Release lock
         var released = await _mockLockService.Object.UnlockAsync(instance);
 

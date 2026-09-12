@@ -1,10 +1,10 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Client;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Ai;
-using RedNb.Nacos.GrpcClient;
+using RedNb.Nacos.Http;
+using RedNb.Nacos;
+using RedNb.Nacos.Ai;
+using RedNb.Nacos.Grpc;
 
 namespace RedNb.Nacos.Sample.AI;
 
@@ -104,7 +104,7 @@ internal static class Program
         // a connection failure on the startup path (caught above) or every section failing.
         // A dead server lands here rather than in the catch above, because login is lazy
         // and each section swallows its own connection error and reports Failed.
-        return results.Count > 0 && results.All(r => r.Result.Outcome == SampleOutcome.Failed)
+        return results.Count == 0 || results.Any(r => r.Result.Outcome == SampleOutcome.Failed)
             ? 2
             : 0;
     }

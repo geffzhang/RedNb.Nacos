@@ -1,6 +1,6 @@
-using RedNb.Nacos.Core.Ai.Model.A2a;
+using RedNb.Nacos.Ai.Models.A2a;
 
-namespace RedNb.Nacos.Core.Ai.Listener;
+namespace RedNb.Nacos.Ai.Listener;
 
 /// <summary>
 /// Event for agent card changes.

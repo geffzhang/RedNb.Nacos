@@ -10,16 +10,16 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Server;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Ai;
-using RedNb.Nacos.Core.Ai.Model.Mcp;
+using RedNb.Nacos;
+using RedNb.Nacos.Ai;
+using RedNb.Nacos.Ai.Models.Mcp;
 using RedNb.Nacos.Sample.AI.Chat;
 using A2ACard = A2A.AgentCard;
 using A2AClientOptions = A2A.A2AClientOptions;
-using NacosAgentCapabilities = RedNb.Nacos.Core.Ai.Model.A2a.AgentCapabilities;
-using NacosAgentCard = RedNb.Nacos.Core.Ai.Model.A2a.AgentCard;
-using NacosAgentCardDetailInfo = RedNb.Nacos.Core.Ai.Model.A2a.AgentCardDetailInfo;
-using NacosAgentSkill = RedNb.Nacos.Core.Ai.Model.A2a.AgentSkill;
+using NacosAgentCapabilities = RedNb.Nacos.Ai.Models.A2a.AgentCapabilities;
+using NacosAgentCard = RedNb.Nacos.Ai.Models.A2a.AgentCard;
+using NacosAgentCardDetailInfo = RedNb.Nacos.Ai.Models.A2a.AgentCardDetailInfo;
+using NacosAgentSkill = RedNb.Nacos.Ai.Models.A2a.AgentSkill;
 
 namespace RedNb.Nacos.Sample.AI.Integration;
 

@@ -1,29 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <LangVersion>latest</LangVersion>
-    <Version>1.0.3</Version>
-    <Authors>RedNb</Authors>
     <Description>Nacos .NET SDK All-in-One - Meta package that includes all Nacos SDK components for easy installation</Description>
     <PackageTags>nacos;service-discovery;config;microservices;all-in-one</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageProjectUrl>https://github.com/redNb/RedNb.Nacos</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/redNb/RedNb.Nacos</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    <!-- This is a meta package - no source code -->
-    <IncludeBuildOutput>true</IncludeBuildOutput>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <!-- Dependency-only packages intentionally have no lib/ref assemblies. -->
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
   </PropertyGroup>
-
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
-
-  <!-- Reference all main packages -->
   <ItemGroup>
     <ProjectReference Include="..\RedNb.Nacos\RedNb.Nacos.csproj" />
     <ProjectReference Include="..\RedNb.Nacos.Http\RedNb.Nacos.Http.csproj" />
@@ -31,5 +18,4 @@
     <ProjectReference Include="..\RedNb.Nacos.DependencyInjection\RedNb.Nacos.DependencyInjection.csproj" />
     <ProjectReference Include="..\RedNb.Nacos.AspNetCore\RedNb.Nacos.AspNetCore.csproj" />
   </ItemGroup>
-
 </Project>

@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
-using RedNb.Nacos.Core.Ai.Model.A2a;
-using RedNb.Nacos.Core.Ai.Model.Mcp;
+using RedNb.Nacos.Ai.Models.A2a;
+using RedNb.Nacos.Ai.Models.Mcp;
 
-namespace RedNb.Nacos.Client.Ai;
+namespace RedNb.Nacos.Http.Ai;
 
 /// <summary>
 /// Holds cached MCP server and Agent card data.

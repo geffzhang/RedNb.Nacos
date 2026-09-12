@@ -16,7 +16,7 @@ import "google/protobuf/any.proto";
 //     with mismatched field numbers is decoded by the server as an empty type
 //     and dropped ("Unknown payload type: ").
 
-option csharp_namespace = "RedNb.Nacos.GrpcClient.Protos";
+option csharp_namespace = "RedNb.Nacos.Grpc.Protos";
 
 // The metadata.
 message Metadata {

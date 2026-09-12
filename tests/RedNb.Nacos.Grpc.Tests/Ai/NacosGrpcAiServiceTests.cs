@@ -1,12 +1,12 @@
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Client;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Ai.Model;
-using RedNb.Nacos.Core.Ai.Model.A2a;
-using RedNb.Nacos.Core.Ai.Model.Mcp;
-using RedNb.Nacos.GrpcClient.Ai;
+using RedNb.Nacos.Http;
+using RedNb.Nacos;
+using RedNb.Nacos.Ai.Models;
+using RedNb.Nacos.Ai.Models.A2a;
+using RedNb.Nacos.Ai.Models.Mcp;
+using RedNb.Nacos.Grpc.Ai;
 using Xunit;
 
 namespace RedNb.Nacos.Grpc.Tests.Ai;

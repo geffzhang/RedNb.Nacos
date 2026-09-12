@@ -1,7 +1,7 @@
-using RedNb.Nacos.Core.Naming.FuzzyWatch;
-using RedNb.Nacos.Core.Naming.Selector;
+using RedNb.Nacos.Naming.FuzzyWatch;
+using RedNb.Nacos.Naming.Selector;
 
-namespace RedNb.Nacos.Core.Naming;
+namespace RedNb.Nacos.Naming;
 
 /// <summary>
 /// Naming service interface for service registration and discovery.

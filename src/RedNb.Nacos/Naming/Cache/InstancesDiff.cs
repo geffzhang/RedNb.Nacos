@@ -1,4 +1,4 @@
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos.Naming;
 
 namespace RedNb.Nacos.Naming.Cache;
 

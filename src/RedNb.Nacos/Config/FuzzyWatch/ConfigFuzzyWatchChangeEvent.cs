@@ -1,4 +1,4 @@
-namespace RedNb.Nacos.Core.Config.FuzzyWatch;
+namespace RedNb.Nacos.Config.FuzzyWatch;
 
 /// <summary>
 /// Config change type for fuzzy watch.

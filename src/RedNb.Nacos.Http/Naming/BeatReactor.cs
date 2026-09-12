@@ -1,14 +1,14 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Naming;
+using RedNb.Nacos;
+using RedNb.Nacos.Naming;
 
-namespace RedNb.Nacos.Client.Naming;
+namespace RedNb.Nacos.Http.Naming;
 
 /// <summary>
 /// Handles heartbeat sending for registered instances.
 /// </summary>
-public class BeatReactor : IDisposable
+public class BeatReactor : IDisposable, IAsyncDisposable
 {
     private readonly NacosNamingService _namingService;
     private readonly NacosClientOptions _options;
@@ -16,6 +16,8 @@ public class BeatReactor : IDisposable
     private readonly ConcurrentDictionary<string, BeatInfo> _beatInfoMap = new();
     private readonly CancellationTokenSource _cts;
     private bool _disposed;
+    private readonly object _startLock = new();
+    private Task? _beatTask;
 
     public BeatReactor(NacosNamingService namingService, NacosClientOptions options, ILogger? logger = null)
     {
@@ -25,7 +27,6 @@ public class BeatReactor : IDisposable
         _cts = new CancellationTokenSource();
 
         // Start the beat task
-        _ = BeatTaskAsync(_cts.Token);
     }
 
     /// <summary>
@@ -43,6 +44,11 @@ public class BeatReactor : IDisposable
         };
 
         _beatInfoMap[key] = beatInfo;
+        lock (_startLock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _beatTask ??= Task.Run(() => BeatTaskAsync(_cts.Token));
+        }
         _logger?.LogDebug("Added beat info for {Key}", key);
     }
 
@@ -71,17 +77,17 @@ public class BeatReactor : IDisposable
                 foreach (var kvp in _beatInfoMap)
                 {
                     var beatInfo = kvp.Value;
-                    
+
                     if (now - beatInfo.LastBeatTime >= beatInfo.Period)
                     {
                         try
                         {
                             await _namingService.SendBeatAsync(
-                                beatInfo.ServiceName, 
-                                beatInfo.GroupName, 
-                                beatInfo.Instance, 
+                                beatInfo.ServiceName,
+                                beatInfo.GroupName,
+                                beatInfo.Instance,
                                 cancellationToken);
-                            
+
                             beatInfo.LastBeatTime = now;
                             _logger?.LogDebug("Sent heartbeat for {Key}", kvp.Key);
                         }
@@ -110,12 +116,15 @@ public class BeatReactor : IDisposable
         return $"{groupName}@@{serviceName}@@{instance.Ip}:{instance.Port}";
     }
 
-    public void Dispose()
+    public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
+
+    public async ValueTask DisposeAsync()
     {
         if (_disposed) return;
-        _cts.Cancel();
-        _cts.Dispose();
         _disposed = true;
+        await _cts.CancelAsync().ConfigureAwait(false);
+        if (_beatTask != null) await _beatTask.ConfigureAwait(false);
+        _cts.Dispose();
     }
 
     private class BeatInfo

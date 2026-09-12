@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace RedNb.Nacos.Core.Naming;
+namespace RedNb.Nacos.Naming;
 
 /// <summary>
 /// Represents a service instance in Nacos.

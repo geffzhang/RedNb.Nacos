@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
-using RedNb.Nacos.Core;
-using RedNb.Nacos.Core.Config;
+using RedNb.Nacos;
+using RedNb.Nacos.Config;
 
 namespace RedNb.Nacos.AspNetCore.Configuration;
 
@@ -9,6 +9,8 @@ namespace RedNb.Nacos.AspNetCore.Configuration;
 /// </summary>
 public class NacosConfigurationSource : IConfigurationSource
 {
+    /// <summary>Optional logger factory for startup and reload diagnostics.</summary>
+    public Microsoft.Extensions.Logging.ILoggerFactory? LoggerFactory { get; set; }
     /// <summary>
     /// Gets or sets the Nacos client options.
     /// </summary>

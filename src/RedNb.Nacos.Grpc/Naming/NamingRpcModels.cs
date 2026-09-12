@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace RedNb.Nacos.GrpcClient.Naming;
+namespace RedNb.Nacos.Grpc.Naming;
 
 #region Base Request/Response
 
@@ -280,11 +280,16 @@ public class NamingFuzzyWatchRequest : NamingRpcRequest
 {
     public const string TYPE = "NamingFuzzyWatchRequest";
 
-    [JsonPropertyName("serviceNamePattern")]
+    [JsonIgnore]
     public string ServiceNamePattern { get; set; } = "*";
 
-    [JsonPropertyName("groupNamePattern")]
+    [JsonIgnore]
     public string GroupNamePattern { get; set; } = "*";
+
+    [JsonPropertyName("groupKeyPattern")]
+    public string GroupKeyPattern => $"{(string.IsNullOrEmpty(Namespace) ? "public" : Namespace)}>>{GroupNamePattern}>>{ServiceNamePattern}";
+    [JsonPropertyName("watchType")]
+    public string WatchType => "WATCH";
 
     [JsonPropertyName("initializing")]
     public bool Initializing { get; set; } = true;
@@ -330,13 +335,17 @@ public class NamingFuzzyWatchChangeItem
 /// </summary>
 public class NamingFuzzyWatchCancelRequest : NamingRpcRequest
 {
-    public const string TYPE = "NamingFuzzyWatchCancelRequest";
+    public const string TYPE = "NamingFuzzyWatchRequest";
 
-    [JsonPropertyName("serviceNamePattern")]
+    [JsonIgnore]
     public string ServiceNamePattern { get; set; } = "*";
 
-    [JsonPropertyName("groupNamePattern")]
+    [JsonIgnore]
     public string GroupNamePattern { get; set; } = "*";
+    [JsonPropertyName("groupKeyPattern")]
+    public string GroupKeyPattern => $"{(string.IsNullOrEmpty(Namespace) ? "public" : Namespace)}>>{GroupNamePattern}>>{ServiceNamePattern}";
+    [JsonPropertyName("watchType")]
+    public string WatchType => "CANCEL_WATCH";
 }
 
 /// <summary>
