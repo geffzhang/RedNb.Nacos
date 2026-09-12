@@ -239,6 +239,27 @@ public class NacosClientOptions
                 "Username/Password require ServerAddresses: login is performed against the server API port (8848), so a console-only configuration cannot authenticate");
         }
 
+        // Symmetric AK/SK guards: SecurityProxy.ResolveLoginStrategy requires
+        // BOTH AccessKey AND SecretKey (AND semantics). Without these guards, a
+        // caller that sets only one of them passes Validate() silently, the
+        // runtime strategy resolves to None, and the configured credential is
+        // dropped without a clear error.
+        var hasAccessKeyOnly = !string.IsNullOrWhiteSpace(AccessKey) && string.IsNullOrWhiteSpace(SecretKey);
+        if (hasAccessKeyOnly)
+        {
+            throw new NacosException(
+                NacosException.InvalidParam,
+                "SecretKey is required when AccessKey is set");
+        }
+
+        var hasSecretKeyOnly = !string.IsNullOrWhiteSpace(SecretKey) && string.IsNullOrWhiteSpace(AccessKey);
+        if (hasSecretKeyOnly)
+        {
+            throw new NacosException(
+                NacosException.InvalidParam,
+                "AccessKey is required when SecretKey is set");
+        }
+
         var hasAccessKey = !string.IsNullOrWhiteSpace(AccessKey) || !string.IsNullOrWhiteSpace(SecretKey);
         if (hasAccessKey && !hasCore)
         {

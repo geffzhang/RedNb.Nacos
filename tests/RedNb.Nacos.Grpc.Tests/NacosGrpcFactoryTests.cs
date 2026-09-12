@@ -32,6 +32,13 @@ public class NacosGrpcFactoryTests
         Password = "nacos"
     };
 
+    private static NacosClientOptions AkSkOnlyNoAddresses() => new()
+    {
+        ServerAddresses = string.Empty,
+        AccessKey = "ak",
+        SecretKey = "sk"
+    };
+
     private static NacosClientOptions AllAddressesEmpty() => new()
     {
         ServerAddresses = string.Empty,
@@ -307,6 +314,18 @@ public class NacosGrpcFactoryTests
     {
         var ex = await Assert.ThrowsAsync<NacosException>(
             () => NacosGrpcFactory.CreateAiServiceAsync(AllAddressesEmpty()));
+        ex.ErrorCode.Should().Be(NacosException.InvalidParam);
+    }
+
+    [Fact]
+    public async Task CreateAiServiceAsync_AkSkButNoServerAddresses_Throws()
+    {
+        // Mirrors the HTTP-side SecurityProxyTests.Validate_WithAkSkButNoServerAddresses_ThrowsInvalidParam
+        // through the gRPC factory entry point: both AccessKey and SecretKey
+        // set, ServerAddresses blank — must be rejected by Validate() with
+        // InvalidParam before any gRPC dial attempt.
+        var ex = await Assert.ThrowsAsync<NacosException>(
+            () => NacosGrpcFactory.CreateAiServiceAsync(AkSkOnlyNoAddresses()));
         ex.ErrorCode.Should().Be(NacosException.InvalidParam);
     }
 

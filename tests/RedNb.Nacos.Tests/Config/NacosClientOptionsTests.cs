@@ -99,4 +99,67 @@ public class NacosClientOptionsTests
         Action act = () => opts.Validate();
         act.Should().NotThrow();
     }
+
+    [Fact]
+    public void Validate_AccessKeyOnlyWithoutSecretKey_ThrowsInvalidParam()
+    {
+        // AK without SK: ResolveLoginStrategy requires BOTH, so without
+        // this symmetric guard the half-set credential would be silently
+        // dropped and the runtime would fall through to anonymous login.
+        var opts = new NacosClientOptions
+        {
+            ServerAddresses = "localhost:8848",
+            AccessKey = "ak"
+        };
+        Action act = () => opts.Validate();
+        act.Should().Throw<NacosException>()
+            .Where(e => e.ErrorCode == NacosException.InvalidParam)
+            .WithMessage("*SecretKey is required when AccessKey is set*");
+    }
+
+    [Fact]
+    public void Validate_SecretKeyOnlyWithoutAccessKey_ThrowsInvalidParam()
+    {
+        var opts = new NacosClientOptions
+        {
+            ServerAddresses = "localhost:8848",
+            SecretKey = "sk"
+        };
+        Action act = () => opts.Validate();
+        act.Should().Throw<NacosException>()
+            .Where(e => e.ErrorCode == NacosException.InvalidParam)
+            .WithMessage("*AccessKey is required when SecretKey is set*");
+    }
+
+    [Fact]
+    public void Validate_AccessKeyAndSecretKeyWithoutServerAddresses_ThrowsInvalidParam()
+    {
+        // Existing OR-with-ServerAddresses rule still fires when both AK and
+        // SK are set but no core address is provided.
+        var opts = new NacosClientOptions
+        {
+            ServerAddresses = "",
+            ConsoleAddresses = "console.example:8080",
+            AccessKey = "ak",
+            SecretKey = "sk"
+        };
+        Action act = () => opts.Validate();
+        act.Should().Throw<NacosException>()
+            .Where(e => e.ErrorCode == NacosException.InvalidParam)
+            .WithMessage("*AccessKey/SecretKey*ServerAddresses*");
+    }
+
+    [Fact]
+    public void Validate_AccessKeyAndSecretKeyWithServerAddresses_Passes()
+    {
+        // Both AK and SK set + ServerAddresses set → happy path.
+        var opts = new NacosClientOptions
+        {
+            ServerAddresses = "localhost:8848",
+            AccessKey = "ak",
+            SecretKey = "sk"
+        };
+        Action act = () => opts.Validate();
+        act.Should().NotThrow();
+    }
 }
