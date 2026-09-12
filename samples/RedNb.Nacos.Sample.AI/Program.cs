@@ -64,6 +64,7 @@ internal static class Program
 
             logger.LogInformation("Connecting to Nacos at {Server} (HTTP) and gRPC port offset {Offset}",
                 serverAddresses, grpcPortOffset);
+            logger.LogInformation("ChatProvider: {Provider}", config["ChatProvider"] ?? "echo");
             httpAi = httpFactory.CreateAiService(options);
             grpcAi = grpcFactory.CreateAiService(options);
 
