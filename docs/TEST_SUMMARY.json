@@ -1,0 +1,121 @@
+{
+  "date": "2026-09-13",
+  "source_commit": "e5e9cb5a7ec2e443b1ae8062de09dd9387f76f3a",
+  "sdk_version": "2.0.0",
+  "server_version": "3.2.4",
+  "runs": [
+    {
+      "environment": "local",
+      "project": "rednb.nacos.tests",
+      "framework": "net8.0",
+      "total": 388,
+      "passed": 388,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/test-results/acceptance-local/rednb_DESKTOP-VN56ARD_2026-09-13_06_37_57.trx"
+    },
+    {
+      "environment": "local",
+      "project": "rednb.nacos.tests",
+      "framework": "net10.0",
+      "total": 388,
+      "passed": 388,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/test-results/acceptance-local/rednb_DESKTOP-VN56ARD_2026-09-13_06_37_59.trx"
+    },
+    {
+      "environment": "local",
+      "project": "rednb.nacos.http.tests",
+      "framework": "net8.0",
+      "total": 144,
+      "passed": 144,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/test-results/acceptance-local/rednb_DESKTOP-VN56ARD_2026-09-13_06_38_02.trx"
+    },
+    {
+      "environment": "local",
+      "project": "rednb.nacos.http.tests",
+      "framework": "net10.0",
+      "total": 144,
+      "passed": 144,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/test-results/acceptance-local/rednb_DESKTOP-VN56ARD_2026-09-13_06_38_06.trx"
+    },
+    {
+      "environment": "local",
+      "project": "rednb.nacos.integrationtests",
+      "framework": "net8.0",
+      "total": 56,
+      "passed": 56,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/test-results/acceptance-local/rednb_DESKTOP-VN56ARD_2026-09-13_06_38_12.trx"
+    },
+    {
+      "environment": "local",
+      "project": "rednb.nacos.integrationtests",
+      "framework": "net10.0",
+      "total": 56,
+      "passed": 56,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/test-results/acceptance-local/rednb_DESKTOP-VN56ARD_2026-09-13_06_40_30.trx"
+    },
+    {
+      "environment": "local",
+      "project": "rednb.nacos.grpc.tests",
+      "framework": "net8.0",
+      "total": 84,
+      "passed": 84,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/test-results/acceptance-local/rednb_DESKTOP-VN56ARD_2026-09-13_06_43_10.trx"
+    },
+    {
+      "environment": "local",
+      "project": "rednb.nacos.grpc.tests",
+      "framework": "net10.0",
+      "total": 84,
+      "passed": 84,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/test-results/acceptance-local/rednb_DESKTOP-VN56ARD_2026-09-13_06_43_13.trx"
+    },
+    {
+      "environment": "local",
+      "project": "rednb.nacos.sample.ai.tests",
+      "framework": "net10.0",
+      "total": 12,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "trx": "artifacts/test-results/acceptance-local/rednb_DESKTOP-VN56ARD_2026-09-13_06_43_16.trx"
+    },
+    {
+      "environment": "cloud",
+      "project": "rednb.nacos.integrationtests",
+      "framework": "net8.0",
+      "total": 56,
+      "passed": 55,
+      "failed": 0,
+      "skipped": 1,
+      "trx": "artifacts/test-results/acceptance-cloud/rednb_DESKTOP-VN56ARD_2026-09-13_06_40_27.trx"
+    },
+    {
+      "environment": "cloud",
+      "project": "rednb.nacos.integrationtests",
+      "framework": "net10.0",
+      "total": 56,
+      "passed": 55,
+      "failed": 0,
+      "skipped": 1,
+      "trx": "artifacts/test-results/acceptance-cloud/rednb_DESKTOP-VN56ARD_2026-09-13_06_42_07.trx"
+    }
+  ],
+  "passed": 1466,
+  "failed": 0,
+  "skipped": 2
+}
