@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>RedNb.Nacos.Sample.AI</RootNamespace>
+    <AssemblyName>RedNb.Nacos.Sample.AI</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <UserSecretsId>rednb-nacos-sample-ai</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RedNb.Nacos.All\RedNb.Nacos.All.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.AI" Version="9.*" />
+    <PackageReference Include="ModelContextProtocol" Version="0.*" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.*" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.*" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.*" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(DefineConstants.Contains(`OPENAI_PROVIDER`))' == 'True'">
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="9.*" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(DefineConstants.Contains(`AZURE_PROVIDER`))' == 'True'">
+    <PackageReference Include="Microsoft.Extensions.AI.AzureAIInference" Version="9.*" />
+  </ItemGroup>
+
+</Project>

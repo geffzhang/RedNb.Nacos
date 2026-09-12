@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>RedNb.Nacos.Sample.AI.Tests</RootNamespace>
+    <AssemblyName>RedNb.Nacos.Sample.AI.Tests</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject />
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
+    <PackageReference Include="xunit" Version="2.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.*" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="9.*" />
+    <!-- Microsoft.Extensions.Configuration.Memory is now folded into the base Microsoft.Extensions.Configuration package (>= 8.0); the Memory provider ships there. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\samples\RedNb.Nacos.Sample.AI\RedNb.Nacos.Sample.AI.csproj" />
+  </ItemGroup>
+
+</Project>
