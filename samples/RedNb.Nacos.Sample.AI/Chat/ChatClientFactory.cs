@@ -6,9 +6,9 @@ namespace RedNb.Nacos.Sample.AI.Chat;
 
 /// <summary>
 /// Resolves an <see cref="IChatClient"/> based on the "ChatProvider" key in
-/// configuration. Default provider is <see cref="EchoChatClient"/>. OpenAI and
-/// Azure branches are only compiled when the matching symbol is defined, so
-/// the default build does not pull in their provider packages.
+/// configuration. Default provider is <see cref="EchoChatClient"/>. The OpenAI
+/// branch is only compiled when OPENAI_PROVIDER is defined, so the default
+/// build does not pull in its provider package.
 /// </summary>
 public static class ChatClientFactory
 {
@@ -33,29 +33,8 @@ public static class ChatClientFactory
                 return new EchoChatClient();
             }
 
-            var openAi = new OpenAI.OpenAIClient(apiKey);
-            return openAi.AsChatClient(model);
-        }
-#endif
-
-#if AZURE_PROVIDER
-        if (string.Equals(provider, "azure", StringComparison.OrdinalIgnoreCase))
-        {
-            var endpoint = config["AzureOpenAI:Endpoint"];
-            var apiKey = config["AzureOpenAI:ApiKey"];
-            var deployment = config["AzureOpenAI:DeploymentName"];
-            if (string.IsNullOrWhiteSpace(endpoint) ||
-                string.IsNullOrWhiteSpace(apiKey) ||
-                string.IsNullOrWhiteSpace(deployment))
-            {
-                logger?.LogWarning(
-                    "ChatProvider=azure but AzureOpenAI:* config is incomplete — falling back to EchoChatClient.");
-                return new EchoChatClient();
-            }
-
-            var azure = new Azure.AI.Inference.AzureOpenAIClient(
-                new Uri(endpoint), new Azure.AzureKeyCredential(apiKey));
-            return azure.AsChatClient(deployment);
+            var openAi = new OpenAI.Chat.ChatClient(model, apiKey);
+            return openAi.AsIChatClient();
         }
 #endif
 
