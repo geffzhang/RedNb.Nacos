@@ -522,7 +522,11 @@ public partial class NacosGrpcAiService : IAiService
                 "Failed to register Agent endpoints: no response from server");
         }
 
-        if (response.ResultCode != 0)
+        // Nacos 3.x marks success with the Jackson-serialized "success" flag (and
+        // resultCode 200 = ResponseCode.SUCCESS) rather than resultCode 0. Trust
+        // the flag first so a successful batch register is not rejected; fall back
+        // to resultCode != 0 for servers/wire shapes that omit "success".
+        if (response.Success is not true && response.ResultCode != 0)
         {
             throw new NacosException(NacosException.ServerError,
                 $"Failed to register Agent endpoints: {response.Message ?? "unknown error"}");
@@ -917,13 +921,22 @@ public partial class NacosGrpcAiService : IAiService
     /// adds a <c>type</c> discriminator (unused by the SDK). The single-endpoint
     /// path's <c>OperationResponse</c> (Success/Message) does not match the server
     /// payload and is left in place to minimise blast radius; the batch path
-    /// inspects <c>resultCode</c> directly. <c>0</c> means success — anything else
-    /// is treated as a hard failure (the batch handler has no per-endpoint result
-    /// list, so we cannot report partial success).
+    /// inspects <c>success</c> / <c>resultCode</c> directly.
+    ///
+    /// Nacos 3.x success contract (wire-captured against 3.2.4): the server's
+    /// <c>Response</c> carries a Jackson-serialized <c>success</c> field (the
+    /// computed <c>isSuccess()</c>, <c>true</c> on success) and <c>resultCode</c>
+    /// is <c>ResponseCode.SUCCESS.getCode()</c> = <c>200</c>, not <c>0</c> — a
+    /// successful register looks like
+    /// <c>{"resultCode":200,"errorCode":0,"type":"batchRegisterEndpoint","success":true}</c>.
+    /// Failures carry <c>success:false</c> plus a <c>message</c>. The batch
+    /// handler has no per-endpoint result list, so a partial success cannot be
+    /// reported to the caller.
     /// </summary>
-    private class BatchAgentEndpointResponse
+    internal class BatchAgentEndpointResponse
     {
         public int ResultCode { get; set; }
+        public bool? Success { get; set; }
         public string? Message { get; set; }
         public string? Type { get; set; }
     }

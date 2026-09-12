@@ -93,10 +93,11 @@ public class NacosGrpcAiServiceTests
     {
         // The batch path must produce exactly one wire dispatch with op-type
         // "BatchAgentEndpointRequest" and the body must carry every endpoint the
-        // caller supplied — never loop single-endpoint ops. The fake cannot
-        // construct the private BatchAgentEndpointResponse DTO, so we assert on
-        // the captured request and let the service throw NacosException (no
-        // response) — that throw is the signal that the dispatch happened.
+        // caller supplied — never loop single-endpoint ops. This test leaves the
+        // fake's Response unset, so we assert on the captured request and let the
+        // service throw NacosException (no response) — that throw is the signal
+        // that the dispatch happened. The typed-response cases are covered by the
+        // success-shape / failure-shape tests below.
         var fake = new FakeNacosGrpcClient(Options);
         var service = new NacosGrpcAiService(Options, fake);
 
@@ -204,19 +205,11 @@ public class NacosGrpcAiServiceTests
     [Fact]
     public async Task RegisterAgentEndpointsAsync_ThrowsWithServerMessage_OnNonZeroResultCode()
     {
-        // We can't inject a typed BatchAgentEndpointResponse from outside the
-        // SDK (private nested DTO). Instead simulate the wire shape: have the
-        // fake echo a JSON body that matches the server's AgentEndpointResponse
-        // (resultCode + message) — but with the wrong shape (an object literal
-        // whose type the FakeNacosGrpcClient can return as a dynamic value).
-        // Since FakeNacosGrpcClient.RequestAsync<T> only returns T if the
-        // configured Response is assignable to T, we wrap the JSON in an
-        // anonymous shape that carries resultCode/message and let the SDK
-        // deserialize into the private DTO via JsonSerializer.Deserialize.
-        // The fake today returns `default(T)` for non-matching types, so we
-        // exercise the null-response branch first, then verify via the live
-        // integration test that a non-zero resultCode surfaces the server
-        // message (gated — skipped while the server is in Derby crash-loop).
+        // This test covers the null-response branch: with the fake's Response
+        // unset, RequestAsync<T> returns default(T) and the service must fail
+        // with "no response from server". The failure shape the server actually
+        // sends (success:false + message) is covered by
+        // RegisterAgentEndpointsAsync_ThrowsWithServerMessage_OnSuccessFalse below.
         var fake = new FakeNacosGrpcClient(Options);
         var service = new NacosGrpcAiService(Options, fake);
 
@@ -226,5 +219,76 @@ public class NacosGrpcAiServiceTests
 
         Assert.Equal(NacosException.ServerError, ex.ErrorCode);
         ex.Message.Should().Contain("no response from server");
+    }
+
+    [Fact]
+    public async Task RegisterAgentEndpointsAsync_AcceptsServerSuccessShape_ResultCode200AndSuccessTrue()
+    {
+        // Wire-captured Nacos 3.2.4 success shape for a batch register:
+        // {"resultCode":200,"errorCode":0,"type":"batchRegisterEndpoint","success":true}
+        // resultCode 200 is ResponseCode.SUCCESS on 3.x, NOT 0 — the service must
+        // trust the server's success flag instead of demanding resultCode 0.
+        var fake = new FakeNacosGrpcClient(Options)
+        {
+            Response = new NacosGrpcAiService.BatchAgentEndpointResponse
+            {
+                Success = true,
+                ResultCode = 200,
+                Type = "batchRegisterEndpoint"
+            }
+        };
+        var service = new NacosGrpcAiService(Options, fake);
+
+        await service.RegisterAgentEndpointsAsync("svc",
+            new[] { new AgentEndpoint { Address = "10.0.0.1", Port = 9001, Version = "1.0.0" } });
+
+        var (type, _) = Assert.Single(fake.Captured);
+        Assert.Equal("BatchAgentEndpointRequest", type);
+    }
+
+    [Fact]
+    public async Task RegisterAgentEndpointsAsync_ThrowsWithServerMessage_OnSuccessFalse()
+    {
+        // Failure shape: success:false plus the server's message.
+        var fake = new FakeNacosGrpcClient(Options)
+        {
+            Response = new NacosGrpcAiService.BatchAgentEndpointResponse
+            {
+                Success = false,
+                ResultCode = 500,
+                Message = "boom"
+            }
+        };
+        var service = new NacosGrpcAiService(Options, fake);
+
+        var ex = await Assert.ThrowsAsync<NacosException>(
+            () => service.RegisterAgentEndpointsAsync("svc",
+                new[] { new AgentEndpoint { Address = "10.0.0.1", Port = 9001, Version = "1.0.0" } }));
+
+        Assert.Equal(NacosException.ServerError, ex.ErrorCode);
+        ex.Message.Should().Contain("boom");
+        fake.Captured.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task RegisterAgentEndpointsAsync_AcceptsLegacyZeroResultCode_WhenSuccessAbsent()
+    {
+        // Legacy / no-flag wire shape: resultCode 0 alone still means success, so
+        // servers that omit the "success" field must keep working.
+        var fake = new FakeNacosGrpcClient(Options)
+        {
+            Response = new NacosGrpcAiService.BatchAgentEndpointResponse
+            {
+                Success = null,
+                ResultCode = 0
+            }
+        };
+        var service = new NacosGrpcAiService(Options, fake);
+
+        await service.RegisterAgentEndpointsAsync("svc",
+            new[] { new AgentEndpoint { Address = "10.0.0.1", Port = 9001, Version = "1.0.0" } });
+
+        var (type, _) = Assert.Single(fake.Captured);
+        Assert.Equal("BatchAgentEndpointRequest", type);
     }
 }
