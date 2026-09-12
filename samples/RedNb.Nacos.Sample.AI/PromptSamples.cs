@@ -48,8 +48,13 @@ public static class PromptSamples
             // 3. Publish the reviewing version (reviewing -> online). The server
             //    refuses to publish a version that is neither reviewing nor online,
             //    so this must follow the submit above.
-            // HTTP: publish and move the "latest" label onto this version.
-            await httpAi.PublishPromptAsync(
+            //    Vanilla Nacos 3.2.4 ships the default AI pipeline plugin
+            //    (nacos-default-ai-pipeline-plugin-3.2.4.jar), so the normal publish
+            //    requires an approval step the stock server exposes no API for; the
+            //    force-publish route [since=3.2.1] is the documented unattended
+            //    bypass and has the same reviewing -> online effect.
+            // HTTP: force-publish and move the "latest" label onto this version.
+            await httpAi.ForcePublishPromptAsync(
                 promptKey, version, updateLatestLabel: true, cancellationToken: ct);
             logger.LogInformation("[Prompt] published");
 

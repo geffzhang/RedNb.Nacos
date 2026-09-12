@@ -51,9 +51,13 @@ public static class PromptChatIntegrationSample
             // HTTP: submit for review (editing -> reviewing).
             await httpAi.SubmitPromptReviewAsync(promptKey, version, ct);
 
-            // HTTP: publish the reviewing version; the server refuses a version that is neither
-            //       reviewing nor online, so this must follow the submit above.
-            await httpAi.PublishPromptAsync(
+            // HTTP: force-publish the reviewing version. Vanilla Nacos 3.2.4 ships the
+            //       default AI pipeline plugin, so the normal publish requires an approval
+            //       step the stock server exposes no API for; force-publish [since=3.2.1]
+            //       is the unattended bypass with the same reviewing -> online effect. The
+            //       server still refuses a version that is neither reviewing nor online, so
+            //       this must follow the submit above.
+            await httpAi.ForcePublishPromptAsync(
                 promptKey, version, updateLatestLabel: true, cancellationToken: ct);
             published = true;
             logger.LogInformation("[PromptChat] published {Key}@{Version}", promptKey, version);

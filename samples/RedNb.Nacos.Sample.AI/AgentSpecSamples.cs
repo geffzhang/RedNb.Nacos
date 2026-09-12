@@ -50,19 +50,20 @@ public static class AgentSpecSamples
             await httpAi.UploadAgentSpecAsync(
                 zipBytes, $"{agentName}.zip", overwrite: false, cancellationToken: ct);
 
-            // 2. Draft -> reviewing -> online. A Nacos publish pipeline runs only when an AI
-            //    pipeline plugin is installed (off by default — the server ships no
-            //    plugin/ai/pipeline implementation and PublishPipelineExecutor.isPipelineAvailable
-            //    is false), so with no plugin the submit publishes the version straight away and
-            //    the explicit publish below is accepted rather than rejected; with a pipeline
-            //    configured the version waits in reviewing and the publish call surfaces the
-            //    server's refusal.
+            // 2. Draft -> reviewing -> online. The 3.2.4 image DOES ship the default AI
+            //    pipeline plugin (nacos-default-ai-pipeline-plugin-3.2.4.jar) — the live
+            //    run disproved the earlier "off by default" note — so the approval gate is
+            //    active and the normal publish would demand an approval step the stock
+            //    server exposes no API for. That is why this section force-publishes: the
+            //    force-publish route [since=3.2.1] is the documented unattended bypass and
+            //    has the same reviewing -> online effect.
             // HTTP: draft -> reviewing.
             await httpAi.SubmitAgentSpecReviewAsync(agentName, InitialVersion, cancellationToken: ct);
             logger.LogInformation("[AgentSpec] submitted for review");
 
-            // HTTP: reviewing -> published; updateLatestLabel moves the "latest" label along.
-            await httpAi.PublishAgentSpecAsync(
+            // HTTP: force-publish (reviewing -> online); updateLatestLabel moves the
+            //       "latest" label along.
+            await httpAi.ForcePublishAgentSpecAsync(
                 agentName, InitialVersion, updateLatestLabel: true, cancellationToken: ct);
 
             // HTTP: explicit online switch with the public scope; a no-op once publish has

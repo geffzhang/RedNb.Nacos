@@ -92,7 +92,11 @@ public static class McpChatIntegrationSample
             var spec = new McpServerBasicInfo
             {
                 Name = mcpName,
-                Protocol = AiConstants.Mcp.ProtocolSse,
+                // The wire dialect is Streamable HTTP (the client dials with
+                // TransportMode.StreamableHttp); the protocol string is registry
+                // metadata only — the server's release validation checks name +
+                // versionDetail.version, not a protocol whitelist.
+                Protocol = AiConstants.Mcp.ProtocolStreamable,
                 Description = "Weather MCP server hosted in-process by RedNb.Nacos.Sample.AI",
                 VersionDetail = new ServerVersionDetail { Version = ServerVersion },
                 RemoteServerConfig = new McpServerRemoteServiceConfig

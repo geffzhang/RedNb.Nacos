@@ -65,17 +65,18 @@ public static class SkillSamples
             await httpAi.UploadSkillZipAsync(
                 zipBytes, $"{skillName}.zip", targetVersion: version, cancellationToken: ct);
 
-            // 2. Draft -> reviewing -> online. A Nacos publish pipeline runs only when an
-            //    AI pipeline plugin is installed (off by default), so with no plugin the
-            //    submit publishes the version straight away and the explicit publish below
-            //    is idempotent; with a pipeline configured the version waits in reviewing
-            //    and the publish call surfaces the server's refusal.
+            // 2. Draft -> reviewing -> online. Vanilla Nacos 3.2.4 ships the default AI
+            //    pipeline plugin (nacos-default-ai-pipeline-plugin-3.2.4.jar), so the
+            //    normal publish requires an approval step the stock server exposes no
+            //    API for; the force-publish route [since=3.2.1] is the documented
+            //    unattended bypass and has the same reviewing -> online effect.
             // HTTP: draft -> reviewing.
             await httpAi.SubmitSkillReviewAsync(skillName, version, cancellationToken: ct);
             logger.LogInformation("[Skill] submitted for review");
 
-            // HTTP: reviewing -> online; updateLatestLabel moves the "latest" label along.
-            await httpAi.PublishSkillAsync(
+            // HTTP: force-publish (reviewing -> online); updateLatestLabel moves the
+            //       "latest" label along.
+            await httpAi.ForcePublishSkillAsync(
                 skillName, version, updateLatestLabel: true, cancellationToken: ct);
 
             // HTTP: explicit online switch with the public scope; a no-op once publish
