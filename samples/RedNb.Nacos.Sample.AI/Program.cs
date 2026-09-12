@@ -69,9 +69,8 @@ internal static class Program
 
             logger.LogInformation("Connected. Section runner arrives in Tasks 5-11.");
 
-            // TODO(Tasks 5-11): dispatch McpSamples / A2aSamples / PromptSamples /
-            // SkillSamples / AgentSpecSamples / PromptChatIntegrationSample /
-            // McpChatIntegrationSample in order, appending each result.
+            results.Add(("Mcp", await McpSamples.RunAsync(httpAi, grpcAi, logger, cts.Token)));
+            results.Add(("A2a", await A2aSamples.RunAsync(httpAi, grpcAi, logger, cts.Token)));
 
             results.Add(("Scaffold", new SampleResult(SampleOutcome.Ok)));
         }
