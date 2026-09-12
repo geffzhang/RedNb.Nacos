@@ -48,9 +48,12 @@ namespace RedNb.Nacos.Sample.AI.Integration;
 /// package set, so this demo stops at "the registry's card drives the agent/client construction".
 /// </description></item>
 /// </list>
-/// Every sub-demo runs in its own <c>try/catch</c>: one failing demo cannot stop the others, and a
-/// demo whose prerequisite is absent (for example Nacos is unreachable) reports
-/// <see cref="SampleOutcome.Skipped"/> instead of failing the section.
+/// Every sub-demo runs in its own <c>try/catch</c> and logs its own outcome: a crash or a failed
+/// check is collected as a failure and the remaining sub-demos still run, so one broken demo cannot
+/// mask the others. A sub-demo reports <see cref="SampleOutcome.Skipped"/> only when its
+/// prerequisite turns out to be genuinely absent rather than broken — the section then still
+/// reports <see cref="SampleOutcome.Ok"/> if no sub-demo failed. The two Nacos-backed sub-demos host
+/// or release their own artifacts, so missing registrations are failures there, not skips.
 /// </summary>
 public static class AgentsAISamples
 {
@@ -68,6 +71,9 @@ public static class AgentsAISamples
 
     /// <summary>Version of the throwaway A2A card released to Nacos.</summary>
     private const string A2aCardVersion = "1.0.0";
+
+    /// <summary>Protocol version of the throwaway A2A card released to Nacos.</summary>
+    private const string A2aCardProtocolVersion = "0.3.7";
 
     /// <summary>URL the throwaway A2A card advertises (never dialed — nothing listens there).</summary>
     private const string A2aCardUrl = "http://127.0.0.1:9201";
@@ -363,7 +369,9 @@ public static class AgentsAISamples
 
                 try
                 {
-                    await mcpHost.DisposeAsync();
+                    // The same budget as the other cleanup steps: a dispose that hangs (a stuck
+                    // transport, an unresponsive server) must not stall the section.
+                    await mcpHost.DisposeAsync().AsTask().WaitAsync(cleanupCt);
                 }
                 catch (Exception cleanupEx)
                 {
@@ -423,6 +431,16 @@ public static class AgentsAISamples
                 "EchoChatClient did not echo the user message");
         }
 
+        // The provider advertises the skill to the model as functions, so the chat request carries
+        // them and the echo reply gains the "tool(s) wired from Nacos" suffix. Asserting the suffix
+        // (EchoChatClient's own stable format, not a skills-package detail) keeps this demo from
+        // reporting Ok if a provider regression silently contributes nothing to the request.
+        if (!reply.Contains("tool(s) wired from Nacos", StringComparison.Ordinal))
+        {
+            return new SampleResult(SampleOutcome.Failed,
+                "the skills provider did not contribute any function to the chat request");
+        }
+
         return new SampleResult(SampleOutcome.Ok);
     }
 
@@ -451,7 +469,7 @@ public static class AgentsAISamples
                 Name = agentName,
                 Description = "Throwaway A2A card released by the Microsoft.Agents.AI sample section",
                 Version = A2aCardVersion,
-                ProtocolVersion = "0.3.7",
+                ProtocolVersion = A2aCardProtocolVersion,
                 // The card's URL is the interface the A2A 1.0 card type below turns into
                 // supportedInterfaces; nothing listens there, which is fine for this demo.
                 Url = A2aCardUrl,
@@ -649,14 +667,25 @@ public static class AgentsAISamples
             var transport = node["preferredTransport"]?.GetValue<string>();
             var protocolVersion = node["protocolVersion"]?.GetValue<string>();
 
+            // url, protocolBinding and protocolVersion are all JSON-required on the 1.0 interface,
+            // so the mapped entry is written only with non-null values: the card's url gates the
+            // entry, and a blank transport/protocolVersion falls back to the values this demo
+            // releases (preferredTransport = JSONRPC, protocolVersion = 0.3.7).
             var interfaces = new JsonArray();
             if (!string.IsNullOrWhiteSpace(cardUrl))
             {
+                var binding = string.IsNullOrWhiteSpace(transport)
+                    ? AiConstants.A2a.TransportJsonRpc
+                    : transport;
+                var version = string.IsNullOrWhiteSpace(protocolVersion)
+                    ? A2aCardProtocolVersion
+                    : protocolVersion;
+
                 interfaces.Add(new JsonObject
                 {
                     ["url"] = cardUrl,
-                    ["protocolBinding"] = string.IsNullOrWhiteSpace(transport) ? null : transport,
-                    ["protocolVersion"] = string.IsNullOrWhiteSpace(protocolVersion) ? null : protocolVersion
+                    ["protocolBinding"] = binding,
+                    ["protocolVersion"] = version
                 });
             }
 
