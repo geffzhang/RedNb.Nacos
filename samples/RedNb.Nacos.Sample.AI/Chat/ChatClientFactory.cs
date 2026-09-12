@@ -25,7 +25,9 @@ public static class ChatClientFactory
         if (string.Equals(provider, "openai", StringComparison.OrdinalIgnoreCase))
         {
             var apiKey = config["OpenAI:ApiKey"];
-            var model = config["OpenAI:Model"] ?? "gpt-4o-mini";
+            var model = string.IsNullOrWhiteSpace(config["OpenAI:Model"])
+                ? "gpt-4o-mini"
+                : config["OpenAI:Model"]!;
             if (string.IsNullOrWhiteSpace(apiKey))
             {
                 logger?.LogWarning(
