@@ -231,12 +231,20 @@ public class NacosClientOptions
                 "At least one of ServerAddresses, ConsoleAddresses, or Endpoint must be provided");
         }
 
-        var hasCredentials = !string.IsNullOrWhiteSpace(Username) || !string.IsNullOrWhiteSpace(Password);
-        if (hasCredentials && !hasCore)
+        var hasUsernamePassword = !string.IsNullOrWhiteSpace(Username) || !string.IsNullOrWhiteSpace(Password);
+        if (hasUsernamePassword && !hasCore)
         {
             throw new NacosException(
                 NacosException.InvalidParam,
                 "Username/Password require ServerAddresses: login is performed against the server API port (8848), so a console-only configuration cannot authenticate");
+        }
+
+        var hasAccessKey = !string.IsNullOrWhiteSpace(AccessKey) || !string.IsNullOrWhiteSpace(SecretKey);
+        if (hasAccessKey && !hasCore)
+        {
+            throw new NacosException(
+                NacosException.InvalidParam,
+                "AccessKey/SecretKey require ServerAddresses: AK/SK signing is performed against the server API port (8848), so a console-only configuration cannot authenticate");
         }
     }
 }
