@@ -72,6 +72,7 @@ internal static class Program
             results.Add(("Mcp", await McpSamples.RunAsync(httpAi, grpcAi, logger, cts.Token)));
             results.Add(("A2a", await A2aSamples.RunAsync(httpAi, grpcAi, logger, cts.Token)));
             results.Add(("Prompt", await PromptSamples.RunAsync(httpAi, grpcAi, logger, cts.Token)));
+            results.Add(("Skill", await SkillSamples.RunAsync(httpAi, grpcAi, logger, cts.Token)));
         }
         catch (NacosException nex)
         {
