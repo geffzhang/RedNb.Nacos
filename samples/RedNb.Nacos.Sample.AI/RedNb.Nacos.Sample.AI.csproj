@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>RedNb.Nacos.Sample.AI</RootNamespace>
     <AssemblyName>RedNb.Nacos.Sample.AI</AssemblyName>
     <Nullable>enable</Nullable>
@@ -23,10 +23,10 @@
     <!-- Hosts the in-process MCP server the McpChat section releases to Nacos; brings the
          Microsoft.AspNetCore.App framework reference for Kestrel (streamable HTTP transport). -->
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.*" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.*" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.*" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.*" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.*" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(DefineConstants.Contains(`OPENAI_PROVIDER`))' == 'True'">

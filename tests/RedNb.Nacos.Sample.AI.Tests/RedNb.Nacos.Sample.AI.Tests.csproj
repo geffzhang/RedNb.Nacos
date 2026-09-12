@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>RedNb.Nacos.Sample.AI.Tests</RootNamespace>
     <AssemblyName>RedNb.Nacos.Sample.AI.Tests</AssemblyName>
     <Nullable>enable</Nullable>
@@ -16,7 +16,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.*" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.10.0" />
     <!-- Microsoft.Extensions.Configuration.Memory is now folded into the base Microsoft.Extensions.Configuration package (>= 8.0); the Memory provider ships there. -->
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.*" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.*" />
   </ItemGroup>
 
   <ItemGroup>
