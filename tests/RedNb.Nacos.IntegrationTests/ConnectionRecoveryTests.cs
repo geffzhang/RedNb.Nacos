@@ -45,14 +45,17 @@ public class ConnectionRecoveryTests
             await naming.RegisterInstanceAsync(name, "127.0.0.1", 19234);
             await ai.ReleaseMcpServerAsync(new McpServerBasicInfo
             {
-                Name = mcpName, Protocol = "mcp-sse", VersionDetail = new ServerVersionDetail { Version = "1.0.0" },
+                Name = mcpName,
+                Protocol = "mcp-sse",
+                VersionDetail = new ServerVersionDetail { Version = "1.0.0" },
                 RemoteServerConfig = new McpServerRemoteServiceConfig
                 {
                     ServiceRef = new McpServiceRef { NamespaceId = "public", GroupName = "DEFAULT_GROUP", ServiceName = backend }
                 }
             }, null, new McpEndpointSpec
             {
-                Type = "REF", Data = new() { ["namespaceId"] = "public", ["groupName"] = "DEFAULT_GROUP", ["serviceName"] = backend }
+                Type = "REF",
+                Data = new() { ["namespaceId"] = "public", ["groupName"] = "DEFAULT_GROUP", ["serviceName"] = backend }
             });
             mcpCreated = true;
             await ai.RegisterMcpServerEndpointAsync(mcpName, "127.0.0.1", 19235, "1.0.0");
