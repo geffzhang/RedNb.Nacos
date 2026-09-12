@@ -50,10 +50,9 @@ namespace RedNb.Nacos.Sample.AI.Integration;
 /// </list>
 /// Every sub-demo runs in its own <c>try/catch</c> and logs its own outcome: a crash or a failed
 /// check is collected as a failure and the remaining sub-demos still run, so one broken demo cannot
-/// mask the others. A sub-demo reports <see cref="SampleOutcome.Skipped"/> only when its
-/// prerequisite turns out to be genuinely absent rather than broken — the section then still
-/// reports <see cref="SampleOutcome.Ok"/> if no sub-demo failed. The two Nacos-backed sub-demos host
-/// or release their own artifacts, so missing registrations are failures there, not skips.
+/// mask the others. No sub-demo reports <see cref="SampleOutcome.Skipped"/>: each one hosts or
+/// releases what it needs, so a missing registration is a failure rather than a skip — and the
+/// section reports <see cref="SampleOutcome.Ok"/> only when no sub-demo failed.
 /// </summary>
 public static class AgentsAISamples
 {
@@ -671,16 +670,16 @@ public static class AgentsAISamples
             // so the mapped entry is written only with non-null values: the card's url gates the
             // entry, and a blank transport/protocolVersion falls back to the values this demo
             // releases (preferredTransport = JSONRPC, protocolVersion = 0.3.7).
+            var binding = string.IsNullOrWhiteSpace(transport)
+                ? AiConstants.A2a.TransportJsonRpc
+                : transport;
+            var version = string.IsNullOrWhiteSpace(protocolVersion)
+                ? A2aCardProtocolVersion
+                : protocolVersion;
+
             var interfaces = new JsonArray();
             if (!string.IsNullOrWhiteSpace(cardUrl))
             {
-                var binding = string.IsNullOrWhiteSpace(transport)
-                    ? AiConstants.A2a.TransportJsonRpc
-                    : transport;
-                var version = string.IsNullOrWhiteSpace(protocolVersion)
-                    ? A2aCardProtocolVersion
-                    : protocolVersion;
-
                 interfaces.Add(new JsonObject
                 {
                     ["url"] = cardUrl,
@@ -692,10 +691,12 @@ public static class AgentsAISamples
             node["supportedInterfaces"] = interfaces;
             if (interfaces.Count > 0)
             {
+                // Log the binding actually written into the mapped interface (the fallback-aware
+                // value), so a fired fallback can never be logged as an empty transport.
                 logger.LogInformation(
                     "[AgentsAI/A2A] registry card carried the 0.3.7 shape (url={Url}, transport={Transport}) " +
                     "— mapped onto the A2A 1.0 supportedInterfaces list",
-                    cardUrl, transport);
+                    cardUrl, binding);
             }
             else
             {

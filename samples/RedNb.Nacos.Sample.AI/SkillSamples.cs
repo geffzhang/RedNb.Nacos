@@ -11,6 +11,8 @@ namespace RedNb.Nacos.Sample.AI;
 /// bring online, download the published ZIP back, then take it offline and delete it.
 /// The skill registry is HTTP-only on Nacos 3.2.4 (the gRPC AI service delegates every
 /// skill call to the same HTTP sub-service), so the gRPC handle is unused here.
+/// The offline/delete cleanup runs in a <c>finally</c>, so a failed or interrupted run
+/// (including the rare read-after-publish window) cleans up after itself too.
 /// </summary>
 public static class SkillSamples
 {
@@ -22,6 +24,8 @@ public static class SkillSamples
     {
         var skillName = $"doc-writer-{DateTime.UtcNow:yyyyMMddHHmmss}";
         const string version = "1.0.0";
+        var uploaded = false;
+        var published = false;
 
         try
         {
@@ -64,6 +68,7 @@ public static class SkillSamples
             //       whichever source wins.
             await httpAi.UploadSkillZipAsync(
                 zipBytes, $"{skillName}.zip", targetVersion: version, cancellationToken: ct);
+            uploaded = true;
 
             // 2. Draft -> reviewing -> online. Vanilla Nacos 3.2.4 ships the default AI
             //    pipeline plugin (nacos-default-ai-pipeline-plugin-3.2.4.jar), so the
@@ -78,6 +83,7 @@ public static class SkillSamples
             //       "latest" label along.
             await httpAi.ForcePublishSkillAsync(
                 skillName, version, updateLatestLabel: true, cancellationToken: ct);
+            published = true;
 
             // HTTP: explicit online switch with the public scope; a no-op once publish
             //       has already made the version online.
@@ -109,20 +115,57 @@ public static class SkillSamples
                     $"Downloaded package has no SKILL.md entry (entries: {string.Join(", ", entries)})");
             }
 
-            // 4. Cleanup: take the version offline, then delete the skill. The server's
-            //    DELETE route binds only the skill name, so the version argument is
-            //    ignored and every version of the demo skill goes away with it.
-            // HTTP: online -> offline.
-            await httpAi.OfflineSkillAsync(skillName, version, cancellationToken: ct);
-            // HTTP: delete the skill.
-            await httpAi.DeleteSkillAsync(skillName, version, cancellationToken: ct);
-
+            // 4. Cleanup (take the version offline, then delete the skill) is the finally
+            //    below, so a failure or an interrupt after the upload — including the early
+            //    returns above — does not orphan the uploaded skill.
             return new SampleResult(SampleOutcome.Ok);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "[Skill] failed");
             return new SampleResult(SampleOutcome.Failed, ex.Message);
+        }
+        finally
+        {
+            // Cleanup runs on the success and the failure path alike, so a failed or
+            // interrupted run cannot orphan the skill. It gets its own budget (a cancelled
+            // caller token must not abort it) and every step is guarded on its own so one
+            // failure cannot skip the rest; a cleanup failure is logged rather than rethrown
+            // so it cannot mask the outcome the try/catch above produced.
+            using var cleanupCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var cleanupCt = cleanupCts.Token;
+
+            if (published)
+            {
+                try
+                {
+                    // HTTP: online -> offline.
+                    await httpAi.OfflineSkillAsync(skillName, version, cancellationToken: cleanupCt)
+                        .WaitAsync(cleanupCt);
+                }
+                catch (Exception cleanupEx)
+                {
+                    logger.LogWarning(cleanupEx,
+                        "[Skill] cleanup: taking {Name}@{Version} offline failed", skillName, version);
+                }
+            }
+
+            if (uploaded)
+            {
+                try
+                {
+                    // HTTP: delete the skill. The server's DELETE route binds only the skill
+                    // name, so the version argument is ignored and every version of the demo
+                    // skill goes away with it.
+                    await httpAi.DeleteSkillAsync(skillName, version, cancellationToken: cleanupCt)
+                        .WaitAsync(cleanupCt);
+                }
+                catch (Exception cleanupEx)
+                {
+                    logger.LogWarning(cleanupEx,
+                        "[Skill] cleanup: deleting {Name} failed", skillName);
+                }
+            }
         }
     }
 

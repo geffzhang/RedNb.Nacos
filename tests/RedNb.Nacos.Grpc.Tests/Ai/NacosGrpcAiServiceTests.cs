@@ -203,7 +203,7 @@ public class NacosGrpcAiServiceTests
     }
 
     [Fact]
-    public async Task RegisterAgentEndpointsAsync_ThrowsWithServerMessage_OnNonZeroResultCode()
+    public async Task RegisterAgentEndpointsAsync_ThrowsOnNullResponse()
     {
         // This test covers the null-response branch: with the fake's Response
         // unset, RequestAsync<T> returns default(T) and the service must fail

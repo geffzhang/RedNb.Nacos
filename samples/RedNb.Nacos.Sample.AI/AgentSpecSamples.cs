@@ -13,6 +13,8 @@ namespace RedNb.Nacos.Sample.AI;
 /// offline and delete it.
 /// The AgentSpec registry is HTTP-only on Nacos 3.2.4 (the gRPC AI service delegates every
 /// AgentSpec call to the same HTTP sub-service), so the gRPC handle is unused here.
+/// The offline/delete cleanup runs in a <c>finally</c>, so a failed or interrupted run
+/// cleans up after itself too.
 /// </summary>
 public static class AgentSpecSamples
 {
@@ -32,6 +34,8 @@ public static class AgentSpecSamples
         CancellationToken ct)
     {
         var agentName = $"travel-agent-spec-{DateTime.UtcNow:yyyyMMddHHmmss}";
+        var uploaded = false;
+        var published = false;
 
         try
         {
@@ -49,6 +53,7 @@ public static class AgentSpecSamples
             //       overwrite=false and a name nobody has used, the ZIP lands as draft 0.0.1.
             await httpAi.UploadAgentSpecAsync(
                 zipBytes, $"{agentName}.zip", overwrite: false, cancellationToken: ct);
+            uploaded = true;
 
             // 2. Draft -> reviewing -> online. The 3.2.4 image DOES ship the default AI
             //    pipeline plugin (nacos-default-ai-pipeline-plugin-3.2.4.jar) — the live
@@ -65,6 +70,7 @@ public static class AgentSpecSamples
             //       "latest" label along.
             await httpAi.ForcePublishAgentSpecAsync(
                 agentName, InitialVersion, updateLatestLabel: true, cancellationToken: ct);
+            published = true;
 
             // HTTP: explicit online switch with the public scope; a no-op once publish has
             //       already made the version online.
@@ -110,20 +116,59 @@ public static class AgentSpecSamples
                     $"Uploaded package lost its AGENTS.md resource (resources: {string.Join(", ", resourceNames)})");
             }
 
-            // 4. Cleanup: take the version offline, then delete the AgentSpec. The DELETE route
-            //    binds the name and version, and the version argument is optional — passing it
-            //    here removes only the 0.0.1 this run created.
-            // HTTP: online -> offline.
-            await httpAi.OfflineAgentSpecAsync(agentName, InitialVersion, cancellationToken: ct);
-            // HTTP: delete the AgentSpec version.
-            await httpAi.DeleteAgentSpecAsync(agentName, InitialVersion, cancellationToken: ct);
-
+            // 4. Cleanup (take the version offline, then delete the AgentSpec) is the finally
+            //    below, so a failure or an interrupt after the upload — including the early
+            //    returns above — does not orphan the uploaded AgentSpec.
             return new SampleResult(SampleOutcome.Ok);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "[AgentSpec] failed");
             return new SampleResult(SampleOutcome.Failed, ex.Message);
+        }
+        finally
+        {
+            // Cleanup runs on the success and the failure path alike, so a failed or
+            // interrupted run cannot orphan the AgentSpec. It gets its own budget (a cancelled
+            // caller token must not abort it) and every step is guarded on its own so one
+            // failure cannot skip the rest; a cleanup failure is logged rather than rethrown
+            // so it cannot mask the outcome the try/catch above produced.
+            using var cleanupCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var cleanupCt = cleanupCts.Token;
+
+            if (published)
+            {
+                try
+                {
+                    // HTTP: online -> offline.
+                    await httpAi.OfflineAgentSpecAsync(agentName, InitialVersion, cancellationToken: cleanupCt)
+                        .WaitAsync(cleanupCt);
+                }
+                catch (Exception cleanupEx)
+                {
+                    logger.LogWarning(cleanupEx,
+                        "[AgentSpec] cleanup: taking {Name}@{Version} offline failed",
+                        agentName, InitialVersion);
+                }
+            }
+
+            if (uploaded)
+            {
+                try
+                {
+                    // HTTP: delete the AgentSpec version. The DELETE route binds the name and
+                    // version, and the version argument is optional — passing it here removes
+                    // only the 0.0.1 this run created.
+                    await httpAi.DeleteAgentSpecAsync(agentName, InitialVersion, cancellationToken: cleanupCt)
+                        .WaitAsync(cleanupCt);
+                }
+                catch (Exception cleanupEx)
+                {
+                    logger.LogWarning(cleanupEx,
+                        "[AgentSpec] cleanup: deleting {Name}@{Version} failed",
+                        agentName, InitialVersion);
+                }
+            }
         }
     }
 

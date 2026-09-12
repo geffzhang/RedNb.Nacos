@@ -23,8 +23,14 @@ dotnet run --project samples/RedNb.Nacos.Sample.AI
 ```
 
 The process prints one line per section, then prints a `--- Summary ---` block
-and exits 0; only a connection failure exits 2 — a section-level `Failed` is
-reported in the summary block, not in the exit code.
+and returns an exit code:
+
+- **0** — the run completed; the per-section results, including any `Failed`,
+  are in that block. A partial failure still exits 0.
+- **2** — the run got nowhere: a connection failure on the startup path, or
+  **every** section reporting `Failed` (e.g. Nacos unreachable — login is lazy,
+  so a dead server surfaces per section rather than throwing on the startup
+  path).
 
 ## What it demonstrates
 
@@ -97,7 +103,7 @@ or override with environment variables prefixed `REDNB_NACOS_` (nested keys use
 | `Nacos:GrpcPortOffset` | `1000` | gRPC port = HTTP port + offset (8848 → 9848) |
 | `Nacos:Username` / `Password` | `nacos` / `nacos` | |
 | `Nacos:Namespace` | (empty = `public`) | |
-| `ChatProvider` | `echo` | `echo` or `openai`, resolved by `Chat/ChatClientFactory.cs`; an unknown value or a missing `OpenAI:ApiKey` falls back to echo with a warning |
+| `ChatProvider` | `echo` | `echo` or `openai`, resolved by `Chat/ChatClientFactory.cs`; an unknown value or a missing `OpenAI:ApiKey` falls back to echo with a warning (the run's sections construct `EchoChatClient` directly, so `ChatProvider`/`OpenAI:*` are read only by the factory — the config-driven path covered by `tests/RedNb.Nacos.Sample.AI.Tests`) |
 | `OpenAI:ApiKey` | (empty) | Only read by the `openai` branch |
 | `OpenAI:Model` | `gpt-4o-mini` | |
 | `Logging:LogLevel:Default` | `Information` | `trace`/`debug`/`information`/`warning`/`error` |
@@ -141,8 +147,13 @@ operations; the sample delegates those calls to the gRPC `IAiService` instead.
   the registry or the wire path is broken rather than a missing prerequisite;
   there is no "run the CRUD section first" ordering requirement. No section is
   expected to report `Skipped` on Nacos 3.2.4 — the sample omits the MCP
-  tool-CRUD calls that used to trigger it, so an all-`Ok` summary is the
-  expected result.
+  tool-CRUD calls, so an all-`Ok` summary is the expected result.
+- **`Skill: Failed — DownloadSkillZipByVersion returned null after publish`** —
+  a transient server-side read-after-write lag on the download route right after
+  publish (observed at roughly 1 run in 4): the publish itself succeeded and the
+  same artifact downloads fine a moment later. The section surfaces it as
+  `Failed` and a re-run is clean; there is no client-side workaround (the sample
+  does not retry by design).
 - **`Pipeline not approved` (HTTP 400) from your own publish call** — the
   3.2.4 AI pipeline plugin gates normal publish; use the force-publish route
   ([since=3.2.1]), as this sample does.

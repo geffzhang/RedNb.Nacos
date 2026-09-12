@@ -11,6 +11,8 @@ namespace RedNb.Nacos.Sample.AI;
 /// delete it. The prompt registry is HTTP-only on Nacos 3.2.4 (the gRPC AI
 /// service delegates every prompt call to the same HTTP sub-service), so the
 /// gRPC handle is unused here.
+/// The offline/delete cleanup runs in a <c>finally</c>, so a failed or
+/// interrupted run cleans up after itself too.
 /// </summary>
 public static class PromptSamples
 {
@@ -22,6 +24,8 @@ public static class PromptSamples
     {
         var promptKey = $"code-review-{DateTime.UtcNow:yyyyMMddHHmmss}";
         const string version = "1.0.0";
+        var created = false;
+        var published = false;
 
         try
         {
@@ -39,6 +43,7 @@ public static class PromptSamples
                     new PromptVariable { Name = "language", DefaultValue = "C#" }
                 },
                 cancellationToken: ct);
+            created = true;
 
             // 2. Submit the draft for review (editing -> reviewing).
             // HTTP: submit for review.
@@ -56,6 +61,7 @@ public static class PromptSamples
             // HTTP: force-publish and move the "latest" label onto this version.
             await httpAi.ForcePublishPromptAsync(
                 promptKey, version, updateLatestLabel: true, cancellationToken: ct);
+            published = true;
             logger.LogInformation("[Prompt] published");
 
             // HTTP: explicit online switch — a no-op once publish made it online.
@@ -85,18 +91,56 @@ public static class PromptSamples
                 cancellationToken: ct);
             logger.LogInformation("[Prompt] list count={Count}", page.TotalCount);
 
-            // 6. Cleanup: take the version offline, then delete it.
-            // HTTP: online -> offline.
-            await httpAi.OfflinePromptAsync(promptKey, version, ct);
-            // HTTP: delete this version (a null version would delete all of them).
-            await httpAi.DeletePromptAsync(promptKey, version, cancellationToken: ct);
-
+            // 6. Cleanup (take the version offline, then delete it) is the finally below,
+            //    so a failure or an interrupt after the draft was created does not orphan it.
             return new SampleResult(SampleOutcome.Ok);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "[Prompt] failed");
             return new SampleResult(SampleOutcome.Failed, ex.Message);
+        }
+        finally
+        {
+            // Cleanup runs on the success and the failure path alike, so a failed or
+            // interrupted run cannot orphan the draft. It gets its own budget (a cancelled
+            // caller token must not abort it) and every step is guarded on its own so one
+            // failure cannot skip the rest; a cleanup failure is logged rather than rethrown
+            // so it cannot mask the outcome the try/catch above produced. Each step is
+            // guarded by the step that made its precondition true (taking a version offline
+            // only makes sense once it is online).
+            using var cleanupCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var cleanupCt = cleanupCts.Token;
+
+            if (published)
+            {
+                try
+                {
+                    // HTTP: online -> offline.
+                    await httpAi.OfflinePromptAsync(promptKey, version, cancellationToken: cleanupCt)
+                        .WaitAsync(cleanupCt);
+                }
+                catch (Exception cleanupEx)
+                {
+                    logger.LogWarning(cleanupEx,
+                        "[Prompt] cleanup: taking {Key}@{Version} offline failed", promptKey, version);
+                }
+            }
+
+            if (created)
+            {
+                try
+                {
+                    // HTTP: delete this version (a null version would delete all of them).
+                    await httpAi.DeletePromptAsync(promptKey, version, cancellationToken: cleanupCt)
+                        .WaitAsync(cleanupCt);
+                }
+                catch (Exception cleanupEx)
+                {
+                    logger.LogWarning(cleanupEx,
+                        "[Prompt] cleanup: deleting {Key}@{Version} failed", promptKey, version);
+                }
+            }
         }
     }
 }

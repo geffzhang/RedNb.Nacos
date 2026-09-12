@@ -98,7 +98,15 @@ internal static class Program
         }
 
         PrintSummary(results, logger);
-        return 0;
+
+        // Exit code contract: a run that completed exits 0 — the per-section outcomes,
+        // including any Failed, are in the summary block. Exit 2 means the run got nowhere:
+        // a connection failure on the startup path (caught above) or every section failing.
+        // A dead server lands here rather than in the catch above, because login is lazy
+        // and each section swallows its own connection error and reports Failed.
+        return results.Count > 0 && results.All(r => r.Result.Outcome == SampleOutcome.Failed)
+            ? 2
+            : 0;
     }
 
     private static void PrintSummary(

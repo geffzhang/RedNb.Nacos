@@ -9,6 +9,8 @@ namespace RedNb.Nacos.Sample.AI;
 /// A2A section of the sample: releases an agent card and reads it back over the
 /// HTTP console channel, then batch-registers and deregisters its endpoints over
 /// gRPC — endpoint operations are served by the gRPC channel only on Nacos 3.2.4.
+/// The endpoint deregisters and the card delete run in a <c>finally</c>, so a
+/// failed or interrupted run cleans up after itself too.
 /// </summary>
 public static class A2aSamples
 {
@@ -20,6 +22,28 @@ public static class A2aSamples
     {
         var agentName = $"travel-agent-{DateTime.UtcNow:yyyyMMddHHmmss}";
         const string version = "1.0.0";
+        var released = false;
+        var endpointsRegistered = false;
+
+        // The endpoints are registered inside the try below; the array is declared here
+        // so the cleanup in the finally can deregister exactly what was registered.
+        var endpoints = new[]
+        {
+            new AgentEndpoint
+            {
+                Address = "127.0.0.1",
+                Port = 9201,
+                Version = version,
+                Transport = AiConstants.A2a.TransportHttpJson
+            },
+            new AgentEndpoint
+            {
+                Address = "127.0.0.1",
+                Port = 9202,
+                Version = version,
+                Transport = AiConstants.A2a.TransportJsonRpc
+            }
+        };
 
         try
         {
@@ -37,31 +61,15 @@ public static class A2aSamples
 
             logger.LogInformation("[A2A] releasing {Name}", agentName);
             await httpAi.ReleaseAgentCardAsync(card, ct);
+            released = true;
 
             // 2. Batch register endpoints via gRPC (HTTP throws ServerError).
             //    Every endpoint is validated server-side, so Version is required
             //    and must match the released card version.
-            var endpoints = new[]
-            {
-                new AgentEndpoint
-                {
-                    Address = "127.0.0.1",
-                    Port = 9201,
-                    Version = version,
-                    Transport = AiConstants.A2a.TransportHttpJson
-                },
-                new AgentEndpoint
-                {
-                    Address = "127.0.0.1",
-                    Port = 9202,
-                    Version = version,
-                    Transport = AiConstants.A2a.TransportJsonRpc
-                }
-            };
-
             logger.LogInformation("[A2A] batch registering {Count} endpoints via gRPC", endpoints.Length);
             // gRPC: RegisterAgentEndpointsAsync has no HTTP console route on Nacos 3.2.4.
             await grpcAi.RegisterAgentEndpointsAsync(agentName, endpoints, ct);
+            endpointsRegistered = true;
 
             // 3. List and get. The console list route requires an explicit search
             //    mode ("accurate" matches agentName exactly).
@@ -88,21 +96,57 @@ public static class A2aSamples
 
             await httpAi.UnsubscribeAgentCardAsync(agentName, listener, ct);
 
-            // 5. Deregister endpoints (gRPC) and delete (HTTP)
-            foreach (var ep in endpoints)
-            {
-                // gRPC: DeregisterAgentEndpointAsync has no HTTP console route on Nacos 3.2.4.
-                await grpcAi.DeregisterAgentEndpointAsync(agentName, ep, ct);
-            }
-
-            await httpAi.DeleteAgentAsync(agentName, cancellationToken: ct);
-
+            // The endpoint deregisters (gRPC) and the card delete (HTTP) are the cleanup
+            // steps in the finally below, so a failure or an interrupt after the release
+            // does not orphan the card.
             return new SampleResult(SampleOutcome.Ok);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "[A2A] failed");
             return new SampleResult(SampleOutcome.Failed, ex.Message);
+        }
+        finally
+        {
+            // Cleanup runs on the success and the failure path alike, so a failed or
+            // interrupted run cannot orphan the released card. It gets its own budget (a
+            // cancelled caller token must not abort it) and every step is guarded on its own
+            // so one failure cannot skip the rest; a cleanup failure is logged rather than
+            // rethrown so it cannot mask the outcome the try/catch above produced.
+            using var cleanupCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var cleanupCt = cleanupCts.Token;
+
+            if (endpointsRegistered)
+            {
+                foreach (var ep in endpoints)
+                {
+                    try
+                    {
+                        // gRPC: DeregisterAgentEndpointAsync has no HTTP console route on Nacos 3.2.4.
+                        await grpcAi.DeregisterAgentEndpointAsync(agentName, ep, cleanupCt)
+                            .WaitAsync(cleanupCt);
+                    }
+                    catch (Exception cleanupEx)
+                    {
+                        logger.LogWarning(cleanupEx,
+                            "[A2A] cleanup: deregistering {Address}:{Port} failed",
+                            ep.Address, ep.Port);
+                    }
+                }
+            }
+
+            if (released)
+            {
+                try
+                {
+                    await httpAi.DeleteAgentAsync(agentName, cancellationToken: cleanupCt)
+                        .WaitAsync(cleanupCt);
+                }
+                catch (Exception cleanupEx)
+                {
+                    logger.LogWarning(cleanupEx, "[A2A] cleanup: deleting {Name} failed", agentName);
+                }
+            }
         }
     }
 }
