@@ -469,12 +469,67 @@ public partial class NacosGrpcAiService : IAiService
     public async Task RegisterAgentEndpointsAsync(string agentName, IEnumerable<AgentEndpoint> endpoints, CancellationToken cancellationToken = default)
     {
         ValidateAgentName(agentName);
-        var endpointList = endpoints?.ToList() ?? throw new NacosException(NacosException.InvalidParam, "endpoints is required");
+        var endpointList = endpoints?.ToList()
+            ?? throw new NacosException(NacosException.InvalidParam, "endpoints is required");
+        if (endpointList.Count == 0)
+        {
+            throw new NacosException(NacosException.InvalidParam, "endpoints cannot be empty");
+        }
 
+        // Per-endpoint validation: same semantics as the single-endpoint path
+        // (version non-blank, address non-blank, port in range). Each endpoint is
+        // normalized so callers may pass partial AgentEndpoint instances; the
+        // default transport matches what the single-endpoint path uses.
+        var normalized = new List<AgentEndpoint>(endpointList.Count);
         foreach (var endpoint in endpointList)
         {
-            await RegisterAgentEndpointAsync(agentName, endpoint, cancellationToken);
+            ValidateAgentEndpoint(endpoint);
+
+            normalized.Add(new AgentEndpoint
+            {
+                Transport = string.IsNullOrWhiteSpace(endpoint.Transport)
+                    ? AiConstants.A2a.TransportJsonRpc
+                    : endpoint.Transport,
+                Address = endpoint.Address,
+                Port = endpoint.Port,
+                Path = endpoint.Path,
+                SupportTls = endpoint.SupportTls,
+                Version = endpoint.Version,
+                Protocol = endpoint.Protocol,
+                Query = endpoint.Query
+            });
         }
+
+        // Single batch op over the AI gRPC connection — server side this is
+        // dispatched by BatchAgentEndpointRequestHandler (Nacos 3.2.4, audit §3.1
+        // row 5). The handler returns AgentEndpointResponse with a single
+        // resultCode (all-or-nothing: there is no per-endpoint result list, so a
+        // partial success cannot be surfaced to the caller — if the server later
+        // grows that capability this method should switch to inspecting it).
+        var request = new BatchAgentEndpointRequest
+        {
+            NamespaceId = _namespaceId,
+            AgentName = agentName,
+            Endpoints = normalized
+        };
+
+        var response = await _grpcClient.RequestAsync<BatchAgentEndpointResponse>(
+            "BatchAgentEndpointRequest", request, cancellationToken);
+
+        if (response is null)
+        {
+            throw new NacosException(NacosException.ServerError,
+                "Failed to register Agent endpoints: no response from server");
+        }
+
+        if (response.ResultCode != 0)
+        {
+            throw new NacosException(NacosException.ServerError,
+                $"Failed to register Agent endpoints: {response.Message ?? "unknown error"}");
+        }
+
+        _logger?.LogInformation("Registered {Count} Agent endpoint(s) to {AgentName} via BatchAgentEndpointRequest",
+            normalized.Count, agentName);
     }
 
     /// <inheritdoc />
@@ -840,6 +895,37 @@ public partial class NacosGrpcAiService : IAiService
         public string AgentName { get; set; } = string.Empty;
         public AgentEndpoint? Endpoint { get; set; }
         public string Type { get; set; } = "register";
+    }
+
+    /// <summary>
+    /// Batched version of <see cref="AgentEndpointRequest"/> — server side this is
+    /// handled by <c>BatchAgentEndpointRequestHandler</c> (Nacos 3.2.4). The wire
+    /// contract mirrors the Java type <c>BatchAgentEndpointRequest</c>:
+    /// <c>namespaceId</c> + <c>agentName</c> from <c>AbstractAgentRequest</c>, plus a
+    /// list of <c>endpoints</c>. No <c>type</c> discriminator — register is implied.
+    /// </summary>
+    private class BatchAgentEndpointRequest
+    {
+        public string? NamespaceId { get; set; }
+        public string AgentName { get; set; } = string.Empty;
+        public List<AgentEndpoint> Endpoints { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Server's <c>AgentEndpointResponse</c> — inherits <c>resultCode</c> +
+    /// <c>message</c> from <c>com.alibaba.nacos.api.remote.response.Response</c> and
+    /// adds a <c>type</c> discriminator (unused by the SDK). The single-endpoint
+    /// path's <c>OperationResponse</c> (Success/Message) does not match the server
+    /// payload and is left in place to minimise blast radius; the batch path
+    /// inspects <c>resultCode</c> directly. <c>0</c> means success — anything else
+    /// is treated as a hard failure (the batch handler has no per-endpoint result
+    /// list, so we cannot report partial success).
+    /// </summary>
+    private class BatchAgentEndpointResponse
+    {
+        public int ResultCode { get; set; }
+        public string? Message { get; set; }
+        public string? Type { get; set; }
     }
 
     private class AgentCardNotification

@@ -168,4 +168,52 @@ public class GrpcAiServiceIntegrationTests : IAsyncLifetime
             await DeleteWithRetryAsync(_output, () => _httpAi!.DeleteMcpServerAsync(mcpName));
         }
     }
+
+    // Task 2 — BatchAgentEndpointRequest replaces the per-endpoint loop. Live
+    // verification is gated: the Nacos 3.2.4 container is currently in a Derby
+    // crash-loop (audit §1 — see .tmp/audit-server-api-3.2.4.md), so the test
+    // would block on NacosServerFixture.InitializeAsync's 90s readiness probe.
+    // Authored for re-enable once the container recovers.
+    [Fact(Skip = "Nacos 3.2.4 container is in Derby crash-loop (see .tmp/audit-server-api-3.2.4.md §1); re-enable once the server recovers.")]
+    [Trait("Category", "Integration")]
+    [Trait("Module", "AI")]
+    public async Task RegisterAgentEndpoints_BatchOp_PreservesAgentCard()
+    {
+        var agentName = $"grpc-batch-{Guid.NewGuid():N}";
+        var card = new AgentCard
+        {
+            Name = agentName,
+            Version = "1.0.0",
+            ProtocolVersion = "0.3.7",
+            PreferredTransport = "jsonrpc",
+            Url = "http://127.0.0.1:9999"
+        };
+
+        await _grpcAi!.ReleaseAgentCardAsync(card);
+
+        try
+        {
+            await WaitForAsync(_output, () => _grpcAi.GetAgentCardAsync(agentName), s => s is not null);
+
+            var endpoints = new List<AgentEndpoint>
+            {
+                new() { Address = "10.0.0.1", Port = 9001, Version = "1.0.0", Transport = AiConstants.A2a.TransportJsonRpc },
+                new() { Address = "10.0.0.2", Port = 9002, Version = "1.0.0", Transport = AiConstants.A2a.TransportGrpc },
+                new() { Address = "10.0.0.3", Port = 9003, Version = "1.0.0" }
+            };
+
+            // Single batch dispatch — the unit test asserts the wire shape
+            // (one payload, three endpoints). Here we verify the live server
+            // accepts it without throwing and the agent card remains queryable.
+            await _grpcAi.RegisterAgentEndpointsAsync(agentName, endpoints);
+
+            var stillVisible = await _grpcAi.GetAgentCardAsync(agentName);
+            stillVisible.Should().NotBeNull();
+            stillVisible!.Name.Should().Be(agentName);
+        }
+        finally
+        {
+            await DeleteWithRetryAsync(_output, () => _httpAi!.DeleteAgentAsync(agentName));
+        }
+    }
 }
