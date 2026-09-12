@@ -67,6 +67,18 @@ with it.
   `ServerAddresses` (config-time `InvalidParam`), because `SecurityProxy` can only
   log in against the server API port. A console-only configuration *without*
   credentials remains valid.
+- **AccessKey/SecretKey authentication** is now wired in. Configure both
+  `NacosClientOptions.AccessKey` and `NacosClientOptions.SecretKey` and the SDK
+  signs the login with the Nacos standard
+  `Base64(HMAC-SHA1(secretKey, accessKey + timestamp))` (see
+  `SignatureUtils.SignRequest`) and POSTs the signed query string
+  `?accessKey=…&timestamp=…&signature=…` to the same `/v3/auth/user/login`
+  endpoint. Strategy precedence: AK/SK wins when both are set, then
+  Username/Password, then anonymous; `Validate()` rejects half-set AK/SK
+  symmetrically (one of the two without the other throws `InvalidParam`) before
+  the `ServerAddresses` check. The gRPC transport picks up the resulting JWT
+  transparently via `SecurityProxy.GetAccessTokenAsync` — `IAiService`,
+  `INamingService` and `IConfigService` over gRPC need no extra wiring.
 
 ## AI endpoints
 

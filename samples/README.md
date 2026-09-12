@@ -8,11 +8,14 @@ This directory contains sample projects demonstrating how to use the RedNb.Nacos
 |---------|-------------|
 | [RedNb.Nacos.Sample.Console](RedNb.Nacos.Sample.Console/) | Console application demonstrating basic SDK usage |
 | [RedNb.Nacos.Sample.WebApi](RedNb.Nacos.Sample.WebApi/) | ASP.NET Core WebAPI demonstrating DI integration |
+| [RedNb.Nacos.Sample.AI](RedNb.Nacos.Sample.AI/) | Console application (net10.0) demonstrating the full `IAiService` surface plus `Microsoft.Extensions.AI`, `ModelContextProtocol` and `Microsoft.Agents.AI` integration |
 
 ## Prerequisites
 
-- .NET 8.0 or later
-- Nacos Server 2.x or 3.x running on `localhost:8848`
+- **.NET 10 SDK** — every sample project in this directory targets `net10.0`
+- A Nacos server running on `localhost:8848` — the SDK targets **Nacos 3.2.0+**;
+  the AI sample is verified on **Nacos 3.2.4** (its force-publish path needs
+  ≥ 3.2.1)
 
 ### Quick Start with Nacos
 
@@ -30,7 +33,7 @@ Or run Nacos standalone:
 docker run -d --name nacos -p 8848:8848 -p 9848:9848 \
   -e MODE=standalone \
   -e NACOS_AUTH_ENABLE=true \
-  nacos/nacos-server:v2.3.0
+  nacos/nacos-server:v3.2.4
 ```
 
 ## Running the Samples
@@ -66,6 +69,22 @@ This sample demonstrates:
 Access the API:
 - Swagger UI: http://localhost:5000/swagger
 - Health Check: http://localhost:5000/health
+
+### AI Sample
+
+```bash
+cd RedNb.Nacos.Sample.AI
+dotnet run
+```
+
+This sample demonstrates:
+- MCP / A2A / Prompt / Skill / AgentSpec CRUD lifecycles
+- gRPC-only endpoint register / batch endpoint register / endpoint deregister
+- Nacos-as-registry + `Microsoft.Extensions.AI` `IChatClient` + `ModelContextProtocol` `McpClient` integration
+- `Microsoft.Agents.AI` integration: MCP tool wiring, inline skills, A2A card resolution
+- An `EchoChatClient` for the default zero-API-key path; OpenAI is the only opt-in provider (`-p:DefineConstants=OPENAI_PROVIDER`)
+
+Requires the **.NET 10 SDK** and **Nacos 3.2.x** (the sample is verified on 3.2.4; the force-publish path needs ≥ 3.2.1). The Docker quick-start above uses Nacos 3.2.4.
 
 ## Key Concepts
 

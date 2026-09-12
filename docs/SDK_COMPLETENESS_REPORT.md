@@ -24,9 +24,9 @@ SDK 已完成向 **Nacos 3.2+** 的协议迁移（分支 `AIRegistry`，标签 `
 | CAS 发布 | HTTP 重载 `[Obsolete]` + 非空 casMd5 抛 `NotSupportedException`（v3 admin 端点忽略 CAS）；gRPC 原生支持 |
 | 重连稳定性 | gRPC 连接代数（generation）隔离 + 清理旧代；`DeadlineExceeded` 视为连接失效；陈旧循环不会翻转新连接的 `_connected` |
 
-**测试矩阵**：Core 384 ×2 TFM · HTTP 134 ×2 TFM · gRPC 24 ×2 TFM · 集成测试 41（**39 通过 · 2 Skip · 0 失败**；2 个 Skip 均为订阅轮询占位 —— `SubscribeAgentCard_ReceivesUpdates` / `SubscribeMcpServer_ReceivesUpdates`，轮询周期 10s，非缺陷）；live Nacos 3.2.4，服务器日志无协议告警。
+**测试矩阵**：Core 365 ×2 TFM · HTTP 144 ×2 TFM · gRPC 74 ×2 TFM · 集成测试 39（**37 通过 · 2 Skip · 0 失败**；2 个 Skip 均为订阅轮询占位 —— `SubscribeAgentCard_ReceivesUpdates` / `SubscribeMcpServer_ReceivesUpdates`，轮询周期 10s，非缺陷）；live Nacos 3.2.4，服务器日志无协议告警。
 
-> 2026-09-11 复跑（净机、单一 live 3.2.4）：单元测试 **384/134/24** ×2 TFM 全绿，集成测试 **41 = 39 通过 · 2 Skip · 0 失败**。
+> 2026-09-12 复跑（净机、单一 live 3.2.4）：单元测试 **365/144/74** ×2 TFM 全绿，集成测试 **39 = 37 通过 · 2 Skip · 0 失败**。本版新增 63 个单元测试（43 × `NacosGrpcFactoryTests` + 5 × BatchAgentEndpoint wire + 10 × AK/SK + 5 × Validate half-set AK/SK），与 1 个新 gated batch-register 集成测试。
 > 此前 6 个非 AI gRPC 推送用例的失败已定位为 **gRPC 载荷头缺少 JWT `accessToken`**（server 401 `User not found`），并非环境阻塞 —— `SecurityProxy` 接线（commit `defeea8`）后全部转为通过。
 > 原"1 个服务端契约差异（`ListAgentVersions` 返回对象数组）"亦已消解：新增 rich 模型 `AgentVersionInfo` 承载 `{version,createdAt,updatedAt,latest}`，该用例已重开并通过（commit `9c55c02`）。
 
@@ -238,14 +238,14 @@ gRPC 通道 TYPE 字符串已对齐服务器，服务器未注册的 14 个 ops 
 
 ### 1. 核心测试 (RedNb.Nacos.Tests)
 
-**总计: 384 个测试 × 2 TFM (net8.0 + net10.0)，全部通过**（2026-09-11 复跑实测 net8.0 = 384 通过 · 0 失败 · 0 Skip）
+**总计: 365 个测试 × 2 TFM (net8.0 + net10.0)，全部通过**（2026-09-12 复跑实测 net8.0 = 365 通过 · 0 失败 · 0 Skip；含 5 个新增 `Validate()` 半集 AK/SK 拒绝用例）
 
 覆盖：客户端配置、异常处理、工具类、实例模型、配置变更事件、过滤链、AES 加密、模糊监听、
 服务信息（含 TTL 缓存失效）、命名选择器、AI 模型、Lock（常量/实例/服务）、Maintainer、Failover、Monitor 等。
 
 ### 2. HTTP 实现测试 (RedNb.Nacos.Http.Tests)
 
-**总计: 134 个测试 × 2 TFM，全部通过**（2026-09-11 复跑实测 net8.0 = 134 通过 · 0 失败 · 0 Skip）
+**总计: 144 个测试 × 2 TFM，全部通过**（2026-09-12 复跑实测 net8.0 = 144 通过 · 0 失败 · 0 Skip；含 10 个新增 `SecurityProxy` AK/SK 与 Username/Password 策略分派回归用例）
 
 覆盖：工厂类、服务器列表管理、配置监听管理、配置服务 v3（信封解析、20004→null、
 错误码抛异常、CAS 抛异常）、命名服务 v3（注册/注销/列表/错误信封抛异常/拒绝查询抛异常）、
@@ -253,10 +253,11 @@ gRPC 通道 TYPE 字符串已对齐服务器，服务器未注册的 14 个 ops 
 
 ### 3. gRPC 实现测试 (RedNb.Nacos.Grpc.Tests)
 
-**总计: 24 个测试 × 2 TFM，全部通过**（2026-09-11 复跑实测 net8.0 = 24 通过 · 0 失败 · 0 Skip）
+**总计: 74 个测试 × 2 TFM，全部通过**（2026-09-12 复跑实测 net8.0 = 74 通过 · 0 失败 · 0 Skip；含 43 个新增 `NacosGrpcFactory` `Validate()` 一致性用例 + 5 个新增 `BatchAgentEndpointRequest` 线格式形状用例）
 
 覆盖：ConfigRpcTransportClient 查询/监听/fuzzy-watch 调度（Metadata.type 断言）、
-NamingRpcTransportClient 一元/流式/推送分派、`NacosGrpcAiService` 构造与 AI 线格式形状（`mcpId` / `namespaceId` 载荷键，2026-09-11 新增）。
+NamingRpcTransportClient 一元/流式/推送分派、`NacosGrpcAiService` 构造与 AI 线格式形状（`mcpId` / `namespaceId` 载荷键，新增 `BatchAgentEndpointRequest` 批量注册路径）、
+`NacosGrpcFactory` 全部 25 个 entry point（20 overload + 5 DI 扩展）调用 `options.Validate()`。
 服务层（Config/Naming 业务方法）无单元测试——批量/fuzzyWatch/Selector 订阅等方法连集成测试也未覆盖。
 
 ### 4. 集成测试 (RedNb.Nacos.IntegrationTests, live Nacos 3.2.4)
@@ -271,7 +272,7 @@ NamingRpcTransportClient 一元/流式/推送分派、`NacosGrpcAiService` 构�
 | AiServiceIntegrationTests.cs | AI 服务集成（HTTP 控制台） | 12 | ✅ 10 通过（8 live 往返 + 2 fail-loud 断言） · ⚠️ 2 Skip（订阅轮询占位） |
 | Ai/GrpcAiServiceIntegrationTests.cs | AI 服务集成（gRPC 通道） | 4 | ✅ 4 通过（含跨通道一致性：gRPC release → HTTP list 可见） |
 
-**总计: 41 个集成测试**（**39 通过 · 2 Skip · 0 失败**，2026-09-11 实测；2 个 Skip 为订阅轮询占位，非缺陷）
+**总计: 39 个集成测试**（**37 通过 · 2 Skip · 0 失败**，2026-09-12 实测；2 个 Skip 为订阅轮询占位，非缺陷；新增长度 +1 个 gated `BatchAgentEndpointRequest` live 集成测试，因 Derby crash-loop 当前 Skip）
 
 ### 测试覆盖总结
 
@@ -287,7 +288,7 @@ NamingRpcTransportClient 一元/流式/推送分派、`NacosGrpcAiService` 构�
 | Failover 机制 | 20+ | 100% ✅ |
 | MetricsMonitor | 25+ | 100% ✅ |
 
-**测试运行结果: 单元（384 + 134 + 24）×2 TFM 全部通过 + 41 集成（39 通过 · 2 Skip · 0 失败；复跑细节见 §零注）**
+**测试运行结果: 单元（365 + 144 + 74 = 583）×2 TFM 全部通过 + 39 集成（37 通过 · 2 Skip · 0 失败；复跑细节见 §零注）**
 
 ---
 
@@ -311,10 +312,16 @@ NamingRpcTransportClient 一元/流式/推送分派、`NacosGrpcAiService` 构�
 
    仍未闭合：`NacosConstants.NamespaceHeader` 常量**未删除** —— AI HTTP 服务已不再发送该 header，但 `NacosPromptService`/`NacosSkillService`/`NacosAgentSpecService` 三个 helper 服务仍读取它（console 只服务 public 命名空间）；见 ANALYSIS §三.7。
 
+   **2026-09-12 SDK gap-closure（4 commits, `094e55d`/`a11ada9`/`f8c0fb8`/`977667e`）**：
+   - [x] **`BatchAgentEndpointRequest` 启用**（`a11ada9`）：`IA2aService.RegisterAgentEndpointsAsync(name, endpoints)` 现向 AI gRPC 连接下发单次批量 op（替换此前的单 endpoint 循环）；服务端由 `BatchAgentEndpointRequestHandler`（3.2.4 jar §3.1 row 5）派发；5 个线格式形状用例 + 1 个 gated live 集成用例（Derby crash-loop 期间 Skip）。
+   - [x] **AccessKey/SecretKey 接入 `SecurityProxy`**（`f8c0fb8`）：HMAC-SHA1 签名登录走同一 `/v3/auth/user/login`；`SignatureUtils.SignRequest` 公开；策略分派 AK/SK > Username/Password > 匿名；10 个 `SecurityProxyTests` 回归。
+   - [x] **`Validate()` 半集 AK/SK 对称拒绝**（`977667e`）：仅配 `AccessKey` 或仅配 `SecretKey` 现于配置期抛 `InvalidParam`，早于既有 `ServerAddresses` 检查；5 个 `NacosClientOptionsTests` 用例。
+   - [x] **`NacosGrpcFactory.CreateXxx*` 调 `Validate()`**（`094e55d`）：25 个 entry point（20 overload + 5 DI 扩展）现统一在 `options.Validate()` 后再构造服务；与 HTTP `NacosFactory` 行为一致；43 个 `NacosGrpcFactoryTests`。
+
 2. **gRPC 服务层测试覆盖（实现齐备，测试空白）**
    - [ ] Config：AddConfigFilter（`NacosGrpcConfigService.cs:303`）、FuzzyWatch/CancelFuzzyWatch（`:313`/`:399`）
    - [ ] Naming：BatchRegister/BatchDeregister（`NacosGrpcNamingService.cs:162`/`:187`）、Selector 订阅（`:528`）、GetSubscribeServices（`:747`，本地订阅视图）、FuzzyWatch/CancelFuzzyWatch（`:787`/`:861`）
-   - [ ] 现状：gRPC 测试 24 个 —— 传输层分派用例（`RedNb.Nacos.Grpc.Tests`）+ `NacosGrpcAiService` 线格式形状；服务层（Config/Naming）业务方法仍零覆盖
+   - [ ] 现状：gRPC 测试 74 个 —— 传输层分派用例 + AI 线格式形状（含 `BatchAgentEndpointRequest` 批量注册路径）+ `NacosGrpcFactory` 全部 entry point 的 `Validate()` 一致性；服务层（Config/Naming 业务方法）仍零覆盖（属独立空白，未计入此计划）
 
 3. **gRPC 配置查询错误语义**
    - [ ] `NacosGrpcConfigService.cs:133`：非成功 `ConfigQueryResponse` 未检查 `ErrorCode`（Java 映射 300 = not found）；先对 live 验证 300 行为再修改

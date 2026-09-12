@@ -195,12 +195,14 @@ var success = await lockService.TryLockAsync(lockInstance, TimeSpan.FromSeconds(
 #### 5. AI 服务 - MCP/A2A/Prompt/Skill/AgentSpec (Nacos 3.x)
 
 ```csharp
-// === MCP 服务 ===
-// 发布 MCP 服务器
-await aiService.ReleaseMcpServerAsync("my-mcp-server", mcpServerSpec);
+// aiService：HTTP 通道的 IAiService；grpcAi：gRPC 通道的 IAiService（NacosGrpcFactory.CreateAiService）
 
-// 注册 MCP 端点
-await aiService.RegisterMcpServerEndpointAsync("my-mcp-server", "1.0.0", endpoint);
+// === MCP 服务 ===
+// 发布 MCP 服务器（参数顺序：serverSpec → toolSpec → endpointSpec）
+await aiService.ReleaseMcpServerAsync(serverSpec, toolSpec, endpointSpec);
+
+// 注册 MCP 端点（gRPC 专用：Nacos 3.2.4 的 HTTP IAiService 抛 NacosException(ServerError)）
+await grpcAi.RegisterMcpServerEndpointAsync("my-mcp-server", "127.0.0.1", 9100, "1.0.0");
 
 // 获取 MCP 服务器详情
 var mcpServer = await aiService.GetMcpServerAsync("my-mcp-server");
@@ -209,17 +211,21 @@ var mcpServer = await aiService.GetMcpServerAsync("my-mcp-server");
 await aiService.SubscribeMcpServerAsync("my-mcp-server", myMcpListener);
 
 // === A2A 服务 ===
-// 发布 Agent Card
-await aiService.ReleaseAgentCardAsync("my-agent", agentCard);
+// 发布 Agent Card（另有 (agentCard, registrationType, setAsLatest) 重载）
+await aiService.ReleaseAgentCardAsync(agentCard);
 
-// 注册 Agent 端点
-await aiService.RegisterAgentEndpointAsync("my-agent", endpoint, TransportProtocol.Http);
+// 注册 Agent 端点（gRPC 专用：HTTP IAiService 抛 NacosException(ServerError)；
+// transport 为字符串："JSONRPC" / "GRPC" / "HTTP+JSON"，见 AiConstants.A2a）
+await grpcAi.RegisterAgentEndpointAsync("my-agent", "1.0.0", "127.0.0.1", 9200, AiConstants.A2a.TransportHttpJson);
+
+// 批量注册 Agent 端点（gRPC 专用：单次 BatchAgentEndpointRequest 往返）
+await grpcAi.RegisterAgentEndpointsAsync("my-agent", endpoints);
 
 // 获取 Agent Card 详情
-var agentCard = await aiService.GetAgentCardAsync("my-agent");
+var agentCardDetail = await aiService.GetAgentCardAsync("my-agent");
 
 // 列出所有 Agents
-var agents = await aiService.ListAgentCardsAsync(1, 20);
+var agents = await aiService.ListAgentCardsAsync(pageNo: 1, pageSize: 20);
 
 // === Prompt 服务 ===
 // 获取 Prompt（支持版本与标签）
@@ -262,6 +268,10 @@ await aiService.CreateAgentSpecDraftAsync(agentSpecDetail, targetVersion: "1.1.0
 await aiService.PublishAgentSpecAsync("travel-agent", "1.1.0");
 await aiService.OnlineAgentSpecAsync("travel-agent", "1.1.0");
 ```
+
+> **注**：Nacos 3.2.4 默认启用 AI pipeline 插件，普通发布会因 “Pipeline not approved”（HTTP 400）被拦截；无人值守运行请改用 `ForcePublishPromptAsync` / `ForcePublishSkillAsync` / `ForcePublishAgentSpecAsync` [since=3.2.1]。
+>
+> 📦 Full sample: see [`samples/RedNb.Nacos.Sample.AI/`](samples/RedNb.Nacos.Sample.AI/).
 
 #### 6. 维护服务
 
@@ -516,7 +526,7 @@ var lock = LockInstance.Create("my-key")
 | 获取 Agent | `GetAgentCardAsync()` | 获取 Agent Card 详情 |
 | 发布 Agent | `ReleaseAgentCardAsync()` | 发布 Agent Card |
 | 注册端点 | `RegisterAgentEndpointAsync()` | 注册 Agent 端点 |
-| 批量注册 | `BatchRegisterAgentEndpointsAsync()` | 批量注册端点 |
+| 批量注册 | `RegisterAgentEndpointsAsync()` | 批量注册端点（gRPC 通道：单次 `BatchAgentEndpointRequest` op） |
 | 注销端点 | `DeregisterAgentEndpointAsync()` | 注销 Agent 端点 |
 | 订阅 | `SubscribeAgentCardAsync()` | 订阅 Agent Card 变更 |
 | 取消订阅 | `UnsubscribeAgentCardAsync()` | 取消订阅 |
@@ -572,6 +582,12 @@ var lock = LockInstance.Create("my-key")
 | 上下线与范围 | `OnlineAgentSpecAsync()` / `OfflineAgentSpecAsync()` / `UpdateAgentSpecScopeAsync()` | 上线/下线/范围 |
 | 标签与业务标签 | `UpdateAgentSpecLabelsAsync()` / `UpdateAgentSpecBizTagsAsync()` | 标签管理 |
 | 删除 | `DeleteAgentSpecAsync()` | 删除 AgentSpec |
+
+#### 🧪 AI 示例
+
+| 示例 | 内容 |
+|------|------|
+| [`RedNb.Nacos.Sample.AI`](samples/RedNb.Nacos.Sample.AI/) | AI 服务全套演示（net10.0）：MCP / A2A / Prompt / Skill / AgentSpec CRUD，gRPC 通道的端点注册与批量注册，Nacos 作为注册中心 + `Microsoft.Extensions.AI` / `ModelContextProtocol` 集成，以及 `Microsoft.Agents.AI` 集成（MCP 工具 + 内联 Skill + A2A 卡片解析，`ChatClientAgent`）的端到端示例 |
 
 ### 🛠️ 维护服务 (IMaintainerService)
 
@@ -729,7 +745,8 @@ RedNb.Nacos/
 │   └── RedNb.Nacos.All/                 # 全功能聚合包
 ├── samples/
 │   ├── RedNb.Nacos.Sample.Console/      # 控制台示例
-│   └── RedNb.Nacos.Sample.WebApi/       # WebAPI 示例
+│   ├── RedNb.Nacos.Sample.WebApi/       # WebAPI 示例
+│   └── RedNb.Nacos.Sample.AI/           # AI 服务示例
 ├── tests/
 │   ├── RedNb.Nacos.Tests/               # 单元测试
 │   ├── RedNb.Nacos.Http.Tests/          # HTTP 客户端测试
@@ -746,7 +763,10 @@ public class NacosClientOptions
     // ====== 服务器连接 ======
     /// <summary>服务器地址，多个用逗号分隔</summary>
     public string ServerAddresses { get; set; } = "localhost:8848";
-    
+
+    /// <summary>控制台地址，多个用逗号分隔；为空时由 ServerAddresses 派生（端口替换为 8080）</summary>
+    public string? ConsoleAddresses { get; set; }
+
     /// <summary>命名空间 ID</summary>
     public string? Namespace { get; set; }
     
@@ -914,7 +934,7 @@ await configService.CancelFuzzyWatchAsync("app-*", "DEFAULT_GROUP", myWatcher);
 - [x] 服务自动注册
 - [x] HTTP 客户端实现
 - [x] gRPC 客户端实现
-- [ ] 安全认证 (Security Proxy)
+- [x] 安全认证 (Security Proxy) — Username/Password 与 AccessKey/SecretKey 双路径
 - [ ] Prometheus 指标监控
 
 ## 📄 许可证
