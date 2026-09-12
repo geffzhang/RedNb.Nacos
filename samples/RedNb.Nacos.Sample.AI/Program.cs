@@ -67,12 +67,11 @@ internal static class Program
             httpAi = httpFactory.CreateAiService(options);
             grpcAi = grpcFactory.CreateAiService(options);
 
-            logger.LogInformation("Connected. Section runner arrives in Tasks 5-11.");
+            logger.LogInformation("Connected. Running AI samples.");
 
             results.Add(("Mcp", await McpSamples.RunAsync(httpAi, grpcAi, logger, cts.Token)));
             results.Add(("A2a", await A2aSamples.RunAsync(httpAi, grpcAi, logger, cts.Token)));
-
-            results.Add(("Scaffold", new SampleResult(SampleOutcome.Ok)));
+            results.Add(("Prompt", await PromptSamples.RunAsync(httpAi, grpcAi, logger, cts.Token)));
         }
         catch (NacosException nex)
         {
