@@ -75,6 +75,7 @@ internal static class Program
             results.Add(("Skill", await SkillSamples.RunAsync(httpAi, grpcAi, logger, cts.Token)));
             results.Add(("AgentSpec", await AgentSpecSamples.RunAsync(httpAi, grpcAi, logger, cts.Token)));
             results.Add(("PromptChat", await Integration.PromptChatIntegrationSample.RunAsync(httpAi, grpcAi, logger, cts.Token)));
+            results.Add(("McpChat", await Integration.McpChatIntegrationSample.RunAsync(httpAi, grpcAi, logger, cts.Token)));
         }
         catch (NacosException nex)
         {

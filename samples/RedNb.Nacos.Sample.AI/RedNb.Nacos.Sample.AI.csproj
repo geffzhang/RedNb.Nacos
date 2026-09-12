@@ -20,6 +20,9 @@
     <PackageReference Include="Microsoft.Agents.AI" Version="1.21.0" />
     <PackageReference Include="Microsoft.Agents.AI.A2A" Version="1.21.0-preview.260911.1" />
     <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
+    <!-- Hosts the in-process MCP server the McpChat section releases to Nacos; brings the
+         Microsoft.AspNetCore.App framework reference for Kestrel (streamable HTTP transport). -->
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.*" />
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.*" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.*" />
