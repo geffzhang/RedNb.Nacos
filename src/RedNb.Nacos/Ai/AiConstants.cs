@@ -158,6 +158,114 @@ public static class AiConstants
     }
 
     /// <summary>
+    /// Prompt related constants.
+    /// </summary>
+    public static class Prompt
+    {
+        /// <summary>
+        /// Default namespace for Prompt.
+        /// </summary>
+        public const string DefaultNamespace = "public";
+
+        /// <summary>
+        /// Draft status.
+        /// </summary>
+        public const string StatusDraft = "draft";
+
+        /// <summary>
+        /// Reviewing status.
+        /// </summary>
+        public const string StatusReviewing = "reviewing";
+
+        /// <summary>
+        /// Online status.
+        /// </summary>
+        public const string StatusOnline = "online";
+
+        /// <summary>
+        /// Offline status.
+        /// </summary>
+        public const string StatusOffline = "offline";
+
+        /// <summary>
+        /// The latest label.
+        /// </summary>
+        public const string LabelLatest = "latest";
+    }
+
+    /// <summary>
+    /// Skill related constants.
+    /// </summary>
+    public static class Skill
+    {
+        /// <summary>
+        /// Default namespace for Skill.
+        /// </summary>
+        public const string DefaultNamespace = "public";
+
+        /// <summary>
+        /// Response header carrying the skill md5.
+        /// </summary>
+        public const string HeaderSkillMd5 = "X-Nacos-Skill-Md5";
+
+        /// <summary>
+        /// Response header carrying the resolved skill version.
+        /// </summary>
+        public const string HeaderSkillResolvedVersion = "X-Nacos-Skill-Resolved-Version";
+
+        /// <summary>
+        /// Online scope: public.
+        /// </summary>
+        public const string ScopePublic = "public";
+
+        /// <summary>
+        /// Online scope: private.
+        /// </summary>
+        public const string ScopePrivate = "private";
+
+        /// <summary>
+        /// The latest label.
+        /// </summary>
+        public const string LabelLatest = "latest";
+    }
+
+    /// <summary>
+    /// AgentSpec related constants.
+    /// </summary>
+    public static class AgentSpec
+    {
+        /// <summary>
+        /// Default namespace for AgentSpec.
+        /// </summary>
+        public const string DefaultNamespace = "public";
+
+        /// <summary>
+        /// Response header carrying the AgentSpec md5.
+        /// </summary>
+        public const string HeaderAgentSpecMd5 = "X-Nacos-AgentSpec-Md5";
+
+        /// <summary>
+        /// Response header carrying the resolved AgentSpec version.
+        /// </summary>
+        public const string HeaderAgentSpecResolvedVersion = "X-Nacos-AgentSpec-Resolved-Version";
+
+        /// <summary>
+        /// Online scope: public.
+        /// </summary>
+        public const string ScopePublic = "public";
+
+        /// <summary>
+        /// Online scope: private.
+        /// </summary>
+        public const string ScopePrivate = "private";
+
+        /// <summary>
+        /// The latest label.
+        /// </summary>
+        public const string LabelLatest = "latest";
+    }
+
+    /// <summary>
     /// Default AI cache update interval in milliseconds.
     /// </summary>
     public const long DefaultAiCacheUpdateInterval = 10000L;

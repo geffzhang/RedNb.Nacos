@@ -34,6 +34,7 @@ public class NacosGrpcFactory : INacosFactory
     /// </summary>
     public static async Task<IConfigService> CreateConfigServiceAsync(NacosClientOptions options)
     {
+        options.Validate();
         var service = new NacosGrpcConfigService(options);
         await service.InitializeAsync();
         return service;
@@ -43,9 +44,10 @@ public class NacosGrpcFactory : INacosFactory
     /// Creates a config service using gRPC with a logger asynchronously.
     /// </summary>
     public static async Task<IConfigService> CreateConfigServiceAsync(
-        NacosClientOptions options, 
+        NacosClientOptions options,
         ILogger<NacosGrpcConfigService> logger)
     {
+        options.Validate();
         var service = new NacosGrpcConfigService(options, logger);
         await service.InitializeAsync();
         return service;
@@ -56,6 +58,7 @@ public class NacosGrpcFactory : INacosFactory
     /// </summary>
     public static async Task<INamingService> CreateNamingServiceAsync(NacosClientOptions options)
     {
+        options.Validate();
         var service = new NacosGrpcNamingService(options);
         await service.InitializeAsync();
         return service;
@@ -65,9 +68,10 @@ public class NacosGrpcFactory : INacosFactory
     /// Creates a naming service using gRPC with a logger asynchronously.
     /// </summary>
     public static async Task<INamingService> CreateNamingServiceAsync(
-        NacosClientOptions options, 
+        NacosClientOptions options,
         ILogger<NacosGrpcNamingService> logger)
     {
+        options.Validate();
         var service = new NacosGrpcNamingService(options, logger);
         await service.InitializeAsync();
         return service;
@@ -78,6 +82,7 @@ public class NacosGrpcFactory : INacosFactory
     /// </summary>
     public static async Task<IAiService> CreateAiServiceAsync(NacosClientOptions options)
     {
+        options.Validate();
         var service = new NacosGrpcAiService(options);
         await service.InitializeAsync();
         return service;
@@ -90,6 +95,7 @@ public class NacosGrpcFactory : INacosFactory
         NacosClientOptions options,
         ILogger<NacosGrpcAiService> logger)
     {
+        options.Validate();
         var service = new NacosGrpcAiService(options, logger);
         await service.InitializeAsync();
         return service;
@@ -100,6 +106,7 @@ public class NacosGrpcFactory : INacosFactory
     /// </summary>
     public static async Task<ILockService> CreateLockServiceAsync(NacosClientOptions options)
     {
+        options.Validate();
         var service = new NacosGrpcLockService(options);
         await service.InitializeAsync();
         return service;
@@ -112,6 +119,7 @@ public class NacosGrpcFactory : INacosFactory
         NacosClientOptions options,
         ILogger<NacosGrpcLockService> logger)
     {
+        options.Validate();
         var service = new NacosGrpcLockService(options, logger);
         await service.InitializeAsync();
         return service;
@@ -122,6 +130,7 @@ public class NacosGrpcFactory : INacosFactory
     /// </summary>
     public static IMaintainerService CreateMaintainerServiceStatic(NacosClientOptions options)
     {
+        options.Validate();
         return new NacosGrpcMaintainerService(options);
     }
 
@@ -132,12 +141,14 @@ public class NacosGrpcFactory : INacosFactory
         NacosClientOptions options,
         ILogger<NacosGrpcMaintainerService> logger)
     {
+        options.Validate();
         return new NacosGrpcMaintainerService(options, logger);
     }
 
     /// <inheritdoc/>
     public IConfigService CreateConfigService(NacosClientOptions options)
     {
+        options.Validate();
         var logger = _serviceProvider?.GetService<ILogger<NacosGrpcConfigService>>();
         var service = new NacosGrpcConfigService(options, logger);
         // Note: Must call InitializeAsync before use for gRPC connection
@@ -154,6 +165,7 @@ public class NacosGrpcFactory : INacosFactory
     /// <inheritdoc/>
     public INamingService CreateNamingService(NacosClientOptions options)
     {
+        options.Validate();
         var logger = _serviceProvider?.GetService<ILogger<NacosGrpcNamingService>>();
         var service = new NacosGrpcNamingService(options, logger);
         // Note: Must call InitializeAsync before use for gRPC connection
@@ -170,6 +182,7 @@ public class NacosGrpcFactory : INacosFactory
     /// <inheritdoc/>
     public IAiService CreateAiService(NacosClientOptions options)
     {
+        options.Validate();
         var logger = _serviceProvider?.GetService<ILogger<NacosGrpcAiService>>();
         var service = new NacosGrpcAiService(options, logger);
         // Note: Must call InitializeAsync before use for gRPC connection
@@ -186,6 +199,7 @@ public class NacosGrpcFactory : INacosFactory
     /// <inheritdoc/>
     public ILockService CreateLockService(NacosClientOptions options)
     {
+        options.Validate();
         var logger = _serviceProvider?.GetService<ILogger<NacosGrpcLockService>>();
         var service = new NacosGrpcLockService(options, logger);
         // Note: Must call InitializeAsync before use for gRPC connection
@@ -202,6 +216,7 @@ public class NacosGrpcFactory : INacosFactory
     /// <inheritdoc/>
     public IMaintainerService CreateMaintainerService(NacosClientOptions options)
     {
+        options.Validate();
         var logger = _serviceProvider?.GetService<ILogger<NacosGrpcMaintainerService>>();
         return new NacosGrpcMaintainerService(options, logger);
     }
@@ -223,20 +238,21 @@ public static class NacosGrpcServiceCollectionExtensions
     /// Adds Nacos gRPC services (config, naming, AI, lock, and maintainer).
     /// </summary>
     public static IServiceCollection AddNacosGrpc(
-        this IServiceCollection services, 
+        this IServiceCollection services,
         Action<NacosClientOptions> configure)
     {
         var options = new NacosClientOptions();
         configure(options);
+        options.Validate();
 
         services.AddSingleton(options);
         services.AddSingleton<INacosFactory>(sp => new NacosGrpcFactory(sp));
-        services.AddSingleton<IConfigService>(sp => 
+        services.AddSingleton<IConfigService>(sp =>
         {
             var logger = sp.GetService<ILogger<NacosGrpcConfigService>>();
             return new NacosGrpcConfigService(options, logger);
         });
-        services.AddSingleton<INamingService>(sp => 
+        services.AddSingleton<INamingService>(sp =>
         {
             var logger = sp.GetService<ILogger<NacosGrpcNamingService>>();
             return new NacosGrpcNamingService(options, logger);
@@ -264,14 +280,15 @@ public static class NacosGrpcServiceCollectionExtensions
     /// Adds Nacos gRPC config service only.
     /// </summary>
     public static IServiceCollection AddNacosGrpcConfig(
-        this IServiceCollection services, 
+        this IServiceCollection services,
         Action<NacosClientOptions> configure)
     {
         var options = new NacosClientOptions();
         configure(options);
+        options.Validate();
 
         services.AddSingleton(options);
-        services.AddSingleton<IConfigService>(sp => 
+        services.AddSingleton<IConfigService>(sp =>
         {
             var logger = sp.GetService<ILogger<NacosGrpcConfigService>>();
             return new NacosGrpcConfigService(options, logger);
@@ -284,14 +301,15 @@ public static class NacosGrpcServiceCollectionExtensions
     /// Adds Nacos gRPC naming service only.
     /// </summary>
     public static IServiceCollection AddNacosGrpcNaming(
-        this IServiceCollection services, 
+        this IServiceCollection services,
         Action<NacosClientOptions> configure)
     {
         var options = new NacosClientOptions();
         configure(options);
+        options.Validate();
 
         services.AddSingleton(options);
-        services.AddSingleton<INamingService>(sp => 
+        services.AddSingleton<INamingService>(sp =>
         {
             var logger = sp.GetService<ILogger<NacosGrpcNamingService>>();
             return new NacosGrpcNamingService(options, logger);
@@ -304,14 +322,15 @@ public static class NacosGrpcServiceCollectionExtensions
     /// Adds Nacos gRPC lock service only.
     /// </summary>
     public static IServiceCollection AddNacosGrpcLock(
-        this IServiceCollection services, 
+        this IServiceCollection services,
         Action<NacosClientOptions> configure)
     {
         var options = new NacosClientOptions();
         configure(options);
+        options.Validate();
 
         services.AddSingleton(options);
-        services.AddSingleton<ILockService>(sp => 
+        services.AddSingleton<ILockService>(sp =>
         {
             var logger = sp.GetService<ILogger<NacosGrpcLockService>>();
             return new NacosGrpcLockService(options, logger);
@@ -324,14 +343,15 @@ public static class NacosGrpcServiceCollectionExtensions
     /// Adds Nacos maintainer service only.
     /// </summary>
     public static IServiceCollection AddNacosGrpcMaintainer(
-        this IServiceCollection services, 
+        this IServiceCollection services,
         Action<NacosClientOptions> configure)
     {
         var options = new NacosClientOptions();
         configure(options);
+        options.Validate();
 
         services.AddSingleton(options);
-        services.AddSingleton<IMaintainerService>(sp => 
+        services.AddSingleton<IMaintainerService>(sp =>
         {
             var logger = sp.GetService<ILogger<NacosGrpcMaintainerService>>();
             return new NacosGrpcMaintainerService(options, logger);

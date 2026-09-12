@@ -8,7 +8,7 @@
 [![NuGet Downloads](https://img.shields.io/nuget/dt/RedNb.Nacos.svg?style=flat-square)](https://www.nuget.org/packages/RedNb.Nacos)
 [![.NET](https://img.shields.io/badge/.NET-8.0%20|%2010.0-512BD4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg?style=flat-square)](LICENSE)
-[![Nacos](https://img.shields.io/badge/Nacos-2.x%20|%203.x-00C7B7.svg?style=flat-square)](https://nacos.io/)
+[![Nacos](https://img.shields.io/badge/Nacos-3.2%2B-00C7B7.svg?style=flat-square)](https://nacos.io/)
 [![GitHub stars](https://img.shields.io/github/stars/redNb/RedNb.Nacos?style=flat-square)](https://github.com/redNb/RedNb.Nacos/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/redNb/RedNb.Nacos?style=flat-square)](https://github.com/redNb/RedNb.Nacos/issues)
 
@@ -18,7 +18,7 @@ English | [简体中文](README.md)
 
 ---
 
-**RedNb.Nacos** is a fully-featured modern .NET Nacos client SDK, fully compatible with Nacos 2.x/3.x, providing **200+ API methods** covering configuration management, service discovery, distributed locks, AI services (MCP/A2A), and operations management.
+**RedNb.Nacos** is a fully-featured modern .NET Nacos client SDK, built for Nacos 3.2+ servers, providing **200+ API methods** covering configuration management, service discovery, distributed locks, AI services (MCP/A2A), and operations management.
 
 > 🎯 **Why Choose RedNb.Nacos?**
 > - 🆕 Supports **.NET 8.0** and **.NET 10.0** with latest language features
@@ -33,9 +33,9 @@ English | [简体中文](README.md)
 |---------|-------------|
 | 🚀 **High Performance** | Supports both HTTP and gRPC protocols |
 | 📦 **Modular Design** | Import on demand, flexible composition |
-| 🔄 **Nacos 2.x/3.x Compatible** | Full support for Fuzzy Watch, AI Service, Distributed Lock |
+| 🔄 **Nacos 3.2+ Only** | Rewritten for the v3 protocol: Fuzzy Watch, AI Service, Distributed Lock |
 | 🔒 **Distributed Lock** | Native Nacos 3.0 distributed lock support |
-| 🤖 **AI Service** | Supports MCP (Model Context Protocol) and A2A (Agent-to-Agent) protocols |
+| 🤖 **AI Service** | Supports MCP, A2A, Prompt, Skill and AgentSpec - the full AI Registry resource set |
 | 🛠️ **Operations Management** | Complete Maintainer API for namespace, cluster, client management |
 | 💉 **Dependency Injection** | Native support for Microsoft.Extensions.DependencyInjection |
 | 🏗️ **ASP.NET Core Integration** | Configuration provider, health checks, automatic service registration |
@@ -185,15 +185,17 @@ if (acquired)
 var success = await lockService.TryLockAsync(lockInstance, TimeSpan.FromSeconds(10));
 ```
 
-#### 5. AI Service - MCP/A2A (Nacos 3.0)
+#### 5. AI Service - MCP/A2A/Prompt/Skill/AgentSpec (Nacos 3.x)
 
 ```csharp
-// === MCP Service ===
-// Release MCP server
-await aiService.ReleaseMcpServerAsync("my-mcp-server", mcpServerSpec);
+// aiService: IAiService over HTTP; grpcAi: IAiService over gRPC (NacosGrpcFactory.CreateAiService)
 
-// Register MCP endpoint
-await aiService.RegisterMcpServerEndpointAsync("my-mcp-server", "1.0.0", endpoint);
+// === MCP Service ===
+// Release MCP server (parameter order: serverSpec → toolSpec → endpointSpec)
+await aiService.ReleaseMcpServerAsync(serverSpec, toolSpec, endpointSpec);
+
+// Register MCP endpoint (gRPC-only on Nacos 3.2.4; the HTTP IAiService throws NacosException(ServerError))
+await grpcAi.RegisterMcpServerEndpointAsync("my-mcp-server", "127.0.0.1", 9100, "1.0.0");
 
 // Get MCP server details
 var mcpServer = await aiService.GetMcpServerAsync("my-mcp-server");
@@ -202,18 +204,26 @@ var mcpServer = await aiService.GetMcpServerAsync("my-mcp-server");
 await aiService.SubscribeMcpServerAsync("my-mcp-server", myMcpListener);
 
 // === A2A Service ===
-// Release Agent Card
-await aiService.ReleaseAgentCardAsync("my-agent", agentCard);
+// Release Agent Card (an (agentCard, registrationType, setAsLatest) overload also exists)
+await aiService.ReleaseAgentCardAsync(agentCard);
 
-// Register Agent endpoint
-await aiService.RegisterAgentEndpointAsync("my-agent", endpoint, TransportProtocol.Http);
+// Register Agent endpoint (gRPC-only on Nacos 3.2.4; the HTTP IAiService throws NacosException(ServerError);
+// transport is a string: "JSONRPC" / "GRPC" / "HTTP+JSON", see AiConstants.A2a)
+await grpcAi.RegisterAgentEndpointAsync("my-agent", "1.0.0", "127.0.0.1", 9200, AiConstants.A2a.TransportHttpJson);
+
+// Batch register Agent endpoints (gRPC-only: one BatchAgentEndpointRequest round trip)
+await grpcAi.RegisterAgentEndpointsAsync("my-agent", endpoints);
 
 // Get Agent Card details
-var agentCard = await aiService.GetAgentCardAsync("my-agent");
+var agentCardDetail = await aiService.GetAgentCardAsync("my-agent");
 
 // List all Agents
-var agents = await aiService.ListAgentCardsAsync(1, 20);
+var agents = await aiService.ListAgentCardsAsync(pageNo: 1, pageSize: 20);
 ```
+
+> **Note (Prompt / Skill / AgentSpec publishing, not shown above):** on Nacos 3.2.4 the default AI pipeline plugin gates a normal publish (“Pipeline not approved”, HTTP 400); for unattended runs use `ForcePublishPromptAsync` / `ForcePublishSkillAsync` / `ForcePublishAgentSpecAsync` [since=3.2.1].
+>
+> 📦 Full sample: see [`samples/RedNb.Nacos.Sample.AI/`](samples/RedNb.Nacos.Sample.AI/).
 
 #### 6. Maintainer Service
 
@@ -440,6 +450,8 @@ var lock = LockInstance.Create("my-key")
 
 ### 🤖 AI Service (IAiService) - Nacos 3.0
 
+> **Note:** the Prompt / Skill / AgentSpec endpoints require the Nacos console (port 8080) to be enabled and are not covered by the live integration suite.
+
 #### MCP Service (Model Context Protocol)
 
 | Feature | Method | Description |
@@ -462,13 +474,19 @@ var lock = LockInstance.Create("my-key")
 | Get Agent | `GetAgentCardAsync()` | Get Agent Card details |
 | Release Agent | `ReleaseAgentCardAsync()` | Release Agent Card |
 | Register Endpoint | `RegisterAgentEndpointAsync()` | Register Agent endpoint |
-| Batch Register | `BatchRegisterAgentEndpointsAsync()` | Batch register endpoints |
+| Batch Register | `RegisterAgentEndpointsAsync()` | Batch register endpoints (gRPC: single `BatchAgentEndpointRequest` op) |
 | Deregister Endpoint | `DeregisterAgentEndpointAsync()` | Deregister Agent endpoint |
 | Subscribe | `SubscribeAgentCardAsync()` | Subscribe to Agent Card changes |
 | Unsubscribe | `UnsubscribeAgentCardAsync()` | Unsubscribe |
 | Delete Agent | `DeleteAgentAsync()` | Delete Agent |
 | List | `ListAgentCardsAsync()` | Paginated list of Agent Cards |
 | Version List | `ListAgentVersionsAsync()` | List Agent versions |
+
+#### 🧪 AI Samples
+
+| Sample | Description |
+|--------|-------------|
+| [`RedNb.Nacos.Sample.AI`](samples/RedNb.Nacos.Sample.AI/) | End-to-end tour of the whole AI surface (net10.0): MCP / A2A / Prompt / Skill / AgentSpec CRUD, gRPC-only endpoint registration and batch registration, Nacos as the registry plus `Microsoft.Extensions.AI` and `ModelContextProtocol` integration, and a `Microsoft.Agents.AI` integration (MCP tools + inline skill + A2A card resolution via `ChatClientAgent`) |
 
 ### 🛠️ Maintainer Service (IMaintainerService)
 
@@ -626,7 +644,8 @@ RedNb.Nacos/
 │   └── RedNb.Nacos.All/                 # All-in-one package
 ├── samples/
 │   ├── RedNb.Nacos.Sample.Console/      # Console sample
-│   └── RedNb.Nacos.Sample.WebApi/       # WebAPI sample
+│   ├── RedNb.Nacos.Sample.WebApi/       # WebAPI sample
+│   └── RedNb.Nacos.Sample.AI/           # AI sample
 ├── tests/
 │   ├── RedNb.Nacos.Tests/               # Unit tests
 │   ├── RedNb.Nacos.Http.Tests/          # HTTP client tests
@@ -643,7 +662,10 @@ public class NacosClientOptions
     // ====== Server Connection ======
     /// <summary>Server addresses, comma separated</summary>
     public string ServerAddresses { get; set; } = "localhost:8848";
-    
+
+    /// <summary>Console addresses, comma separated; when empty, derived from ServerAddresses by replacing port with 8080</summary>
+    public string? ConsoleAddresses { get; set; }
+
     /// <summary>Namespace ID</summary>
     public string? Namespace { get; set; }
     
@@ -791,7 +813,7 @@ await configService.CancelFuzzyWatchAsync("app-*", "DEFAULT_GROUP", myWatcher);
 | Component | Version Requirement |
 |-----------|---------------------|
 | .NET | 8.0+ / 10.0+ |
-| Nacos Server | 2.x / 3.x |
+| Nacos Server | 3.2.0+ |
 | C# | 12.0+ |
 
 ## 🗺️ Roadmap
@@ -799,7 +821,7 @@ await configService.CancelFuzzyWatchAsync("app-*", "DEFAULT_GROUP", myWatcher);
 - [x] Configuration Center (Config Service)
 - [x] Service Discovery (Naming Service)
 - [x] Fuzzy Watch - Nacos 3.0
-- [x] AI Service - MCP/A2A (Nacos 3.0)
+- [x] AI Service - MCP/A2A/Prompt/Skill/AgentSpec (Nacos 3.x)
 - [x] Distributed Lock (Lock Service) - Nacos 3.0
 - [x] Maintainer Service
 - [x] ASP.NET Core Integration
@@ -808,7 +830,7 @@ await configService.CancelFuzzyWatchAsync("app-*", "DEFAULT_GROUP", myWatcher);
 - [x] Automatic Service Registration
 - [x] HTTP Client Implementation
 - [x] gRPC Client Implementation
-- [ ] Security Authentication (Security Proxy)
+- [x] Security Authentication (Security Proxy) — Username/Password and AccessKey/SecretKey paths
 - [ ] Prometheus Metrics Monitoring
 
 ## 📄 License

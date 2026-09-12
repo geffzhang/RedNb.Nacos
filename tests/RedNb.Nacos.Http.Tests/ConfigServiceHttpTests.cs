@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentAssertions;
 using RedNb.Nacos.Client;
 using RedNb.Nacos.Core;
@@ -36,7 +37,7 @@ public class ConfigServiceHttpTests : IDisposable
     {
         _server
             .Given(Request.Create()
-                .WithPath("/nacos/v1/auth/login")
+                .WithPath("/nacos/v3/auth/user/login")
                 .UsingPost())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
@@ -48,16 +49,27 @@ public class ConfigServiceHttpTests : IDisposable
     {
         // Arrange
         var expectedContent = "key=value\nname=test";
+        var envelope = JsonSerializer.Serialize(new
+        {
+            code = 0,
+            message = "success",
+            data = new
+            {
+                content = expectedContent,
+                md5 = "d41d8cd98f00b204e9800998ecf8427e",
+                contentType = "text"
+            }
+        });
 
         _server
             .Given(Request.Create()
-                .WithPath("/nacos/v1/cs/configs")
+                .WithPath("/nacos/v3/client/cs/config")
                 .WithParam("dataId", "test-config")
-                .WithParam("group", "DEFAULT_GROUP")
+                .WithParam("groupName", "DEFAULT_GROUP")
                 .UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
-                .WithBody(expectedContent));
+                .WithBody(envelope));
 
         var configService = _factory.CreateConfigService(_options);
 
@@ -72,13 +84,15 @@ public class ConfigServiceHttpTests : IDisposable
     public async Task GetConfigAsync_NotFound_ShouldReturnNull()
     {
         // Arrange
+        // Nacos 3.x reports a missing config as HTTP 200 with code 20004.
         _server
             .Given(Request.Create()
-                .WithPath("/nacos/v1/cs/configs")
+                .WithPath("/nacos/v3/client/cs/config")
                 .WithParam("dataId", "non-existent")
                 .UsingGet())
             .RespondWith(Response.Create()
-                .WithStatusCode(404));
+                .WithStatusCode(200)
+                .WithBody("{\"code\":20004,\"message\":\"config data not exist\",\"data\":null}"));
 
         var configService = _factory.CreateConfigService(_options);
 
@@ -90,16 +104,116 @@ public class ConfigServiceHttpTests : IDisposable
     }
 
     [Fact]
+    public async Task GetConfigAsync_ErrorCodeOtherThanNotFound_ShouldThrow()
+    {
+        // Arrange
+        // A non-zero, non-20004 code is a server-side failure, not a missing config.
+        _server
+            .Given(Request.Create()
+                .WithPath("/nacos/v3/client/cs/config")
+                .WithParam("dataId", "denied-config")
+                .UsingGet())
+            .RespondWith(Response.Create()
+                .WithStatusCode(200)
+                .WithBody("{\"code\":10001,\"message\":\"access denied\",\"data\":null}"));
+
+        var configService = _factory.CreateConfigService(_options);
+
+        // Act
+        var action = async () => await configService.GetConfigAsync("denied-config", "DEFAULT_GROUP", 5000);
+
+        // Assert
+        await action.Should().ThrowAsync<NacosException>()
+            .WithMessage("*10001*");
+    }
+
+    [Fact]
+    public async Task GetConfigAsync_AccessDenied_ShouldThrowInsteadOfServingSnapshot()
+    {
+        // Arrange
+        // A refusal must not be masked by the local snapshot: the snapshot exists
+        // (first call succeeds), so a pre-fix client would report the denied read as
+        // a successful cache hit.
+        var envelope = JsonSerializer.Serialize(new
+        {
+            code = 0,
+            message = "success",
+            data = new
+            {
+                content = "cached=value",
+                md5 = "d41d8cd98f00b204e9800998ecf8427e",
+                contentType = "text"
+            }
+        });
+
+        _server
+            .Given(Request.Create()
+                .WithPath("/nacos/v3/client/cs/config")
+                .WithParam("dataId", "guarded-config")
+                .UsingGet())
+            .RespondWith(Response.Create()
+                .WithStatusCode(200)
+                .WithBody(envelope));
+
+        var configService = _factory.CreateConfigService(_options);
+        (await configService.GetConfigAsync("guarded-config", "DEFAULT_GROUP", 5000))
+            .Should().Be("cached=value");
+
+        // The server now denies the very same read.
+        _server.ResetMappings();
+        SetupLoginEndpoint();
+        _server
+            .Given(Request.Create()
+                .WithPath("/nacos/v3/client/cs/config")
+                .WithParam("dataId", "guarded-config")
+                .UsingGet())
+            .RespondWith(Response.Create()
+                .WithStatusCode(403)
+                .WithBody("{\"code\":403,\"message\":\"unknown user!\",\"data\":null}"));
+
+        // Act
+        var action = async () => await configService.GetConfigAsync("guarded-config", "DEFAULT_GROUP", 5000);
+
+        // Assert
+        await action.Should().ThrowAsync<NacosException>()
+            .Where(e => e.ErrorCode == NacosException.NoRight);
+    }
+
+#pragma warning disable CS0618 // CAS publish over HTTP is obsolete by design
+    [Fact]
+    public async Task PublishConfigCasAsync_WithCasMd5_ShouldThrowNotSupported()
+    {
+        // Arrange
+        // The v3 admin endpoint ignores casMd5 (a stale overwrite would otherwise
+        // look successful), so the HTTP service must refuse the call outright.
+        var configService = _factory.CreateConfigService(_options);
+
+        // Act
+        var action = async () => await configService.PublishConfigCasAsync(
+            "test-config", "DEFAULT_GROUP", "new content", "deadbeefdeadbeefdeadbeefdeadbeef");
+
+        // Assert
+        await action.Should().ThrowAsync<NotSupportedException>();
+        _server.LogEntries.Should().BeEmpty("CAS publish must fail before any request is sent");
+    }
+#pragma warning restore CS0618
+
+    [Fact]
     public async Task PublishConfigAsync_Success_ShouldReturnTrue()
     {
         // Arrange
         _server
             .Given(Request.Create()
-                .WithPath("/nacos/v1/cs/configs")
-                .UsingPost())
+                .WithPath("/nacos/v3/admin/cs/config")
+                .UsingPost()
+                .WithBody(body => body != null
+                    && body.Contains("dataId=test-config")
+                    && body.Contains("groupName=DEFAULT_GROUP")
+                    && body.Contains($"content={Uri.EscapeDataString("new content")}")
+                    && body.Contains("type=text")))
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
-                .WithBody("true"));
+                .WithBody("{\"code\":0,\"message\":\"success\",\"data\":true}"));
 
         var configService = _factory.CreateConfigService(_options);
 
@@ -116,11 +230,13 @@ public class ConfigServiceHttpTests : IDisposable
         // Arrange
         _server
             .Given(Request.Create()
-                .WithPath("/nacos/v1/cs/configs")
+                .WithPath("/nacos/v3/admin/cs/config")
+                .WithParam("dataId", "test-config")
+                .WithParam("groupName", "DEFAULT_GROUP")
                 .UsingDelete())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
-                .WithBody("true"));
+                .WithBody("{\"code\":0,\"message\":\"success\",\"data\":true}"));
 
         var configService = _factory.CreateConfigService(_options);
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Nacos Docker Compose 启动脚本
-# Nacos 版本: 3.1.1
+# Nacos 版本: 3.2.4
 # 使用方式: ./start.sh [standalone|mysql|cluster]
 
 set -e
@@ -12,7 +12,7 @@ cd "$SCRIPT_DIR"
 
 echo "==================================="
 echo "  Nacos Docker Compose 部署脚本"
-echo "  版本: 3.1.1"
+echo "  版本: 3.2.4"
 echo "==================================="
 echo ""
 

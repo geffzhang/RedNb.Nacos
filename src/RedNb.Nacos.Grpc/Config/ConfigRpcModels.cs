@@ -399,6 +399,16 @@ public class ConnectionSetupRequest
 
     [JsonPropertyName("labels")]
     public Dictionary<string, string> Labels { get; set; } = new();
+
+    /// <summary>
+    /// The ability table. Must be non-null for Nacos to answer the setup with a
+    /// <c>SetupAckRequest</c>; that push is the only signal that the connection is
+    /// registered server-side. A null table makes the server skip the ack, and
+    /// any request sent before the registration is processed is rejected with
+    /// "Invalid connection Id ... is unregistered".
+    /// </summary>
+    [JsonPropertyName("abilityTable")]
+    public Dictionary<string, bool>? AbilityTable { get; set; }
 }
 
 /// <summary>

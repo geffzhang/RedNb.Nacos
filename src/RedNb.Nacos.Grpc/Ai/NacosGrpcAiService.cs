@@ -16,12 +16,16 @@ namespace RedNb.Nacos.GrpcClient.Ai;
 /// Nacos AI service implementation using gRPC.
 /// Provides both A2A (Agent-to-Agent) and MCP (Model Context Protocol) capabilities.
 /// </summary>
-public class NacosGrpcAiService : IAiService
+public partial class NacosGrpcAiService : IAiService
 {
     private readonly NacosClientOptions _options;
     private readonly NacosGrpcClient _grpcClient;
     private readonly ILogger<NacosGrpcAiService>? _logger;
     private readonly string _namespaceId;
+    private readonly RedNb.Nacos.Client.Http.NacosHttpClient _registryHttpClient;
+    private readonly RedNb.Nacos.Client.Ai.NacosPromptService _promptService;
+    private readonly RedNb.Nacos.Client.Ai.NacosSkillService _skillService;
+    private readonly RedNb.Nacos.Client.Ai.NacosAgentSpecService _agentSpecService;
     
     private readonly ConcurrentDictionary<string, McpServerDetailInfo?> _mcpCache = new();
     private readonly ConcurrentDictionary<string, AgentCardDetailInfo?> _agentCache = new();
@@ -39,12 +43,31 @@ public class NacosGrpcAiService : IAiService
     /// <summary>
     /// Creates a new NacosGrpcAiService.
     /// </summary>
+    // The connection must announce the naming module: the server only tracks
+    // `naming`-labelled connections, and MCP endpoint ops register ephemeral
+    // naming instances bound to the connection (mirror NacosGrpcNamingService).
     public NacosGrpcAiService(NacosClientOptions options, ILogger<NacosGrpcAiService>? logger = null)
+        : this(options, new NacosGrpcClient(options, logger, "naming"), logger)
+    {
+    }
+
+    /// <summary>
+    /// Test-friendly overload: injects the gRPC client so tests can capture
+    /// requests with a <c>FakeNacosGrpcClient</c> instead of a live channel.
+    /// </summary>
+    internal NacosGrpcAiService(NacosClientOptions options, NacosGrpcClient grpcClient, ILogger<NacosGrpcAiService>? logger = null)
     {
         _options = options;
         _logger = logger;
-        _grpcClient = new NacosGrpcClient(options, logger);
+        _grpcClient = grpcClient;
         _namespaceId = options.Namespace ?? string.Empty;
+
+        // Prompt / Skill / AgentSpec APIs are HTTP-only on the Nacos server side,
+        // so they are served by dedicated HTTP services sharing one client.
+        _registryHttpClient = new RedNb.Nacos.Client.Http.NacosHttpClient(options, logger);
+        _promptService = new RedNb.Nacos.Client.Ai.NacosPromptService(_registryHttpClient, options, logger);
+        _skillService = new RedNb.Nacos.Client.Ai.NacosSkillService(_registryHttpClient, options, logger);
+        _agentSpecService = new RedNb.Nacos.Client.Ai.NacosAgentSpecService(_registryHttpClient, options, logger);
 
         // Register push handler
         _grpcClient.RegisterPushHandler(HandlePushMessage);
@@ -74,13 +97,13 @@ public class NacosGrpcAiService : IAiService
 
         var request = new McpServerQueryRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             McpName = mcpName,
             Version = version
         };
 
         var response = await _grpcClient.RequestAsync<McpServerQueryResponse>(
-            "McpServerQueryRequest", request, cancellationToken);
+            "QueryMcpServerRequest", request, cancellationToken);
 
         return response?.McpServerDetailInfo;
     }
@@ -98,7 +121,7 @@ public class NacosGrpcAiService : IAiService
 
         var request = new McpServerReleaseRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             McpName = serverSpecification.Name!,
             ServerSpecification = serverSpecification,
             ToolSpecification = toolSpecification,
@@ -106,9 +129,9 @@ public class NacosGrpcAiService : IAiService
         };
 
         var response = await _grpcClient.RequestAsync<McpServerReleaseResponse>(
-            "McpServerReleaseRequest", request, cancellationToken);
+            "ReleaseMcpServerRequest", request, cancellationToken);
 
-        return response?.McpServerId ?? string.Empty;
+        return response?.McpId ?? string.Empty;
     }
 
     /// <inheritdoc />
@@ -125,16 +148,16 @@ public class NacosGrpcAiService : IAiService
 
         var request = new McpEndpointRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             McpName = mcpName,
             Address = address,
             Port = port,
             Version = version,
-            Type = "register"
+            Type = "registerEndpoint"
         };
 
         var response = await _grpcClient.RequestAsync<OperationResponse>(
-            "McpEndpointRequest", request, cancellationToken);
+            "McpServerEndpointRequest", request, cancellationToken);
 
         if (response?.Success != true)
         {
@@ -152,15 +175,15 @@ public class NacosGrpcAiService : IAiService
 
         var request = new McpEndpointRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             McpName = mcpName,
             Address = address,
             Port = port,
-            Type = "deregister"
+            Type = "deregisterEndpoint"
         };
 
         var response = await _grpcClient.RequestAsync<OperationResponse>(
-            "McpEndpointRequest", request, cancellationToken);
+            "McpServerEndpointRequest", request, cancellationToken);
 
         if (response?.Success != true)
         {
@@ -177,38 +200,13 @@ public class NacosGrpcAiService : IAiService
     }
 
     /// <inheritdoc />
-    public async Task<McpServerDetailInfo?> SubscribeMcpServerAsync(string mcpName, string? version, AbstractNacosMcpServerListener listener, CancellationToken cancellationToken = default)
+    public Task<McpServerDetailInfo?> SubscribeMcpServerAsync(string mcpName, string? version, AbstractNacosMcpServerListener listener, CancellationToken cancellationToken = default)
     {
         ValidateMcpName(mcpName);
         if (listener == null) throw new NacosException(NacosException.InvalidParam, "listener is required");
 
-        var key = GetMcpKey(mcpName, version);
-        
-        _mcpListeners.AddOrUpdate(key,
-            _ => new List<AbstractNacosMcpServerListener> { listener },
-            (_, list) => { list.Add(listener); return list; });
-
-        // Send subscribe request
-        var request = new McpServerSubscribeRequest
-        {
-            Namespace = _namespaceId,
-            McpName = mcpName,
-            Version = version,
-            Subscribe = true
-        };
-
-        await _grpcClient.SendStreamRequestAsync("McpServerSubscribeRequest", request);
-
-        // Get current value
-        var current = await GetMcpServerAsync(mcpName, version, cancellationToken);
-        if (current != null)
-        {
-            _mcpCache[key] = current;
-            listener.OnEvent(new NacosMcpServerEvent(current));
-        }
-
-        _logger?.LogDebug("Subscribed to MCP server {McpName}@{Version}", mcpName, version);
-        return current;
+        throw new NacosException(NacosException.ServerNotImplemented,
+            "McpServerSubscribeRequest has no Nacos 3.2.4 gRPC handler; use the HTTP console channel (IAiService via NacosFactory with ConsoleAddresses) instead");
     }
 
     /// <inheritdoc />
@@ -240,66 +238,24 @@ public class NacosGrpcAiService : IAiService
     }
 
     /// <inheritdoc />
-    public async Task DeleteMcpServerAsync(string mcpName, string? version = null, CancellationToken cancellationToken = default)
+    public Task DeleteMcpServerAsync(string mcpName, string? version = null, CancellationToken cancellationToken = default)
     {
         ValidateMcpName(mcpName);
 
-        var request = new McpServerDeleteRequest
-        {
-            Namespace = _namespaceId,
-            McpName = mcpName,
-            Version = version
-        };
-
-        var response = await _grpcClient.RequestAsync<OperationResponse>(
-            "McpServerDeleteRequest", request, cancellationToken);
-
-        if (response?.Success != true)
-        {
-            throw new NacosException(NacosException.ServerError, response?.Message ?? "Failed to delete MCP server");
-        }
-
-        // Remove from cache
-        var key = GetMcpKey(mcpName, version);
-        _mcpCache.TryRemove(key, out _);
-
-        _logger?.LogInformation("Deleted MCP server {McpName}@{Version}", mcpName, version ?? "all");
+        throw new NacosException(NacosException.ServerNotImplemented,
+            "McpServerDeleteRequest has no Nacos 3.2.4 gRPC handler; use the HTTP console channel (IAiService via NacosFactory with ConsoleAddresses) instead");
     }
 
     /// <inheritdoc />
-    public async Task<PageResult<McpServerBasicInfo>> ListMcpServersAsync(
+    public Task<PageResult<McpServerBasicInfo>> ListMcpServersAsync(
         string? mcpName = null,
         string? search = null,
         int pageNo = 1,
         int pageSize = 10,
         CancellationToken cancellationToken = default)
     {
-        if (pageNo < 1) pageNo = 1;
-        if (pageSize < 1) pageSize = 10;
-        if (pageSize > 100) pageSize = 100;
-
-        var request = new McpServerListRequest
-        {
-            Namespace = _namespaceId,
-            McpName = mcpName,
-            Search = search,
-            PageNo = pageNo,
-            PageSize = pageSize
-        };
-
-        var response = await _grpcClient.RequestAsync<McpServerListResponse>(
-            "McpServerListRequest", request, cancellationToken);
-
-        if (response == null)
-        {
-            return PageResult<McpServerBasicInfo>.Empty(pageNo, pageSize);
-        }
-
-        return PageResult<McpServerBasicInfo>.FromItems(
-            response.McpServers ?? new List<McpServerBasicInfo>(),
-            response.TotalCount,
-            pageNo,
-            pageSize);
+        throw new NacosException(NacosException.ServerNotImplemented,
+            "McpServerListRequest has no Nacos 3.2.4 gRPC handler; use the HTTP console channel (IAiService via NacosFactory with ConsoleAddresses) instead");
     }
 
     #endregion
@@ -307,76 +263,27 @@ public class NacosGrpcAiService : IAiService
     #region MCP Server Import/Validation
 
     /// <inheritdoc />
-    public async Task<McpServerImportValidationResult> ValidateImportAsync(
+    public Task<McpServerImportValidationResult> ValidateImportAsync(
         McpServerImportRequest request,
         CancellationToken cancellationToken = default)
     {
         if (request == null)
             throw new NacosException(NacosException.InvalidParam, "request is required");
 
-        var grpcRequest = new McpServerValidateImportRequest
-        {
-            Namespace = _namespaceId,
-            ImportType = request.ImportType.ToString().ToLowerInvariant(),
-            ImportData = request.ImportData,
-            OverrideExisting = request.OverrideExisting
-        };
-
-        var response = await _grpcClient.RequestAsync<McpServerValidateImportResponse>(
-            "McpServerValidateImportRequest", grpcRequest, cancellationToken);
-
-        if (response == null)
-        {
-            return McpServerImportValidationResult.Failed(new List<string> { "Failed to get validation response from server" });
-        }
-
-        return new McpServerImportValidationResult
-        {
-            IsValid = response.IsValid,
-            Errors = response.Errors ?? new List<string>(),
-            Servers = response.Servers ?? new List<McpServerValidationItem>(),
-            ValidCount = response.ValidCount,
-            InvalidCount = response.InvalidCount,
-            DuplicateCount = response.DuplicateCount
-        };
+        throw new NacosException(NacosException.ServerNotImplemented,
+            "McpServerValidateImportRequest has no Nacos 3.2.4 gRPC handler; use the HTTP console channel (IAiService via NacosFactory with ConsoleAddresses) instead");
     }
 
     /// <inheritdoc />
-    public async Task<McpServerImportResponse> ImportMcpServersAsync(
+    public Task<McpServerImportResponse> ImportMcpServersAsync(
         McpServerImportRequest request,
         CancellationToken cancellationToken = default)
     {
         if (request == null)
             throw new NacosException(NacosException.InvalidParam, "request is required");
 
-        var grpcRequest = new McpServerImportGrpcRequest
-        {
-            Namespace = _namespaceId,
-            ImportType = request.ImportType.ToString().ToLowerInvariant(),
-            ImportData = request.ImportData,
-            OverrideExisting = request.OverrideExisting,
-            ValidateOnly = request.ValidateOnly,
-            SkipInvalid = request.SkipInvalid,
-            SelectedServers = request.SelectedServers?.ToList()
-        };
-
-        var response = await _grpcClient.RequestAsync<McpServerImportGrpcResponse>(
-            "McpServerImportRequest", grpcRequest, cancellationToken);
-
-        if (response == null)
-        {
-            return McpServerImportResponse.Error("Failed to get import response from server");
-        }
-
-        return new McpServerImportResponse
-        {
-            Success = response.Success,
-            TotalCount = response.TotalCount,
-            SuccessCount = response.SuccessCount,
-            FailedCount = response.FailedCount,
-            SkippedCount = response.SkippedCount,
-            Results = response.Results ?? new List<McpServerImportResult>()
-        };
+        throw new NacosException(NacosException.ServerNotImplemented,
+            "McpServerImportRequest has no Nacos 3.2.4 gRPC handler; use the HTTP console channel (IAiService via NacosFactory with ConsoleAddresses) instead");
     }
 
     #endregion
@@ -384,7 +291,7 @@ public class NacosGrpcAiService : IAiService
     #region MCP Tool Management
 
     /// <inheritdoc />
-    public async Task<McpToolSpec?> RefreshMcpToolAsync(
+    public Task<McpToolSpec?> RefreshMcpToolAsync(
         string mcpName,
         string toolName,
         string? version = null,
@@ -393,22 +300,12 @@ public class NacosGrpcAiService : IAiService
         ValidateMcpName(mcpName);
         ValidateToolName(toolName);
 
-        var request = new McpToolRefreshRequest
-        {
-            Namespace = _namespaceId,
-            McpName = mcpName,
-            ToolName = toolName,
-            Version = version
-        };
-
-        var response = await _grpcClient.RequestAsync<McpToolQueryResponse>(
-            "McpToolRefreshRequest", request, cancellationToken);
-
-        return response?.Tool;
+        throw new NacosException(NacosException.ServerNotImplemented,
+            "MCP tool management has no Nacos 3.2.4 gRPC handler and no HTTP console endpoint — operation unavailable on this server");
     }
 
     /// <inheritdoc />
-    public async Task<McpToolSpec?> GetMcpToolAsync(
+    public Task<McpToolSpec?> GetMcpToolAsync(
         string mcpName,
         string toolName,
         string? version = null,
@@ -417,22 +314,12 @@ public class NacosGrpcAiService : IAiService
         ValidateMcpName(mcpName);
         ValidateToolName(toolName);
 
-        var request = new McpToolQueryRequest
-        {
-            Namespace = _namespaceId,
-            McpName = mcpName,
-            ToolName = toolName,
-            Version = version
-        };
-
-        var response = await _grpcClient.RequestAsync<McpToolQueryResponse>(
-            "McpToolQueryRequest", request, cancellationToken);
-
-        return response?.Tool;
+        throw new NacosException(NacosException.ServerNotImplemented,
+            "MCP tool management has no Nacos 3.2.4 gRPC handler and no HTTP console endpoint — operation unavailable on this server");
     }
 
     /// <inheritdoc />
-    public async Task DeleteMcpToolAsync(
+    public Task DeleteMcpToolAsync(
         string mcpName,
         string toolName,
         string? version = null,
@@ -441,27 +328,12 @@ public class NacosGrpcAiService : IAiService
         ValidateMcpName(mcpName);
         ValidateToolName(toolName);
 
-        var request = new McpToolDeleteRequest
-        {
-            Namespace = _namespaceId,
-            McpName = mcpName,
-            ToolName = toolName,
-            Version = version
-        };
-
-        var response = await _grpcClient.RequestAsync<OperationResponse>(
-            "McpToolDeleteRequest", request, cancellationToken);
-
-        if (response?.Success != true)
-        {
-            throw new NacosException(NacosException.ServerError, response?.Message ?? "Failed to delete MCP tool");
-        }
-
-        _logger?.LogInformation("Deleted MCP tool {ToolName} from {McpName}@{Version}", toolName, mcpName, version ?? "latest");
+        throw new NacosException(NacosException.ServerNotImplemented,
+            "MCP tool management has no Nacos 3.2.4 gRPC handler and no HTTP console endpoint — operation unavailable on this server");
     }
 
     /// <inheritdoc />
-    public async Task UpdateMcpToolAsync(
+    public Task UpdateMcpToolAsync(
         string mcpName,
         McpToolSpec toolSpec,
         string? version = null,
@@ -472,23 +344,8 @@ public class NacosGrpcAiService : IAiService
             throw new NacosException(NacosException.InvalidParam, "toolSpec is required");
         ValidateToolName(toolSpec.Name);
 
-        var request = new McpToolUpdateRequest
-        {
-            Namespace = _namespaceId,
-            McpName = mcpName,
-            Tool = toolSpec,
-            Version = version
-        };
-
-        var response = await _grpcClient.RequestAsync<OperationResponse>(
-            "McpToolUpdateRequest", request, cancellationToken);
-
-        if (response?.Success != true)
-        {
-            throw new NacosException(NacosException.ServerError, response?.Message ?? "Failed to update MCP tool");
-        }
-
-        _logger?.LogInformation("Updated MCP tool {ToolName} in {McpName}@{Version}", toolSpec.Name, mcpName, version ?? "latest");
+        throw new NacosException(NacosException.ServerNotImplemented,
+            "MCP tool management has no Nacos 3.2.4 gRPC handler and no HTTP console endpoint — operation unavailable on this server");
     }
 
     #endregion
@@ -514,14 +371,14 @@ public class NacosGrpcAiService : IAiService
 
         var request = new AgentCardQueryRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             AgentName = agentName,
             Version = version,
             RegistrationType = registrationType
         };
 
         var response = await _grpcClient.RequestAsync<AgentCardQueryResponse>(
-            "AgentCardQueryRequest", request, cancellationToken);
+            "QueryAgentCardRequest", request, cancellationToken);
 
         return response?.AgentCardDetailInfo;
     }
@@ -545,7 +402,7 @@ public class NacosGrpcAiService : IAiService
 
         var request = new AgentCardReleaseRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             AgentName = agentCard.Name!,
             AgentCard = agentCard,
             RegistrationType = registrationType ?? AiConstants.A2a.A2aEndpointTypeService,
@@ -553,7 +410,7 @@ public class NacosGrpcAiService : IAiService
         };
 
         var response = await _grpcClient.RequestAsync<OperationResponse>(
-            "AgentCardReleaseRequest", request, cancellationToken);
+            "ReleaseAgentCardRequest", request, cancellationToken);
 
         if (response?.Success != true)
         {
@@ -590,10 +447,10 @@ public class NacosGrpcAiService : IAiService
 
         var request = new AgentEndpointRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             AgentName = agentName,
             Endpoint = endpoint,
-            Type = "register"
+            Type = "registerEndpoint"
         };
 
         var response = await _grpcClient.RequestAsync<OperationResponse>(
@@ -612,12 +469,71 @@ public class NacosGrpcAiService : IAiService
     public async Task RegisterAgentEndpointsAsync(string agentName, IEnumerable<AgentEndpoint> endpoints, CancellationToken cancellationToken = default)
     {
         ValidateAgentName(agentName);
-        var endpointList = endpoints?.ToList() ?? throw new NacosException(NacosException.InvalidParam, "endpoints is required");
+        var endpointList = endpoints?.ToList()
+            ?? throw new NacosException(NacosException.InvalidParam, "endpoints is required");
+        if (endpointList.Count == 0)
+        {
+            throw new NacosException(NacosException.InvalidParam, "endpoints cannot be empty");
+        }
 
+        // Per-endpoint validation: same semantics as the single-endpoint path
+        // (version non-blank, address non-blank, port in range). Each endpoint is
+        // normalized so callers may pass partial AgentEndpoint instances; the
+        // default transport matches what the single-endpoint path uses.
+        var normalized = new List<AgentEndpoint>(endpointList.Count);
         foreach (var endpoint in endpointList)
         {
-            await RegisterAgentEndpointAsync(agentName, endpoint, cancellationToken);
+            ValidateAgentEndpoint(endpoint);
+
+            normalized.Add(new AgentEndpoint
+            {
+                Transport = string.IsNullOrWhiteSpace(endpoint.Transport)
+                    ? AiConstants.A2a.TransportJsonRpc
+                    : endpoint.Transport,
+                Address = endpoint.Address,
+                Port = endpoint.Port,
+                Path = endpoint.Path,
+                SupportTls = endpoint.SupportTls,
+                Version = endpoint.Version,
+                Protocol = endpoint.Protocol,
+                Query = endpoint.Query
+            });
         }
+
+        // Single batch op over the AI gRPC connection — server side this is
+        // dispatched by BatchAgentEndpointRequestHandler (Nacos 3.2.4, audit §3.1
+        // row 5). The handler returns AgentEndpointResponse with a single
+        // resultCode (all-or-nothing: there is no per-endpoint result list, so a
+        // partial success cannot be surfaced to the caller — if the server later
+        // grows that capability this method should switch to inspecting it).
+        var request = new BatchAgentEndpointRequest
+        {
+            NamespaceId = _namespaceId,
+            AgentName = agentName,
+            Endpoints = normalized
+        };
+
+        var response = await _grpcClient.RequestAsync<BatchAgentEndpointResponse>(
+            "BatchAgentEndpointRequest", request, cancellationToken);
+
+        if (response is null)
+        {
+            throw new NacosException(NacosException.ServerError,
+                "Failed to register Agent endpoints: no response from server");
+        }
+
+        // Nacos 3.x marks success with the Jackson-serialized "success" flag (and
+        // resultCode 200 = ResponseCode.SUCCESS) rather than resultCode 0. Trust
+        // the flag first so a successful batch register is not rejected; fall back
+        // to resultCode != 0 for servers/wire shapes that omit "success".
+        if (response.Success is not true && response.ResultCode != 0)
+        {
+            throw new NacosException(NacosException.ServerError,
+                $"Failed to register Agent endpoints: {response.Message ?? "unknown error"}");
+        }
+
+        _logger?.LogInformation("Registered {Count} Agent endpoint(s) to {AgentName} via BatchAgentEndpointRequest",
+            normalized.Count, agentName);
     }
 
     /// <inheritdoc />
@@ -640,10 +556,10 @@ public class NacosGrpcAiService : IAiService
 
         var request = new AgentEndpointRequest
         {
-            Namespace = _namespaceId,
+            NamespaceId = _namespaceId,
             AgentName = agentName,
             Endpoint = endpoint,
-            Type = "deregister"
+            Type = "deregisterEndpoint"
         };
 
         var response = await _grpcClient.RequestAsync<OperationResponse>(
@@ -665,38 +581,13 @@ public class NacosGrpcAiService : IAiService
     }
 
     /// <inheritdoc />
-    public async Task<AgentCardDetailInfo?> SubscribeAgentCardAsync(string agentName, string? version, AbstractNacosAgentCardListener listener, CancellationToken cancellationToken = default)
+    public Task<AgentCardDetailInfo?> SubscribeAgentCardAsync(string agentName, string? version, AbstractNacosAgentCardListener listener, CancellationToken cancellationToken = default)
     {
         ValidateAgentName(agentName);
         if (listener == null) throw new NacosException(NacosException.InvalidParam, "listener is required");
 
-        var key = GetAgentKey(agentName, version);
-        
-        _agentListeners.AddOrUpdate(key,
-            _ => new List<AbstractNacosAgentCardListener> { listener },
-            (_, list) => { list.Add(listener); return list; });
-
-        // Send subscribe request
-        var request = new AgentCardSubscribeRequest
-        {
-            Namespace = _namespaceId,
-            AgentName = agentName,
-            Version = version,
-            Subscribe = true
-        };
-
-        await _grpcClient.SendStreamRequestAsync("AgentCardSubscribeRequest", request);
-
-        // Get current value
-        var current = await GetAgentCardAsync(agentName, version, cancellationToken);
-        if (current != null)
-        {
-            _agentCache[key] = current;
-            listener.OnEvent(new NacosAgentCardEvent(current));
-        }
-
-        _logger?.LogDebug("Subscribed to Agent Card {AgentName}@{Version}", agentName, version);
-        return current;
+        throw new NacosException(NacosException.ServerNotImplemented,
+            "AgentCardSubscribeRequest has no Nacos 3.2.4 gRPC handler; use the HTTP console channel (IAiService via NacosFactory with ConsoleAddresses) instead");
     }
 
     /// <inheritdoc />
@@ -728,83 +619,40 @@ public class NacosGrpcAiService : IAiService
     }
 
     /// <inheritdoc />
-    public async Task DeleteAgentAsync(string agentName, string? version = null, CancellationToken cancellationToken = default)
+    public Task DeleteAgentAsync(string agentName, string? version = null, CancellationToken cancellationToken = default)
     {
         ValidateAgentName(agentName);
 
-        var request = new AgentDeleteRequest
-        {
-            Namespace = _namespaceId,
-            AgentName = agentName,
-            Version = version
-        };
-
-        var response = await _grpcClient.RequestAsync<OperationResponse>(
-            "AgentDeleteRequest", request, cancellationToken);
-
-        if (response?.Success != true)
-        {
-            throw new NacosException(NacosException.ServerError, response?.Message ?? "Failed to delete Agent");
-        }
-
-        // Remove from cache
-        var key = GetAgentKey(agentName, version);
-        _agentCache.TryRemove(key, out _);
-
-        _logger?.LogInformation("Deleted Agent {AgentName}@{Version}", agentName, version ?? "all");
+        throw new NacosException(NacosException.ServerNotImplemented,
+            "AgentDeleteRequest has no Nacos 3.2.4 gRPC handler; use the HTTP console channel (IAiService via NacosFactory with ConsoleAddresses) instead");
     }
 
     /// <inheritdoc />
-    public async Task<PageResult<AgentCardBasicInfo>> ListAgentCardsAsync(
+    public Task<PageResult<AgentCardBasicInfo>> ListAgentCardsAsync(
         string? agentName = null,
         string? search = null,
         int pageNo = 1,
         int pageSize = 10,
         CancellationToken cancellationToken = default)
     {
-        if (pageNo < 1) pageNo = 1;
-        if (pageSize < 1) pageSize = 10;
-        if (pageSize > 100) pageSize = 100;
-
-        var request = new AgentListRequest
-        {
-            Namespace = _namespaceId,
-            AgentName = agentName,
-            Search = search,
-            PageNo = pageNo,
-            PageSize = pageSize
-        };
-
-        var response = await _grpcClient.RequestAsync<AgentListResponse>(
-            "AgentListRequest", request, cancellationToken);
-
-        if (response == null)
-        {
-            return PageResult<AgentCardBasicInfo>.Empty(pageNo, pageSize);
-        }
-
-        return PageResult<AgentCardBasicInfo>.FromItems(
-            response.AgentCards ?? new List<AgentCardBasicInfo>(),
-            response.TotalCount,
-            pageNo,
-            pageSize);
+        throw new NacosException(NacosException.ServerNotImplemented,
+            "AgentListRequest has no Nacos 3.2.4 gRPC handler; use the HTTP console channel (IAiService via NacosFactory with ConsoleAddresses) instead");
     }
 
     /// <inheritdoc />
-    public async Task<List<string>> ListAgentVersionsAsync(string agentName, CancellationToken cancellationToken = default)
+    public Task<List<string>> ListAgentVersionsAsync(string agentName, CancellationToken cancellationToken = default)
     {
         ValidateAgentName(agentName);
+        throw new NacosException(NacosException.ServerNotImplemented,
+            "AgentVersionListRequest has no Nacos 3.2.4 gRPC handler; use the HTTP console channel (IAiService via NacosFactory with ConsoleAddresses) instead");
+    }
 
-        var request = new AgentVersionListRequest
-        {
-            Namespace = _namespaceId,
-            AgentName = agentName
-        };
-
-        var response = await _grpcClient.RequestAsync<AgentVersionListResponse>(
-            "AgentVersionListRequest", request, cancellationToken);
-
-        return response?.Versions ?? new List<string>();
+    /// <inheritdoc />
+    public Task<List<AgentVersionInfo>> ListAgentVersionInfosAsync(string agentName, CancellationToken cancellationToken = default)
+    {
+        ValidateAgentName(agentName);
+        throw new NacosException(NacosException.ServerNotImplemented,
+            "AgentVersionListRequest has no Nacos 3.2.4 gRPC handler; use the HTTP console channel (IAiService via NacosFactory with ConsoleAddresses) instead");
     }
 
     #endregion
@@ -826,7 +674,11 @@ public class NacosGrpcAiService : IAiService
         _agentListeners.Clear();
         _mcpCache.Clear();
         _agentCache.Clear();
-        
+
+        await _promptService.DisposeAsync();
+        await _skillService.DisposeAsync();
+        await _agentSpecService.DisposeAsync();
+        _registryHttpClient.Dispose();
         await _grpcClient.DisposeAsync();
         _disposed = true;
     }
@@ -978,7 +830,7 @@ public class NacosGrpcAiService : IAiService
 
     private class McpServerQueryRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string McpName { get; set; } = string.Empty;
         public string? Version { get; set; }
     }
@@ -990,7 +842,7 @@ public class NacosGrpcAiService : IAiService
 
     private class McpServerReleaseRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string McpName { get; set; } = string.Empty;
         public McpServerBasicInfo? ServerSpecification { get; set; }
         public McpToolSpecification? ToolSpecification { get; set; }
@@ -999,25 +851,17 @@ public class NacosGrpcAiService : IAiService
 
     private class McpServerReleaseResponse
     {
-        public string? McpServerId { get; set; }
+        public string? McpId { get; set; }
     }
 
     private class McpEndpointRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string McpName { get; set; } = string.Empty;
         public string Address { get; set; } = string.Empty;
         public int Port { get; set; }
         public string? Version { get; set; }
         public string Type { get; set; } = "register";
-    }
-
-    private class McpServerSubscribeRequest
-    {
-        public string? Namespace { get; set; }
-        public string McpName { get; set; } = string.Empty;
-        public string? Version { get; set; }
-        public bool Subscribe { get; set; }
     }
 
     private class McpServerNotification
@@ -1029,7 +873,7 @@ public class NacosGrpcAiService : IAiService
 
     private class AgentCardQueryRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string AgentName { get; set; } = string.Empty;
         public string? Version { get; set; }
         public string? RegistrationType { get; set; }
@@ -1042,7 +886,7 @@ public class NacosGrpcAiService : IAiService
 
     private class AgentCardReleaseRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string AgentName { get; set; } = string.Empty;
         public AgentCard? AgentCard { get; set; }
         public string RegistrationType { get; set; } = AiConstants.A2a.A2aEndpointTypeService;
@@ -1051,18 +895,50 @@ public class NacosGrpcAiService : IAiService
 
     private class AgentEndpointRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string AgentName { get; set; } = string.Empty;
         public AgentEndpoint? Endpoint { get; set; }
         public string Type { get; set; } = "register";
     }
 
-    private class AgentCardSubscribeRequest
+    /// <summary>
+    /// Batched version of <see cref="AgentEndpointRequest"/> — server side this is
+    /// handled by <c>BatchAgentEndpointRequestHandler</c> (Nacos 3.2.4). The wire
+    /// contract mirrors the Java type <c>BatchAgentEndpointRequest</c>:
+    /// <c>namespaceId</c> + <c>agentName</c> from <c>AbstractAgentRequest</c>, plus a
+    /// list of <c>endpoints</c>. No <c>type</c> discriminator — register is implied.
+    /// </summary>
+    private class BatchAgentEndpointRequest
     {
-        public string? Namespace { get; set; }
+        public string? NamespaceId { get; set; }
         public string AgentName { get; set; } = string.Empty;
-        public string? Version { get; set; }
-        public bool Subscribe { get; set; }
+        public List<AgentEndpoint> Endpoints { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Server's <c>AgentEndpointResponse</c> — inherits <c>resultCode</c> +
+    /// <c>message</c> from <c>com.alibaba.nacos.api.remote.response.Response</c> and
+    /// adds a <c>type</c> discriminator (unused by the SDK). The single-endpoint
+    /// path's <c>OperationResponse</c> (Success/Message) does not match the server
+    /// payload and is left in place to minimise blast radius; the batch path
+    /// inspects <c>success</c> / <c>resultCode</c> directly.
+    ///
+    /// Nacos 3.x success contract (wire-captured against 3.2.4): the server's
+    /// <c>Response</c> carries a Jackson-serialized <c>success</c> field (the
+    /// computed <c>isSuccess()</c>, <c>true</c> on success) and <c>resultCode</c>
+    /// is <c>ResponseCode.SUCCESS.getCode()</c> = <c>200</c>, not <c>0</c> — a
+    /// successful register looks like
+    /// <c>{"resultCode":200,"errorCode":0,"type":"batchRegisterEndpoint","success":true}</c>.
+    /// Failures carry <c>success:false</c> plus a <c>message</c>. The batch
+    /// handler has no per-endpoint result list, so a partial success cannot be
+    /// reported to the caller.
+    /// </summary>
+    internal class BatchAgentEndpointResponse
+    {
+        public int ResultCode { get; set; }
+        public bool? Success { get; set; }
+        public string? Message { get; set; }
+        public string? Type { get; set; }
     }
 
     private class AgentCardNotification
@@ -1076,139 +952,6 @@ public class NacosGrpcAiService : IAiService
     {
         public bool Success { get; set; }
         public string? Message { get; set; }
-    }
-
-    private class McpServerDeleteRequest
-    {
-        public string? Namespace { get; set; }
-        public string McpName { get; set; } = string.Empty;
-        public string? Version { get; set; }
-    }
-
-    private class McpServerListRequest
-    {
-        public string? Namespace { get; set; }
-        public string? McpName { get; set; }
-        public string? Search { get; set; }
-        public int PageNo { get; set; }
-        public int PageSize { get; set; }
-    }
-
-    private class McpServerListResponse
-    {
-        public List<McpServerBasicInfo>? McpServers { get; set; }
-        public int TotalCount { get; set; }
-    }
-
-    private class AgentDeleteRequest
-    {
-        public string? Namespace { get; set; }
-        public string AgentName { get; set; } = string.Empty;
-        public string? Version { get; set; }
-    }
-
-    private class AgentListRequest
-    {
-        public string? Namespace { get; set; }
-        public string? AgentName { get; set; }
-        public string? Search { get; set; }
-        public int PageNo { get; set; }
-        public int PageSize { get; set; }
-    }
-
-    private class AgentListResponse
-    {
-        public List<AgentCardBasicInfo>? AgentCards { get; set; }
-        public int TotalCount { get; set; }
-    }
-
-    private class AgentVersionListRequest
-    {
-        public string? Namespace { get; set; }
-        public string AgentName { get; set; } = string.Empty;
-    }
-
-    private class AgentVersionListResponse
-    {
-        public List<string>? Versions { get; set; }
-    }
-
-    // Import/Validation Request/Response Models
-    private class McpServerValidateImportRequest
-    {
-        public string? Namespace { get; set; }
-        public string ImportType { get; set; } = string.Empty;
-        public string? ImportData { get; set; }
-        public bool OverrideExisting { get; set; }
-    }
-
-    private class McpServerValidateImportResponse
-    {
-        public bool IsValid { get; set; }
-        public List<string>? Errors { get; set; }
-        public List<McpServerValidationItem>? Servers { get; set; }
-        public int ValidCount { get; set; }
-        public int InvalidCount { get; set; }
-        public int DuplicateCount { get; set; }
-    }
-
-    private class McpServerImportGrpcRequest
-    {
-        public string? Namespace { get; set; }
-        public string ImportType { get; set; } = string.Empty;
-        public string? ImportData { get; set; }
-        public bool OverrideExisting { get; set; }
-        public bool ValidateOnly { get; set; }
-        public bool SkipInvalid { get; set; }
-        public List<string>? SelectedServers { get; set; }
-    }
-
-    private class McpServerImportGrpcResponse
-    {
-        public bool Success { get; set; }
-        public int TotalCount { get; set; }
-        public int SuccessCount { get; set; }
-        public int FailedCount { get; set; }
-        public int SkippedCount { get; set; }
-        public List<McpServerImportResult>? Results { get; set; }
-    }
-
-    // Tool Management Request/Response Models
-    private class McpToolRefreshRequest
-    {
-        public string? Namespace { get; set; }
-        public string McpName { get; set; } = string.Empty;
-        public string ToolName { get; set; } = string.Empty;
-        public string? Version { get; set; }
-    }
-
-    private class McpToolQueryRequest
-    {
-        public string? Namespace { get; set; }
-        public string McpName { get; set; } = string.Empty;
-        public string ToolName { get; set; } = string.Empty;
-        public string? Version { get; set; }
-    }
-
-    private class McpToolQueryResponse
-    {
-        public McpToolSpec? Tool { get; set; }
-    }
-
-    private class McpToolDeleteRequest
-    {
-        public string? Namespace { get; set; }
-        public string McpName { get; set; } = string.Empty;
-        public string ToolName { get; set; } = string.Empty;
-        public string? Version { get; set; }
-    }
-
-    private class McpToolUpdateRequest
-    {
-        public string? Namespace { get; set; }
-        public string McpName { get; set; } = string.Empty;
-        public McpToolSpec? Tool { get; set; }
-        public string? Version { get; set; }
     }
 
     #endregion

@@ -41,15 +41,22 @@ public class ServiceInfoHolder
 
     /// <summary>
     /// Gets service info from cache.
+    /// Returns null when the entry is missing or has expired based on
+    /// <see cref="ServiceInfo.CacheMillis"/> + <see cref="ServiceInfo.LastRefTime"/>.
     /// </summary>
     public ServiceInfo? GetServiceInfo(string serviceName, string groupName, string clusters)
     {
         var key = ServiceInfo.GetKey(
-            $"{groupName}{NacosConstants.ServiceInfoSplitter}{serviceName}", 
+            $"{groupName}{NacosConstants.ServiceInfoSplitter}{serviceName}",
             clusters);
-        
-        _serviceInfoMap.TryGetValue(key, out var serviceInfo);
-        return serviceInfo;
+
+        if (_serviceInfoMap.TryGetValue(key, out var serviceInfo) && !serviceInfo.Expired())
+        {
+            return serviceInfo;
+        }
+
+        // Expired or missing — caller should refresh via QueryServiceAsync.
+        return null;
     }
 
     /// <summary>

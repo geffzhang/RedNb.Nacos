@@ -121,7 +121,7 @@ internal class ConfigRpcTransportClient : IAsyncDisposable
             ConfigListenContexts = listenContexts
         };
 
-        // Use stream request for listen operations
+        // Listen operations need the response body (long-poll timeout applies)
         return await _grpcClient.SendStreamRequestWithResponseAsync<ConfigBatchListenResponse>(
             ConfigBatchListenRequest.TYPE, request,
             TimeSpan.FromMilliseconds(_options.LongPollTimeout),
@@ -238,13 +238,15 @@ internal class ConfigRpcTransportClient : IAsyncDisposable
         }
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (_disposed) return;
+        if (_disposed) return ValueTask.CompletedTask;
         _disposed = true;
 
         _grpcClient.UnregisterPushHandler("config");
         OnConfigChanged = null;
         OnFuzzyWatchChanged = null;
+
+        return ValueTask.CompletedTask;
     }
 }

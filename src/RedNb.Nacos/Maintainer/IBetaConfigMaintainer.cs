@@ -3,6 +3,12 @@ namespace RedNb.Nacos.Core.Maintainer;
 /// <summary>
 /// Nacos beta/gray configuration maintainer interface.
 /// </summary>
+[Obsolete(
+    "Nacos 3.2+ removed v1/v2 HTTP endpoints used by this service. " +
+    "Calls will return HTTP 404 at runtime. " +
+    "Migrate to Nacos 2.x server or use the nacos-api-legacy-adapter JAR. " +
+    "Tracked for removal in the next major version.",
+    error: false)]
 public interface IBetaConfigMaintainer
 {
     /// <summary>

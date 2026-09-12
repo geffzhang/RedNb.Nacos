@@ -69,6 +69,13 @@ public interface IA2aService
     /// <summary>
     /// Registers an endpoint to an agent card.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
+    /// console listener. The HTTP implementation
+    /// (<c>NacosAiService</c>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
+    /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
+    /// </remarks>
     /// <param name="agentName">Name of the agent.</param>
     /// <param name="version">Version of this endpoint.</param>
     /// <param name="address">Address for this endpoint.</param>
@@ -79,6 +86,13 @@ public interface IA2aService
     /// <summary>
     /// Registers an endpoint to an agent card with transport.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
+    /// console listener. The HTTP implementation
+    /// (<c>NacosAiService</c>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
+    /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
+    /// </remarks>
     /// <param name="agentName">Name of the agent.</param>
     /// <param name="version">Version of this endpoint.</param>
     /// <param name="address">Address for this endpoint.</param>
@@ -90,6 +104,13 @@ public interface IA2aService
     /// <summary>
     /// Registers an endpoint to an agent card.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
+    /// console listener. The HTTP implementation
+    /// (<c>NacosAiService</c>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
+    /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
+    /// </remarks>
     /// <param name="agentName">Name of the agent.</param>
     /// <param name="endpoint">Endpoint information.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -98,6 +119,13 @@ public interface IA2aService
     /// <summary>
     /// Batch registers endpoints to an agent card.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
+    /// console listener. The HTTP implementation
+    /// (<c>NacosAiService</c>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
+    /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
+    /// </remarks>
     /// <param name="agentName">Name of the agent.</param>
     /// <param name="endpoints">Collection of endpoints.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -106,6 +134,13 @@ public interface IA2aService
     /// <summary>
     /// Deregisters an endpoint from an agent card.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
+    /// console listener. The HTTP implementation
+    /// (<c>NacosAiService</c>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
+    /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
+    /// </remarks>
     /// <param name="agentName">Name of the agent.</param>
     /// <param name="version">Version of this endpoint.</param>
     /// <param name="address">Address for this endpoint.</param>
@@ -116,6 +151,13 @@ public interface IA2aService
     /// <summary>
     /// Deregisters an endpoint from an agent card.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
+    /// console listener. The HTTP implementation
+    /// (<c>NacosAiService</c>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
+    /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
+    /// </remarks>
     /// <param name="agentName">Name of the agent.</param>
     /// <param name="endpoint">Endpoint information.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -196,6 +238,15 @@ public interface IA2aService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>List of version strings.</returns>
     Task<List<string>> ListAgentVersionsAsync(string agentName, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists all versions of an agent card with their metadata (created/updated
+    /// timestamps and latest flag), as served by the console AI endpoint.
+    /// </summary>
+    /// <param name="agentName">Name of the agent.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of agent version infos.</returns>
+    Task<List<AgentVersionInfo>> ListAgentVersionInfosAsync(string agentName, CancellationToken cancellationToken = default);
 
     #endregion
 }

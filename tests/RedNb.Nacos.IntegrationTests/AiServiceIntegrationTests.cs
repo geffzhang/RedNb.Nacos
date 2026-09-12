@@ -7,344 +7,379 @@ using RedNb.Nacos.Core.Ai.Model.A2a;
 using RedNb.Nacos.Core.Ai.Model.Mcp;
 using Xunit;
 using Xunit.Abstractions;
+using static RedNb.Nacos.IntegrationTests.TestRetryHelpers;
 
 namespace RedNb.Nacos.IntegrationTests;
 
-/// <summary>
-/// Integration tests for Nacos AI Service (A2A and MCP).
-/// Requires a running Nacos server at localhost:8848 with AI module enabled.
-/// </summary>
 [Collection("NacosIntegration")]
 public class AiServiceIntegrationTests : IAsyncLifetime
 {
     private readonly ITestOutputHelper _output;
     private IAiService? _aiService;
     private readonly NacosClientOptions _options;
-    private readonly NacosFactory _factory;
 
     public AiServiceIntegrationTests(ITestOutputHelper output)
     {
         _output = output;
         _options = new NacosClientOptions
         {
-            ServerAddresses = "localhost:8848",
-            Username = "nacos",
-            Password = "nacos",
+            ServerAddresses = NacosServerFixture.ServerAddress,
+            ConsoleAddresses = NacosServerFixture.ConsoleAddress,
+            Username = NacosServerFixture.Username,
+            Password = NacosServerFixture.Password,
             Namespace = "",
             DefaultTimeout = 10000
         };
-        _factory = new NacosFactory();
     }
 
     public Task InitializeAsync()
     {
-        _aiService = _factory.CreateAiService(_options);
+        _aiService = new NacosFactory().CreateAiService(_options);
         return Task.CompletedTask;
     }
 
     public async Task DisposeAsync()
     {
-        if (_aiService is IAsyncDisposable disposable)
-        {
-            await disposable.DisposeAsync();
-        }
+        if (_aiService is IAsyncDisposable d) await d.DisposeAsync();
     }
 
-    #region Agent Card Tests
+    // ---------- Agent Card (HTTP / console) ----------
 
     [Fact]
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
-    public async Task ReleaseAndGetAgentCard_ShouldWork()
+    public async Task ReleaseAndGetAgentCard_RoundTripsViaConsole()
     {
-        // Arrange
-        var agentName = $"test-agent-{Guid.NewGuid():N}";
-        var agentCard = new AgentCard
+        var agentName = $"it-agent-{Guid.NewGuid():N}";
+        var card = new AgentCard
         {
             Name = agentName,
             Version = "1.0.0",
-            ProtocolVersion = "1.0",
-            Description = "Test agent for integration testing",
-            Capabilities = new AgentCapabilities
-            {
-                Streaming = true,
-                PushNotifications = false
-            }
+            ProtocolVersion = "0.3.7",
+            PreferredTransport = "jsonrpc",
+            Url = "http://127.0.0.1:9999"
         };
+
+        await _aiService!.ReleaseAgentCardAsync(card);
 
         try
         {
-            // Act - Release agent card
-            await _aiService!.ReleaseAgentCardAsync(agentCard);
-            _output.WriteLine($"Released Agent Card: {agentName}");
-
-            await Task.Delay(2000);
-
-            // Get agent card
-            var retrieved = await _aiService.GetAgentCardAsync(agentName);
-
-            // Assert
-            if (retrieved != null)
-            {
-                _output.WriteLine($"Retrieved Agent Card: {retrieved.Name}");
-                retrieved.Should().NotBeNull();
-                retrieved.Name.Should().Be(agentName);
-                retrieved.Version.Should().Be("1.0.0");
-            }
-            else
-            {
-                _output.WriteLine("Agent Card not found - AI module may not be enabled");
-            }
+            var retrieved = await WaitForAsync(
+                _output,
+                () => _aiService!.GetAgentCardAsync(agentName),
+                c => c is not null);
+            retrieved.Should().NotBeNull();
+            retrieved!.Name.Should().Be(agentName);
+            retrieved.Version.Should().Be("1.0.0");
         }
-        catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound || ex.Message.Contains("not found"))
+        finally
         {
-            _output.WriteLine($"AI module may not be enabled: {ex.Message}");
+            await DeleteWithRetryAsync(_output, () => _aiService!.DeleteAgentAsync(agentName));
         }
     }
 
     [Fact]
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
-    public async Task RegisterAndDeregisterAgentEndpoint_ShouldWork()
+    public async Task RegisterAndDeregisterAgentEndpoint_HttpChannel_ThrowsLoudly()
     {
-        // Arrange
-        var agentName = $"test-agent-endpoint-{Guid.NewGuid():N}";
-        var agentCard = new AgentCard
-        {
-            Name = agentName,
-            Version = "1.0.0",
-            ProtocolVersion = "1.0"
-        };
+        var agentName = $"it-agent-ep-{Guid.NewGuid():N}";
         var endpoint = new AgentEndpoint
         {
-            Address = "192.168.1.100",
+            Address = "127.0.0.1",
             Port = 9000,
             Version = "1.0.0",
             Transport = AiConstants.A2a.TransportJsonRpc
         };
 
-        try
-        {
-            // Release agent card first
-            await _aiService!.ReleaseAgentCardAsync(agentCard);
-            await Task.Delay(1000);
+        Func<Task> act = () => _aiService!.RegisterAgentEndpointAsync(agentName, endpoint);
+        var ex = await act.Should().ThrowAsync<NacosException>();
+        ex.Which.ErrorCode.Should().Be(NacosException.ServerError);
+        ex.Which.Message.Should().Contain("not available over the HTTP channel");
 
-            // Act - Register endpoint
-            await _aiService.RegisterAgentEndpointAsync(agentName, endpoint);
-            _output.WriteLine($"Registered endpoint {endpoint.Address}:{endpoint.Port}");
-
-            await Task.Delay(1000);
-
-            // Verify by getting agent card
-            var retrieved = await _aiService.GetAgentCardAsync(agentName);
-            _output.WriteLine($"Agent Card retrieved: {retrieved?.Name ?? "null"}");
-
-            // Deregister endpoint
-            await _aiService.DeregisterAgentEndpointAsync(agentName, endpoint);
-            _output.WriteLine("Deregistered endpoint");
-        }
-        catch (NacosException ex)
-        {
-            _output.WriteLine($"AI module may not be enabled: {ex.Message}");
-        }
+        Func<Task> dereg = () => _aiService!.DeregisterAgentEndpointAsync(agentName, endpoint);
+        var ex2 = await dereg.Should().ThrowAsync<NacosException>();
+        ex2.Which.ErrorCode.Should().Be(NacosException.ServerError);
     }
 
     [Fact]
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
-    public async Task SubscribeAgentCard_ShouldReceiveUpdates()
+    public async Task ListAgentCards_ReturnsReleasedAgent()
     {
-        // Arrange
-        var agentName = $"test-agent-subscribe-{Guid.NewGuid():N}";
-        var agentCard = new AgentCard
+        var agentName = $"it-agent-list-{Guid.NewGuid():N}";
+        await _aiService!.ReleaseAgentCardAsync(new AgentCard
         {
             Name = agentName,
             Version = "1.0.0",
-            ProtocolVersion = "1.0"
-        };
-
-        var receivedEvents = new List<NacosAgentCardEvent>();
-        var listener = new TestAgentCardListener(evt =>
-        {
-            _output.WriteLine($"Received Agent Card event for {evt.AgentCard?.Name}");
-            receivedEvents.Add(evt);
+            ProtocolVersion = "0.3.7",
+            PreferredTransport = "jsonrpc",
+            Url = "http://127.0.0.1:9999"
         });
 
         try
         {
-            // Subscribe
-            var initial = await _aiService!.SubscribeAgentCardAsync(agentName, listener);
-            _output.WriteLine($"Subscribed to {agentName}, initial: {initial?.Name ?? "null"}");
-
-            // Release agent card
-            await _aiService.ReleaseAgentCardAsync(agentCard);
-            await Task.Delay(3000);
-
-            // Assert
-            _output.WriteLine($"Received {receivedEvents.Count} events");
-
-            // Cleanup
-            await _aiService.UnsubscribeAgentCardAsync(agentName, listener);
+            // The console list endpoint requires an explicit search mode ("accurate"
+            // or "blur") and matches agentName exactly, so a pageSize-100 scan of the
+            // whole store is neither needed nor deterministic.
+            var page = await WaitForAsync(
+                _output,
+                () => _aiService!.ListAgentCardsAsync(agentName: agentName, search: "accurate"),
+                p => p.PageItems.Any(i => i.Name == agentName));
+            page.PageItems.Should().Contain(i => i.Name == agentName);
         }
-        catch (NacosException ex)
+        finally
         {
-            _output.WriteLine($"AI module may not be enabled: {ex.Message}");
+            await DeleteWithRetryAsync(_output, () => _aiService!.DeleteAgentAsync(agentName));
         }
     }
-
-    #endregion
-
-    #region MCP Server Tests
 
     [Fact]
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
-    public async Task ReleaseAndGetMcpServer_ShouldWork()
+    public async Task ListAgentVersions_ReturnsVersions()
     {
-        // Arrange
-        var mcpName = $"test-mcp-{Guid.NewGuid():N}";
-        var serverSpec = new McpServerBasicInfo
+        var agentName = $"it-agent-ver-{Guid.NewGuid():N}";
+        await _aiService!.ReleaseAgentCardAsync(new AgentCard
+        {
+            Name = agentName,
+            Version = "2.0.0",
+            ProtocolVersion = "0.3.7",
+            PreferredTransport = "jsonrpc",
+            Url = "http://127.0.0.1:9999"
+        });
+
+        var versions = await WaitForAsync(
+            _output,
+            () => _aiService.ListAgentVersionsAsync(agentName),
+            list => list is not null && list.Contains("2.0.0"));
+        versions.Should().Contain("2.0.0");
+
+        await DeleteWithRetryAsync(_output, () => _aiService.DeleteAgentAsync(agentName));
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    [Trait("Module", "AI")]
+    public async Task ListAgentVersionInfos_ReturnsRichMetadata()
+    {
+        var agentName = $"it-agent-verinfo-{Guid.NewGuid():N}";
+        await _aiService!.ReleaseAgentCardAsync(new AgentCard
+        {
+            Name = agentName,
+            Version = "2.0.0",
+            ProtocolVersion = "0.3.7",
+            PreferredTransport = "jsonrpc",
+            Url = "http://127.0.0.1:9999"
+        });
+
+        var infos = await WaitForAsync(
+            _output,
+            () => _aiService.ListAgentVersionInfosAsync(agentName),
+            list => list is not null && list.Count > 0);
+
+        infos.Should().Contain(i => i.Version == "2.0.0");
+        var info = infos.Single(i => i.Version == "2.0.0");
+        info.Latest.Should().BeTrue();
+        info.CreatedAt.Should().HaveValue();
+        info.UpdatedAt.Should().HaveValue();
+
+        await DeleteWithRetryAsync(_output, () => _aiService.DeleteAgentAsync(agentName));
+    }
+
+    // ---------- MCP Server (HTTP / console) ----------
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    [Trait("Module", "AI")]
+    public async Task ReleaseAndGetMcpServer_RoundTripsViaConsole()
+    {
+        var mcpName = $"it-mcp-{Guid.NewGuid():N}";
+        var spec = new McpServerBasicInfo
         {
             Name = mcpName,
-            VersionDetail = new ServerVersionDetail
-            {
-                Version = "1.0.0"
-            }
+            VersionDetail = new ServerVersionDetail { Version = "1.0.0" },
+            Protocol = "stdio"
         };
 
+        var mcpId = await _aiService!.ReleaseMcpServerAsync(spec, toolSpecification: null);
+        mcpId.Should().NotBeNullOrEmpty();
+
+        try
+        {
+            var retrieved = await WaitForAsync(
+                _output,
+                () => _aiService!.GetMcpServerAsync(mcpName),
+                s => s is not null);
+            retrieved.Should().NotBeNull();
+            retrieved!.Name.Should().Be(mcpName);
+            retrieved.VersionDetail!.Version.Should().Be("1.0.0");
+            // Control for ReleaseMcpServer_WithToolSpecification_...: a release with no
+            // tool specification must not report the TOOL capability.
+            retrieved.ToolSpec.Should().BeNull();
+        }
+        finally
+        {
+            await DeleteWithRetryAsync(_output, () => _aiService!.DeleteMcpServerAsync(mcpName));
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    [Trait("Module", "AI")]
+    public async Task ReleaseMcpServer_WithToolSpecification_SucceedsAndMatchesChannelBehavior()
+    {
+        var mcpName = $"it-mcp-tools-{Guid.NewGuid():N}";
+        var spec = new McpServerBasicInfo
+        {
+            Name = mcpName,
+            VersionDetail = new ServerVersionDetail { Version = "1.0.0" },
+            Protocol = "stdio"
+        };
         var toolSpec = new McpToolSpecification
         {
             Tools = new List<McpTool>
             {
-                new McpTool
+                new() { Name = "echo", Description = "Echo tool" }
+            }
+        };
+
+        var mcpId = await _aiService!.ReleaseMcpServerAsync(spec, toolSpec);
+        mcpId.Should().NotBeNullOrEmpty();
+
+        try
+        {
+            // The HTTP console channel accepts and persists tool specifications
+            // (field name `toolSpecification`, bound by the server's McpDetailForm),
+            // so the tool must come back with the released server.
+            var retrieved = await WaitForAsync(
+                _output,
+                () => _aiService!.GetMcpServerAsync(mcpName),
+                s => s?.ToolSpec is not null);
+            retrieved.Should().NotBeNull();
+            retrieved!.Name.Should().Be(mcpName);
+            retrieved.ToolSpec.Should().NotBeNull();
+            retrieved.ToolSpec!.Tools.Should().Contain(t => t.Name == "echo");
+        }
+        finally
+        {
+            await DeleteWithRetryAsync(_output, () => _aiService!.DeleteMcpServerAsync(mcpName));
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    [Trait("Module", "AI")]
+    public async Task ReleaseMcpServer_WithEndpointSpecification_CarriesSpecOverConsole()
+    {
+        var mcpName = $"it-mcp-ep-{Guid.NewGuid():N}";
+        var serviceName = $"svc-{Guid.NewGuid():N}";
+        var spec = new McpServerBasicInfo
+        {
+            Name = mcpName,
+            VersionDetail = new ServerVersionDetail { Version = "1.0.0" },
+            Protocol = "mcp-sse",
+            RemoteServerConfig = new McpServerRemoteServiceConfig
+            {
+                ServiceRef = new McpServiceRef
                 {
-                    Name = "test-tool",
-                    Description = "A test tool for integration testing"
+                    NamespaceId = "public",
+                    GroupName = "DEFAULT_GROUP",
+                    ServiceName = serviceName
                 }
             }
         };
+        var endpointSpec = new McpEndpointSpec
+        {
+            Type = AiConstants.Mcp.EndpointTypeRef,
+            Data = new Dictionary<string, string>
+            {
+                { "namespaceId", "public" },
+                { "groupName", "DEFAULT_GROUP" },
+                { "serviceName", serviceName }
+            }
+        };
+
+        // A non-local server type is rejected by Nacos 3.2.4 with
+        // "request parameter `endpointSpecification` is required if mcp server type
+        // not `local`" (probe P6), so a successful release is itself proof that the
+        // form field reached the release service.
+        var mcpId = await _aiService!.ReleaseMcpServerAsync(spec, toolSpecification: null, endpointSpec);
+        mcpId.Should().NotBeNullOrEmpty();
 
         try
         {
-            // Act - Release MCP server
-            var mcpId = await _aiService!.ReleaseMcpServerAsync(serverSpec, toolSpec);
-            _output.WriteLine($"Released MCP Server: {mcpName}, ID: {mcpId}");
-
-            await Task.Delay(2000);
-
-            // Get MCP server
-            var retrieved = await _aiService.GetMcpServerAsync(mcpName);
-
-            // Assert
-            if (retrieved != null)
-            {
-                _output.WriteLine($"Retrieved MCP Server: {retrieved.Name}");
-                retrieved.Name.Should().Be(mcpName);
-            }
-            else
-            {
-                _output.WriteLine("MCP Server not found - AI module may not be enabled");
-            }
+            var retrieved = await WaitForAsync(
+                _output,
+                () => _aiService.GetMcpServerAsync(mcpName),
+                s => s?.RemoteServerConfig?.ServiceRef is not null);
+            retrieved.Should().NotBeNull();
+            retrieved!.Name.Should().Be(mcpName);
+            retrieved.Protocol.Should().Be("mcp-sse");
+            retrieved.RemoteServerConfig.Should().NotBeNull();
+            retrieved.RemoteServerConfig!.ServiceRef!.ServiceName.Should().Be(serviceName);
+            // The backend/frontend endpoint lists stay empty for a REF registration
+            // (probe: both empty after release), so presence is asserted on the
+            // service reference the endpoint spec resolves through.
         }
-        catch (NacosException ex)
+        finally
         {
-            _output.WriteLine($"AI module may not be enabled: {ex.Message}");
+            await DeleteWithRetryAsync(_output, () => _aiService.DeleteMcpServerAsync(mcpName));
         }
     }
 
     [Fact]
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
-    public async Task RegisterAndDeregisterMcpEndpoint_ShouldWork()
+    public async Task ListMcpServers_ReturnsReleasedServer()
     {
-        // Arrange
-        var mcpName = $"test-mcp-endpoint-{Guid.NewGuid():N}";
-        var serverSpec = new McpServerBasicInfo
+        var mcpName = $"it-mcp-list-{Guid.NewGuid():N}";
+        await _aiService!.ReleaseMcpServerAsync(new McpServerBasicInfo
         {
             Name = mcpName,
-            VersionDetail = new ServerVersionDetail
-            {
-                Version = "1.0.0"
-            }
-        };
-
-        var address = "192.168.1.101";
-        var port = 9100;
+            VersionDetail = new ServerVersionDetail { Version = "1.0.0" },
+            Protocol = "stdio"
+        }, toolSpecification: null);
 
         try
         {
-            // Release MCP server first
-            await _aiService!.ReleaseMcpServerAsync(serverSpec, null);
-            await Task.Delay(1000);
-
-            // Act - Register endpoint
-            await _aiService.RegisterMcpServerEndpointAsync(mcpName, address, port);
-            _output.WriteLine($"Registered MCP endpoint {address}:{port}");
-
-            await Task.Delay(1000);
-
-            // Verify
-            var retrieved = await _aiService.GetMcpServerAsync(mcpName);
-            _output.WriteLine($"MCP Server retrieved: {retrieved?.Name ?? "null"}");
-
-            // Deregister
-            await _aiService.DeregisterMcpServerEndpointAsync(mcpName, address, port);
-            _output.WriteLine("Deregistered MCP endpoint");
+            // mcpName is an exact server-side filter, so no pageSize-100 scan.
+            var page = await WaitForAsync(
+                _output,
+                () => _aiService!.ListMcpServersAsync(mcpName: mcpName),
+                p => p.PageItems.Any(i => i.Name == mcpName));
+            page.PageItems.Should().Contain(i => i.Name == mcpName);
         }
-        catch (NacosException ex)
+        finally
         {
-            _output.WriteLine($"AI module may not be enabled: {ex.Message}");
+            await DeleteWithRetryAsync(_output, () => _aiService!.DeleteMcpServerAsync(mcpName));
         }
     }
 
     [Fact]
     [Trait("Category", "Integration")]
     [Trait("Module", "AI")]
-    public async Task SubscribeMcpServer_ShouldReceiveUpdates()
+    public async Task RegisterAndDeregisterMcpEndpoint_HttpChannel_ThrowsLoudly()
     {
-        // Arrange
-        var mcpName = $"test-mcp-subscribe-{Guid.NewGuid():N}";
-        var serverSpec = new McpServerBasicInfo
-        {
-            Name = mcpName,
-            VersionDetail = new ServerVersionDetail
-            {
-                Version = "1.0.0"
-            }
-        };
-
-        var receivedEvents = new List<NacosMcpServerEvent>();
-        var listener = new TestMcpServerListener(evt =>
-        {
-            _output.WriteLine($"Received MCP Server event for {evt.McpServerDetailInfo?.Name}");
-            receivedEvents.Add(evt);
-        });
-
-        try
-        {
-            // Subscribe
-            var initial = await _aiService!.SubscribeMcpServerAsync(mcpName, listener);
-            _output.WriteLine($"Subscribed to {mcpName}, initial: {initial?.Name ?? "null"}");
-
-            // Release MCP server
-            await _aiService.ReleaseMcpServerAsync(serverSpec, null);
-            await Task.Delay(3000);
-
-            // Assert
-            _output.WriteLine($"Received {receivedEvents.Count} events");
-
-            // Cleanup
-            await _aiService.UnsubscribeMcpServerAsync(mcpName, listener);
-        }
-        catch (NacosException ex)
-        {
-            _output.WriteLine($"AI module may not be enabled: {ex.Message}");
-        }
+        Func<Task> reg = () => _aiService!.RegisterMcpServerEndpointAsync("it-mcp-x", "127.0.0.1", 9100);
+        var ex = await reg.Should().ThrowAsync<NacosException>();
+        ex.Which.ErrorCode.Should().Be(NacosException.ServerError);
+        ex.Which.Message.Should().Contain("not available over the HTTP channel");
     }
 
-    #endregion
+    // ---------- MCP Server (subscribe — covered separately) ----------
 
-    #region Test Listeners
+    [Fact(Skip = "Polling-based; covered by manual smoke test. Polling interval is 10s.")]
+    [Trait("Category", "Integration")]
+    [Trait("Module", "AI")]
+    public async Task SubscribeAgentCard_ReceivesUpdates() { /* kept for reference; see Task 7 for gRPC subscribe */ }
+
+    [Fact(Skip = "Polling-based; covered by manual smoke test. Polling interval is 10s.")]
+    [Trait("Category", "Integration")]
+    [Trait("Module", "AI")]
+    public async Task SubscribeMcpServer_ReceivesUpdates() { /* kept for reference */ }
+
+    // ---------- Test Listeners (unchanged) ----------
 
     private class TestAgentCardListener : AbstractNacosAgentCardListener
     {
@@ -375,6 +410,4 @@ public class AiServiceIntegrationTests : IAsyncLifetime
             _handler(evt);
         }
     }
-
-    #endregion
 }

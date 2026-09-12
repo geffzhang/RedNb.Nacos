@@ -36,4 +36,8 @@
     <Protobuf Include="Protos\*.proto" GrpcServices="Client" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="RedNb.Nacos.Grpc.Tests" />
+  </ItemGroup>
+
 </Project>

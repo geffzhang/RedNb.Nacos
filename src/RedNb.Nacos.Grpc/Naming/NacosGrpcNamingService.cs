@@ -48,7 +48,9 @@ public class NacosGrpcNamingService : INamingService
     {
         _options = options;
         _logger = logger;
-        _grpcClient = new NacosGrpcClient(options, logger);
+        // The connection must announce the naming module: the server only keeps
+        // naming clients for connections labelled `module=naming`.
+        _grpcClient = new NacosGrpcClient(options, logger, "naming");
         _transportClient = new NamingRpcTransportClient(_grpcClient, options, logger);
         _serviceInfoHolder = new NamingServiceInfoHolder(options, logger);
         _redoService = new NamingGrpcRedoService(_transportClient, GetNamespace(), logger);
@@ -1103,9 +1105,15 @@ public class NacosGrpcNamingService : INamingService
         return string.IsNullOrWhiteSpace(group) ? NacosConstants.DefaultGroup : group.Trim();
     }
 
-    private string? GetNamespace()
+    /// <summary>
+    /// The namespace sent to the server. Always non-null: Nacos 3.2.4's naming
+    /// handlers dereference the request namespace (<c>Service.equals</c>) and throw
+    /// an NPE for a null one — the Java client sends an empty string for the default
+    /// namespace, so an unset namespace is normalized to <c>""</c>.
+    /// </summary>
+    private string GetNamespace()
     {
-        return string.IsNullOrWhiteSpace(_options.Namespace) ? null : _options.Namespace;
+        return string.IsNullOrWhiteSpace(_options.Namespace) ? string.Empty : _options.Namespace;
     }
 
     private static string GetServiceKey(string serviceName, string groupName, string? clusters)

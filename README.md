@@ -8,7 +8,7 @@
 [![NuGet Downloads](https://img.shields.io/nuget/dt/RedNb.Nacos.svg?style=flat-square)](https://www.nuget.org/packages/RedNb.Nacos)
 [![.NET](https://img.shields.io/badge/.NET-8.0%20|%2010.0-512BD4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg?style=flat-square)](LICENSE)
-[![Nacos](https://img.shields.io/badge/Nacos-2.x%20|%203.x-00C7B7.svg?style=flat-square)](https://nacos.io/)
+[![Nacos](https://img.shields.io/badge/Nacos-3.2%2B-00C7B7.svg?style=flat-square)](https://nacos.io/)
 [![GitHub stars](https://img.shields.io/github/stars/redNb/RedNb.Nacos?style=flat-square)](https://github.com/redNb/RedNb.Nacos/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/redNb/RedNb.Nacos?style=flat-square)](https://github.com/redNb/RedNb.Nacos/issues)
 
@@ -18,7 +18,7 @@
 
 ---
 
-**RedNb.Nacos** 是一个功能完整的现代化 .NET Nacos 客户端 SDK，完全兼容 Nacos 2.x/3.x，提供 **200+ 个 API 方法**，涵盖配置中心、服务发现、分布式锁、AI 服务（MCP/A2A）和运维管理等全部功能。
+**RedNb.Nacos** 是一个功能完整的现代化 .NET Nacos 客户端 SDK，面向 Nacos 3.2+ 服务器，提供 **200+ 个 API 方法**，涵盖配置中心、服务发现、分布式锁、AI 服务（MCP/A2A）和运维管理等全部功能。
 
 > 🎯 **为什么选择 RedNb.Nacos？**
 > - 🆕 支持 **.NET 8.0** 和 **.NET 10.0**，采用最新语言特性
@@ -27,15 +27,22 @@
 > - 🛠️ 独有 **维护服务 API** - 命名空间、集群、客户端连接管理
 > - 📦 模块化设计，按需引用，减少依赖
 
+## ⚠️ Breaking: Nacos 3.2.0+ Required
+
+This client (post-v1.x release) targets Nacos 3.2.0+ exclusively. v1/v2 HTTP
+endpoints are no longer used; `Maintainer` and `Lock` interfaces are marked
+`[Obsolete]` and will be removed in the next major version. See
+`docs/MIGRATION.md` for upgrade details.
+
 ## ✨ 特性
 
 | 特性 | 描述 |
 |------|------|
 | 🚀 **高性能** | 支持 HTTP 和 gRPC 两种通信协议 |
 | 📦 **模块化设计** | 按需引用，灵活组合 |
-| 🔄 **Nacos 2.x/3.x 兼容** | 完整支持 Fuzzy Watch、AI Service、分布式锁等新特性 |
+| 🔄 **Nacos 3.2+ 专属** | 面向 v3 协议重写，支持 Fuzzy Watch、AI Service、分布式锁等新特性 |
 | 🔒 **分布式锁** | 原生支持 Nacos 3.0 分布式锁功能 |
-| 🤖 **AI 服务** | 支持 MCP (Model Context Protocol) 和 A2A (Agent-to-Agent) 协议 |
+| 🤖 **AI 服务** | 支持 MCP、A2A、Prompt、Skill、AgentSpec 全量 AI Registry 资源 |
 | 🛠️ **运维管理** | 完整的 Maintainer API，支持命名空间、集群、客户端管理 |
 | 💉 **依赖注入** | 原生支持 Microsoft.Extensions.DependencyInjection |
 | 🏗️ **ASP.NET Core 集成** | 配置提供程序、健康检查、服务自动注册 |
@@ -185,15 +192,17 @@ if (acquired)
 var success = await lockService.TryLockAsync(lockInstance, TimeSpan.FromSeconds(10));
 ```
 
-#### 5. AI 服务 - MCP/A2A (Nacos 3.0)
+#### 5. AI 服务 - MCP/A2A/Prompt/Skill/AgentSpec (Nacos 3.x)
 
 ```csharp
-// === MCP 服务 ===
-// 发布 MCP 服务器
-await aiService.ReleaseMcpServerAsync("my-mcp-server", mcpServerSpec);
+// aiService：HTTP 通道的 IAiService；grpcAi：gRPC 通道的 IAiService（NacosGrpcFactory.CreateAiService）
 
-// 注册 MCP 端点
-await aiService.RegisterMcpServerEndpointAsync("my-mcp-server", "1.0.0", endpoint);
+// === MCP 服务 ===
+// 发布 MCP 服务器（参数顺序：serverSpec → toolSpec → endpointSpec）
+await aiService.ReleaseMcpServerAsync(serverSpec, toolSpec, endpointSpec);
+
+// 注册 MCP 端点（gRPC 专用：Nacos 3.2.4 的 HTTP IAiService 抛 NacosException(ServerError)）
+await grpcAi.RegisterMcpServerEndpointAsync("my-mcp-server", "127.0.0.1", 9100, "1.0.0");
 
 // 获取 MCP 服务器详情
 var mcpServer = await aiService.GetMcpServerAsync("my-mcp-server");
@@ -202,18 +211,67 @@ var mcpServer = await aiService.GetMcpServerAsync("my-mcp-server");
 await aiService.SubscribeMcpServerAsync("my-mcp-server", myMcpListener);
 
 // === A2A 服务 ===
-// 发布 Agent Card
-await aiService.ReleaseAgentCardAsync("my-agent", agentCard);
+// 发布 Agent Card（另有 (agentCard, registrationType, setAsLatest) 重载）
+await aiService.ReleaseAgentCardAsync(agentCard);
 
-// 注册 Agent 端点
-await aiService.RegisterAgentEndpointAsync("my-agent", endpoint, TransportProtocol.Http);
+// 注册 Agent 端点（gRPC 专用：HTTP IAiService 抛 NacosException(ServerError)；
+// transport 为字符串："JSONRPC" / "GRPC" / "HTTP+JSON"，见 AiConstants.A2a）
+await grpcAi.RegisterAgentEndpointAsync("my-agent", "1.0.0", "127.0.0.1", 9200, AiConstants.A2a.TransportHttpJson);
+
+// 批量注册 Agent 端点（gRPC 专用：单次 BatchAgentEndpointRequest 往返）
+await grpcAi.RegisterAgentEndpointsAsync("my-agent", endpoints);
 
 // 获取 Agent Card 详情
-var agentCard = await aiService.GetAgentCardAsync("my-agent");
+var agentCardDetail = await aiService.GetAgentCardAsync("my-agent");
 
 // 列出所有 Agents
-var agents = await aiService.ListAgentCardsAsync(1, 20);
+var agents = await aiService.ListAgentCardsAsync(pageNo: 1, pageSize: 20);
+
+// === Prompt 服务 ===
+// 获取 Prompt（支持版本与标签）
+var prompt = await aiService.GetPromptAsync("code-review");
+var stablePrompt = await aiService.GetPromptByLabelAsync("code-review", "stable");
+
+// 渲染模板变量
+var text = prompt!.Render(new Dictionary<string, string> { ["language"] = "C#" });
+
+// 订阅 Prompt 变更（md5 条件请求 + 轮询）
+await aiService.SubscribePromptAsync("code-review", new MyPromptListener());
+
+// 草稿 → 提交 → 发布 → 上线 全生命周期管理
+await aiService.CreatePromptDraftAsync("code-review", "1.1.0", "Review {{language}} code");
+await aiService.SubmitPromptReviewAsync("code-review", "1.1.0");
+await aiService.PublishPromptAsync("code-review", "1.1.0");
+await aiService.OnlinePromptAsync("code-review", "1.1.0");
+
+// === Skill 服务 ===
+// 下载 Skill ZIP 包（返回 md5 与解析版本）
+var package = await aiService.DownloadSkillZipByLabelAsync("doc-writer", "stable");
+
+// 订阅 Skill 变更
+await aiService.SubscribeSkillAsync("doc-writer", new MySkillListener());
+
+// 上传与生命周期管理
+await aiService.UploadSkillZipAsync(zipBytes, "doc-writer.zip");
+await aiService.PublishSkillAsync("doc-writer", "1.0.0");
+await aiService.OnlineSkillAsync("doc-writer", "1.0.0", scope: "public");
+
+// === AgentSpec 服务 ===
+// 获取 AgentSpec（支持版本与标签）
+var agentSpec = await aiService.GetAgentSpecByLabelAsync("travel-agent", "stable");
+
+// 订阅 AgentSpec 变更
+await aiService.SubscribeAgentSpecAsync("travel-agent", new MyAgentSpecListener());
+
+// 生命周期管理
+await aiService.CreateAgentSpecDraftAsync(agentSpecDetail, targetVersion: "1.1.0");
+await aiService.PublishAgentSpecAsync("travel-agent", "1.1.0");
+await aiService.OnlineAgentSpecAsync("travel-agent", "1.1.0");
 ```
+
+> **注**：Nacos 3.2.4 默认启用 AI pipeline 插件，普通发布会因 “Pipeline not approved”（HTTP 400）被拦截；无人值守运行请改用 `ForcePublishPromptAsync` / `ForcePublishSkillAsync` / `ForcePublishAgentSpecAsync` [since=3.2.1]。
+>
+> 📦 Full sample: see [`samples/RedNb.Nacos.Sample.AI/`](samples/RedNb.Nacos.Sample.AI/).
 
 #### 6. 维护服务
 
@@ -307,6 +365,10 @@ builder.Services.AddNacosConfig(options => { /* ... */ });
 
 // 或只注册命名服务
 builder.Services.AddNacosNaming(options => { /* ... */ });
+
+// 注册 AI 服务（IAiService，含 MCP/A2A/Prompt/Skill/AgentSpec；
+// IPromptService、ISkillService、IAgentSpecService 解析为同一单例）
+builder.Services.AddNacosAi(options => { /* ... */ });
 
 // 添加健康检查
 builder.Services.AddHealthChecks()
@@ -440,6 +502,8 @@ var lock = LockInstance.Create("my-key")
 
 ### 🤖 AI 服务 (IAiService) - Nacos 3.0
 
+> **说明**：Prompt / Skill / AgentSpec 端点需要启用 Nacos 控制台（8080 端口），不在实时集成测试的覆盖范围内。
+
 #### MCP 服务 (Model Context Protocol)
 
 | 功能 | 方法 | 描述 |
@@ -462,13 +526,68 @@ var lock = LockInstance.Create("my-key")
 | 获取 Agent | `GetAgentCardAsync()` | 获取 Agent Card 详情 |
 | 发布 Agent | `ReleaseAgentCardAsync()` | 发布 Agent Card |
 | 注册端点 | `RegisterAgentEndpointAsync()` | 注册 Agent 端点 |
-| 批量注册 | `BatchRegisterAgentEndpointsAsync()` | 批量注册端点 |
+| 批量注册 | `RegisterAgentEndpointsAsync()` | 批量注册端点（gRPC 通道：单次 `BatchAgentEndpointRequest` op） |
 | 注销端点 | `DeregisterAgentEndpointAsync()` | 注销 Agent 端点 |
 | 订阅 | `SubscribeAgentCardAsync()` | 订阅 Agent Card 变更 |
 | 取消订阅 | `UnsubscribeAgentCardAsync()` | 取消订阅 |
 | 删除 Agent | `DeleteAgentAsync()` | 删除 Agent |
 | 列表 | `ListAgentCardsAsync()` | 分页列出 Agent Cards |
 | 版本列表 | `ListAgentVersionsAsync()` | 列出 Agent 版本 |
+
+#### Prompt 服务 (IPromptService) - Nacos 3.x
+
+| 功能 | 方法 | 描述 |
+|------|------|------|
+| 获取 Prompt | `GetPromptAsync()` | 按 key/版本获取 Prompt |
+| 按标签获取 | `GetPromptByLabelAsync()` | 获取标签绑定的版本 |
+| 搜索 | `SearchPromptsAsync()` | 客户端搜索 Prompt |
+| 订阅 | `SubscribePromptAsync()` | 订阅变更（md5 条件请求） |
+| 取消订阅 | `UnsubscribePromptAsync()` | 取消订阅 |
+| 列表/元数据 | `ListPromptsAsync()` / `GetPromptMetaAsync()` | 分页列表与元信息 |
+| 版本 | `ListPromptVersionsAsync()` / `GetPromptVersionDetailAsync()` | 版本列表与详情 |
+| 草稿 | `CreatePromptDraftAsync()` / `UpdatePromptDraftAsync()` / `DeletePromptDraftAsync()` | 草稿管理 |
+| 审核发布 | `SubmitPromptReviewAsync()` / `PublishPromptAsync()` / `ForcePublishPromptAsync()` / `RedraftPromptAsync()` | 提交、发布、强制发布、回草稿 |
+| 上下线 | `OnlinePromptAsync()` / `OfflinePromptAsync()` | 上线/下线 |
+| 标签与元数据 | `UpdatePromptLabelsAsync()` / `UpdatePromptDescriptionAsync()` / `UpdatePromptBizTagsAsync()` | 标签、描述、业务标签 |
+| 删除 | `DeletePromptAsync()` | 删除 Prompt |
+
+#### Skill 服务 (ISkillService) - Nacos 3.x
+
+| 功能 | 方法 | 描述 |
+|------|------|------|
+| 下载 ZIP | `DownloadSkillZipAsync()` / `DownloadSkillZipByVersionAsync()` / `DownloadSkillZipByLabelAsync()` | 下载 Skill 包（含 md5/版本头） |
+| 搜索 | `SearchSkillsAsync()` | 客户端搜索 Skill |
+| 订阅 | `SubscribeSkillAsync()` | 订阅变更（304 增量） |
+| 取消订阅 | `UnsubscribeSkillAsync()` | 取消订阅 |
+| 列表/元数据 | `ListSkillsAsync()` / `GetSkillMetaAsync()` / `GetSkillDetailAsync()` | 列表、元信息与详情 |
+| 上传 | `UploadSkillZipAsync()` | multipart 上传 ZIP 包 |
+| 草稿 | `CreateSkillDraftAsync()` / `UpdateSkillDraftAsync()` / `DeleteSkillDraftAsync()` | 草稿管理 |
+| 审核发布 | `SubmitSkillReviewAsync()` / `PublishSkillAsync()` / `ForcePublishSkillAsync()` / `RedraftSkillAsync()` | 提交、发布、强制发布、回草稿 |
+| 上下线与范围 | `OnlineSkillAsync()` / `OfflineSkillAsync()` / `UpdateSkillScopeAsync()` | 上线/下线/范围 |
+| 标签与业务标签 | `UpdateSkillLabelsAsync()` / `UpdateSkillBizTagsAsync()` | 标签管理 |
+| 删除 | `DeleteSkillAsync()` | 删除 Skill |
+
+#### AgentSpec 服务 (IAgentSpecService) - Nacos 3.x
+
+| 功能 | 方法 | 描述 |
+|------|------|------|
+| 获取 AgentSpec | `GetAgentSpecAsync()` / `GetAgentSpecByLabelAsync()` | 按版本或标签获取 |
+| 搜索 | `SearchAgentSpecsAsync()` | 客户端搜索 |
+| 订阅 | `SubscribeAgentSpecAsync()` | 订阅变更（304 增量） |
+| 取消订阅 | `UnsubscribeAgentSpecAsync()` | 取消订阅 |
+| 列表/元数据 | `ListAgentSpecsAsync()` / `GetAgentSpecMetaAsync()` / `GetAgentSpecDetailAsync()` | 列表、元信息与详情 |
+| 上传 | `UploadAgentSpecAsync()` | multipart 上传 |
+| 草稿 | `CreateAgentSpecDraftAsync()` / `UpdateAgentSpecDraftAsync()` / `DeleteAgentSpecDraftAsync()` | 草稿管理 |
+| 审核发布 | `SubmitAgentSpecReviewAsync()` / `PublishAgentSpecAsync()` / `ForcePublishAgentSpecAsync()` / `RedraftAgentSpecAsync()` | 提交、发布、强制发布、回草稿 |
+| 上下线与范围 | `OnlineAgentSpecAsync()` / `OfflineAgentSpecAsync()` / `UpdateAgentSpecScopeAsync()` | 上线/下线/范围 |
+| 标签与业务标签 | `UpdateAgentSpecLabelsAsync()` / `UpdateAgentSpecBizTagsAsync()` | 标签管理 |
+| 删除 | `DeleteAgentSpecAsync()` | 删除 AgentSpec |
+
+#### 🧪 AI 示例
+
+| 示例 | 内容 |
+|------|------|
+| [`RedNb.Nacos.Sample.AI`](samples/RedNb.Nacos.Sample.AI/) | AI 服务全套演示（net10.0）：MCP / A2A / Prompt / Skill / AgentSpec CRUD，gRPC 通道的端点注册与批量注册，Nacos 作为注册中心 + `Microsoft.Extensions.AI` / `ModelContextProtocol` 集成，以及 `Microsoft.Agents.AI` 集成（MCP 工具 + 内联 Skill + A2A 卡片解析，`ChatClientAgent`）的端到端示例 |
 
 ### 🛠️ 维护服务 (IMaintainerService)
 
@@ -626,7 +745,8 @@ RedNb.Nacos/
 │   └── RedNb.Nacos.All/                 # 全功能聚合包
 ├── samples/
 │   ├── RedNb.Nacos.Sample.Console/      # 控制台示例
-│   └── RedNb.Nacos.Sample.WebApi/       # WebAPI 示例
+│   ├── RedNb.Nacos.Sample.WebApi/       # WebAPI 示例
+│   └── RedNb.Nacos.Sample.AI/           # AI 服务示例
 ├── tests/
 │   ├── RedNb.Nacos.Tests/               # 单元测试
 │   ├── RedNb.Nacos.Http.Tests/          # HTTP 客户端测试
@@ -643,7 +763,10 @@ public class NacosClientOptions
     // ====== 服务器连接 ======
     /// <summary>服务器地址，多个用逗号分隔</summary>
     public string ServerAddresses { get; set; } = "localhost:8848";
-    
+
+    /// <summary>控制台地址，多个用逗号分隔；为空时由 ServerAddresses 派生（端口替换为 8080）</summary>
+    public string? ConsoleAddresses { get; set; }
+
     /// <summary>命名空间 ID</summary>
     public string? Namespace { get; set; }
     
@@ -775,6 +898,9 @@ await configService.CancelFuzzyWatchAsync("app-*", "DEFAULT_GROUP", myWatcher);
 | ILockService | 7 | 分布式锁 |
 | IAiService (MCP) | 18 | MCP 服务 |
 | IA2aService (A2A) | 16 | A2A 服务 |
+| IPromptService | 20+ | Prompt 查询/订阅/生命周期 |
+| ISkillService | 20+ | Skill 下载/订阅/上传/生命周期 |
+| IAgentSpecService | 20+ | AgentSpec 查询/订阅/生命周期 |
 | IServiceMaintainer | 12 | 服务管理 |
 | IInstanceMaintainer | 11 | 实例管理 |
 | INamingMaintainer | 5 | 命名服务运维 |
@@ -791,7 +917,7 @@ await configService.CancelFuzzyWatchAsync("app-*", "DEFAULT_GROUP", myWatcher);
 | 组件 | 版本要求 |
 |------|---------|
 | .NET | 8.0+ / 10.0+ |
-| Nacos Server | 2.x / 3.x |
+| Nacos Server | 3.2.0+ |
 | C# | 12.0+ |
 
 ## 🗺️ 路线图
@@ -808,7 +934,7 @@ await configService.CancelFuzzyWatchAsync("app-*", "DEFAULT_GROUP", myWatcher);
 - [x] 服务自动注册
 - [x] HTTP 客户端实现
 - [x] gRPC 客户端实现
-- [ ] 安全认证 (Security Proxy)
+- [x] 安全认证 (Security Proxy) — Username/Password 与 AccessKey/SecretKey 双路径
 - [ ] Prometheus 指标监控
 
 ## 📄 许可证

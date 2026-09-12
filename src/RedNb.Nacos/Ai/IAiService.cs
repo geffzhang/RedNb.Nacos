@@ -8,9 +8,9 @@ namespace RedNb.Nacos.Core.Ai;
 
 /// <summary>
 /// Nacos AI client service interface.
-/// Extends A2A service with MCP (Model Context Protocol) capabilities.
+/// Extends A2A service with MCP (Model Context Protocol), Prompt, Skill and AgentSpec capabilities.
 /// </summary>
-public interface IAiService : IA2aService, IAsyncDisposable
+public interface IAiService : IA2aService, IPromptService, ISkillService, IAgentSpecService, IAsyncDisposable
 {
     #region MCP Server Operations
 
@@ -34,6 +34,14 @@ public interface IAiService : IA2aService, IAsyncDisposable
     /// <summary>
     /// Releases a new MCP server or new version with auto-created service reference.
     /// </summary>
+    /// <remarks>
+    /// A non-null <paramref name="toolSpecification"/> is carried over the HTTP
+    /// console channel as a <c>toolSpecification</c> form field and is persisted by
+    /// Nacos 3.2.4 (the released server reports <c>capabilities: ["TOOL"]</c> with a
+    /// matching <c>toolSpec</c>). Use the overload that accepts an
+    /// <see cref="McpEndpointSpec"/> when the server also needs one — a non-local
+    /// server type is rejected without it.
+    /// </remarks>
     /// <param name="serverSpecification">MCP server specification.</param>
     /// <param name="toolSpecification">MCP tool specification.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -43,6 +51,13 @@ public interface IAiService : IA2aService, IAsyncDisposable
     /// <summary>
     /// Releases a new MCP server or new version.
     /// </summary>
+    /// <remarks>
+    /// Both optional specifications travel over the HTTP console channel as
+    /// <c>toolSpecification</c> / <c>endpointSpecification</c> form fields — the field
+    /// names bound by the server's <c>McpDetailForm</c> on Nacos 3.2.4. Nacos rejects a
+    /// non-local server type (<c>protocol</c> other than <c>stdio</c>) when
+    /// <paramref name="endpointSpecification"/> is omitted.
+    /// </remarks>
     /// <param name="serverSpecification">MCP server specification.</param>
     /// <param name="toolSpecification">MCP tool specification.</param>
     /// <param name="endpointSpecification">MCP endpoint specification (optional).</param>
@@ -57,6 +72,13 @@ public interface IAiService : IA2aService, IAsyncDisposable
     /// <summary>
     /// Registers an endpoint to an MCP server for all versions.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
+    /// console listener. The HTTP implementation
+    /// (<c>NacosAiService</c>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
+    /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
+    /// </remarks>
     /// <param name="mcpName">Name of the MCP server.</param>
     /// <param name="address">Address of the endpoint.</param>
     /// <param name="port">Port of the endpoint.</param>
@@ -66,6 +88,13 @@ public interface IAiService : IA2aService, IAsyncDisposable
     /// <summary>
     /// Registers an endpoint to an MCP server for a specific version.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
+    /// console listener. The HTTP implementation
+    /// (<c>NacosAiService</c>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
+    /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
+    /// </remarks>
     /// <param name="mcpName">Name of the MCP server.</param>
     /// <param name="address">Address of the endpoint.</param>
     /// <param name="port">Port of the endpoint.</param>
@@ -76,6 +105,13 @@ public interface IAiService : IA2aService, IAsyncDisposable
     /// <summary>
     /// Deregisters an endpoint from an MCP server.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 does not expose an HTTP endpoint for this operation on the
+    /// console listener. The HTTP implementation
+    /// (<c>NacosAiService</c>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>. Use the gRPC
+    /// implementation (<c>NacosGrpcFactory.CreateAiService</c>) instead.
+    /// </remarks>
     /// <param name="mcpName">Name of the MCP server.</param>
     /// <param name="address">Address of the endpoint.</param>
     /// <param name="port">Port of the endpoint.</param>
@@ -181,6 +217,13 @@ public interface IAiService : IA2aService, IAsyncDisposable
     /// <summary>
     /// Refreshes a specific MCP tool from the server.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 exposes this operation on neither channel: the console
+    /// listener has no HTTP endpoint for it, and the server registers no
+    /// gRPC handler for MCP tool requests. The HTTP implementation
+    /// (<c>NacosAiService</c>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>.
+    /// </remarks>
     /// <param name="mcpName">Name of the MCP server.</param>
     /// <param name="toolName">Name of the tool to refresh.</param>
     /// <param name="version">Version of the MCP server (null for latest).</param>
@@ -195,6 +238,13 @@ public interface IAiService : IA2aService, IAsyncDisposable
     /// <summary>
     /// Gets a specific MCP tool specification.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 exposes this operation on neither channel: the console
+    /// listener has no HTTP endpoint for it, and the server registers no
+    /// gRPC handler for MCP tool requests. The HTTP implementation
+    /// (<c>NacosAiService</c>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>.
+    /// </remarks>
     /// <param name="mcpName">Name of the MCP server.</param>
     /// <param name="toolName">Name of the tool.</param>
     /// <param name="version">Version of the MCP server (null for latest).</param>
@@ -209,6 +259,13 @@ public interface IAiService : IA2aService, IAsyncDisposable
     /// <summary>
     /// Deletes a specific MCP tool.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 exposes this operation on neither channel: the console
+    /// listener has no HTTP endpoint for it, and the server registers no
+    /// gRPC handler for MCP tool requests. The HTTP implementation
+    /// (<c>NacosAiService</c>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>.
+    /// </remarks>
     /// <param name="mcpName">Name of the MCP server.</param>
     /// <param name="toolName">Name of the tool to delete.</param>
     /// <param name="version">Version of the MCP server (null for latest).</param>
@@ -222,6 +279,13 @@ public interface IAiService : IA2aService, IAsyncDisposable
     /// <summary>
     /// Updates a specific MCP tool.
     /// </summary>
+    /// <remarks>
+    /// Nacos 3.2.4 exposes this operation on neither channel: the console
+    /// listener has no HTTP endpoint for it, and the server registers no
+    /// gRPC handler for MCP tool requests. The HTTP implementation
+    /// (<c>NacosAiService</c>) throws
+    /// <see cref="NacosException"/> with code <c>ServerError</c>.
+    /// </remarks>
     /// <param name="mcpName">Name of the MCP server.</param>
     /// <param name="toolSpec">Updated tool specification.</param>
     /// <param name="version">Version of the MCP server (null for latest).</param>

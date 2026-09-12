@@ -134,4 +134,24 @@ public static class NacosConstants
     /// Nacos server protocol version 3.
     /// </summary>
     public const string ProtocolV3 = "v3";
+
+    /// <summary>
+    /// Success code of the Nacos v3 response envelope.
+    /// </summary>
+    public const int SuccessCode = 0;
+
+    /// <summary>
+    /// Nacos v3 response code indicating the requested config does not exist.
+    /// </summary>
+    public const int ConfigNotFoundCode = 20004;
+
+    /// <summary>
+    /// Legacy HTTP header used to pass <c>namespaceId</c> to the Nacos console AI
+    /// endpoints (Prompt / Skill / AgentSpec), which are parked and not exercised by
+    /// the live integration suite. It is retained for those endpoints only: the v3
+    /// client and admin APIs this library targets pass <c>namespaceId</c> as a request
+    /// parameter instead (and the v3 spec neither requires nor defines this header).
+    /// See https://nacos.io/en/docs/v3/open-api for the v3 spec.
+    /// </summary>
+    public const string NamespaceHeader = "X-Nacos-Namespace-Id";
 }

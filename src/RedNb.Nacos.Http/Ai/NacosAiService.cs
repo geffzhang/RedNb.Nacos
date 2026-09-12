@@ -17,15 +17,18 @@ namespace RedNb.Nacos.Client.Ai;
 /// Nacos AI service implementation using HTTP.
 /// Provides both A2A (Agent-to-Agent) and MCP (Model Context Protocol) capabilities.
 /// </summary>
-public class NacosAiService : IAiService
+public partial class NacosAiService : IAiService
 {
     private readonly NacosClientOptions _options;
-    private readonly NacosHttpClient _httpClient;
+    private readonly NacosConsoleHttpClient _httpClient;
+    private readonly NacosHttpClient _legacyHttpClient;
     private readonly ILogger<NacosAiService>? _logger;
     private readonly AiListenerManager _listenerManager;
     private readonly AiCacheHolder _cacheHolder;
     private readonly CancellationTokenSource _cts;
-    private readonly string _namespaceId;
+    private readonly NacosPromptService _promptService;
+    private readonly NacosSkillService _skillService;
+    private readonly NacosAgentSpecService _agentSpecService;
     private bool _disposed;
 
     // API paths
@@ -45,11 +48,18 @@ public class NacosAiService : IAiService
     {
         _options = options;
         _logger = logger;
-        _httpClient = new NacosHttpClient(options, logger);
+        // MCP/A2A HTTP ops target the console port (8080 by default) with no
+        // /nacos context path. Prompt/Skill/AgentSpec target the core API
+        // port (8848) and continue to use the standard client.
+        _httpClient = new NacosConsoleHttpClient(options, logger);
+        _legacyHttpClient = new NacosHttpClient(options, logger);
         _listenerManager = new AiListenerManager();
         _cacheHolder = new AiCacheHolder();
         _cts = new CancellationTokenSource();
-        _namespaceId = options.Namespace ?? string.Empty;
+
+        _promptService = new NacosPromptService(_legacyHttpClient, options, logger);
+        _skillService = new NacosSkillService(_legacyHttpClient, options, logger);
+        _agentSpecService = new NacosAgentSpecService(_legacyHttpClient, options, logger);
 
         // Start background polling for subscriptions
         _ = StartPollingAsync(_cts.Token);
@@ -70,14 +80,14 @@ public class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "mcpName", mcpName },
             { "version", version }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync(McpBasePath, parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync(McpBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 return null;
@@ -118,23 +128,30 @@ public class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "mcpName", serverSpecification.Name },
-            { "serverSpec", JsonSerializer.Serialize(serverSpecification, JsonOptions) }
+            { "serverSpecification", JsonSerializer.Serialize(serverSpecification, JsonOptions) }
         };
 
+        // The console release controller binds McpDetailForm fields named
+        // serverSpecification / toolSpecification / resourceSpecification /
+        // endpointSpecification, so both optional specs travel as form fields on
+        // the console channel (no /nacos context path). Verified against live
+        // Nacos 3.2.4: a toolSpecification is persisted as capabilities=["TOOL"]
+        // plus toolSpec, and a non-local server type is rejected with
+        // "endpointSpecification is required" when the field is omitted.
         if (toolSpecification != null)
         {
-            parameters["toolSpec"] = JsonSerializer.Serialize(toolSpecification, JsonOptions);
+            parameters["toolSpecification"] = JsonSerializer.Serialize(toolSpecification, JsonOptions);
         }
 
         if (endpointSpecification != null)
         {
-            parameters["endpointSpec"] = JsonSerializer.Serialize(endpointSpecification, JsonOptions);
+            parameters["endpointSpecification"] = JsonSerializer.Serialize(endpointSpecification, JsonOptions);
         }
 
         var body = NacosUtils.BuildQueryString(parameters);
-        var response = await _httpClient.PostAsync(McpBasePath, null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        var response = await _httpClient.PostWithHeadersAsync(McpBasePath, null, body, headers, _options.DefaultTimeout, cancellationToken);
 
         var result = JsonSerializer.Deserialize<ApiResult<string>>(response ?? "{}", JsonOptions);
         return result?.Data ?? string.Empty;
@@ -147,45 +164,19 @@ public class NacosAiService : IAiService
     }
 
     /// <inheritdoc />
-    public async Task RegisterMcpServerEndpointAsync(string mcpName, string address, int port, string? version, CancellationToken cancellationToken = default)
+    public Task RegisterMcpServerEndpointAsync(string mcpName, string address, int port, string? version, CancellationToken cancellationToken = default)
     {
         ValidateMcpName(mcpName);
         ValidateEndpoint(address, port);
-
-        _logger?.LogInformation("Registering MCP endpoint {Address}:{Port} to {McpName}", address, port, mcpName);
-
-        var parameters = new Dictionary<string, string?>
-        {
-            { "namespaceId", _namespaceId },
-            { "mcpName", mcpName },
-            { "address", address },
-            { "port", port.ToString() },
-            { "version", version },
-            { "type", "register" }
-        };
-
-        var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PostAsync($"{McpBasePath}/endpoint", null, body, _options.DefaultTimeout, cancellationToken);
+        throw NoHttpEndpointOperation(nameof(RegisterMcpServerEndpointAsync));
     }
 
     /// <inheritdoc />
-    public async Task DeregisterMcpServerEndpointAsync(string mcpName, string address, int port, CancellationToken cancellationToken = default)
+    public Task DeregisterMcpServerEndpointAsync(string mcpName, string address, int port, CancellationToken cancellationToken = default)
     {
         ValidateMcpName(mcpName);
         ValidateEndpoint(address, port);
-
-        _logger?.LogInformation("Deregistering MCP endpoint {Address}:{Port} from {McpName}", address, port, mcpName);
-
-        var parameters = new Dictionary<string, string?>
-        {
-            { "namespaceId", _namespaceId },
-            { "mcpName", mcpName },
-            { "address", address },
-            { "port", port.ToString() },
-            { "type", "deregister" }
-        };
-
-        await _httpClient.DeleteAsync($"{McpBasePath}/endpoint", parameters, _options.DefaultTimeout, cancellationToken);
+        throw NoHttpEndpointOperation(nameof(DeregisterMcpServerEndpointAsync));
     }
 
     /// <inheritdoc />
@@ -266,12 +257,12 @@ public class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "mcpName", mcpName },
             { "version", version }
         };
+        var headers = BuildNamespaceHeaders();
 
-        await _httpClient.DeleteAsync(McpBasePath, parameters, _options.DefaultTimeout, cancellationToken);
+        await _httpClient.DeleteWithHeadersAsync(McpBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
 
         // Remove from cache
         _cacheHolder.RemoveMcpServer(mcpName, version);
@@ -293,16 +284,16 @@ public class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "mcpName", mcpName },
             { "search", search },
             { "pageNo", pageNo.ToString() },
             { "pageSize", pageSize.ToString() }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync($"{McpBasePath}/list", parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync($"{McpBasePath}/list", parameters, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 return PageResult<McpServerBasicInfo>.Empty(pageNo, pageSize);
@@ -342,17 +333,17 @@ public class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "importType", request.ImportType.ToString().ToLowerInvariant() },
             { "importData", request.ImportData },
             { "overrideExisting", request.OverrideExisting.ToString().ToLowerInvariant() }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.PostAsync($"{McpBasePath}/import/validate", null, body, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.PostWithHeadersAsync("/v3/console/ai/import/validate", null, body, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 return McpServerImportValidationResult.Failed(new List<string> { "Failed to get validation response from server" });
@@ -380,7 +371,6 @@ public class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "importType", request.ImportType.ToString().ToLowerInvariant() },
             { "importData", request.ImportData },
             { "overrideExisting", request.OverrideExisting.ToString().ToLowerInvariant() },
@@ -394,10 +384,11 @@ public class NacosAiService : IAiService
         }
 
         var body = NacosUtils.BuildQueryString(parameters);
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.PostAsync($"{McpBasePath}/import", null, body, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.PostWithHeadersAsync("/v3/console/ai/import/execute", null, body, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 return McpServerImportResponse.Error("Failed to get import response from server");
@@ -418,7 +409,7 @@ public class NacosAiService : IAiService
     #region MCP Tool Management
 
     /// <inheritdoc />
-    public async Task<McpToolSpec?> RefreshMcpToolAsync(
+    public Task<McpToolSpec?> RefreshMcpToolAsync(
         string mcpName,
         string toolName,
         string? version = null,
@@ -426,36 +417,11 @@ public class NacosAiService : IAiService
     {
         ValidateMcpName(mcpName);
         ValidateToolName(toolName);
-
-        var parameters = new Dictionary<string, string?>
-        {
-            { "namespaceId", _namespaceId },
-            { "mcpName", mcpName },
-            { "toolName", toolName },
-            { "version", version }
-        };
-
-        var body = NacosUtils.BuildQueryString(parameters);
-
-        try
-        {
-            var response = await _httpClient.PostAsync($"{McpBasePath}/tool/refresh", null, body, _options.DefaultTimeout, cancellationToken);
-            if (string.IsNullOrEmpty(response))
-            {
-                return null;
-            }
-
-            var result = JsonSerializer.Deserialize<ApiResult<McpToolSpec>>(response, JsonOptions);
-            return result?.Data;
-        }
-        catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
-        {
-            return null;
-        }
+        throw McpToolOperationUnavailable(nameof(RefreshMcpToolAsync));
     }
 
     /// <inheritdoc />
-    public async Task<McpToolSpec?> GetMcpToolAsync(
+    public Task<McpToolSpec?> GetMcpToolAsync(
         string mcpName,
         string toolName,
         string? version = null,
@@ -463,34 +429,11 @@ public class NacosAiService : IAiService
     {
         ValidateMcpName(mcpName);
         ValidateToolName(toolName);
-
-        var parameters = new Dictionary<string, string?>
-        {
-            { "namespaceId", _namespaceId },
-            { "mcpName", mcpName },
-            { "toolName", toolName },
-            { "version", version }
-        };
-
-        try
-        {
-            var response = await _httpClient.GetAsync($"{McpBasePath}/tool", parameters, _options.DefaultTimeout, cancellationToken);
-            if (string.IsNullOrEmpty(response))
-            {
-                return null;
-            }
-
-            var result = JsonSerializer.Deserialize<ApiResult<McpToolSpec>>(response, JsonOptions);
-            return result?.Data;
-        }
-        catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
-        {
-            return null;
-        }
+        throw McpToolOperationUnavailable(nameof(GetMcpToolAsync));
     }
 
     /// <inheritdoc />
-    public async Task DeleteMcpToolAsync(
+    public Task DeleteMcpToolAsync(
         string mcpName,
         string toolName,
         string? version = null,
@@ -498,24 +441,11 @@ public class NacosAiService : IAiService
     {
         ValidateMcpName(mcpName);
         ValidateToolName(toolName);
-
-        _logger?.LogInformation("Deleting MCP tool {ToolName} from {McpName}@{Version}", toolName, mcpName, version ?? "latest");
-
-        var parameters = new Dictionary<string, string?>
-        {
-            { "namespaceId", _namespaceId },
-            { "mcpName", mcpName },
-            { "toolName", toolName },
-            { "version", version }
-        };
-
-        await _httpClient.DeleteAsync($"{McpBasePath}/tool", parameters, _options.DefaultTimeout, cancellationToken);
-
-        _logger?.LogInformation("Deleted MCP tool {ToolName} from {McpName}@{Version}", toolName, mcpName, version ?? "latest");
+        throw McpToolOperationUnavailable(nameof(DeleteMcpToolAsync));
     }
 
     /// <inheritdoc />
-    public async Task UpdateMcpToolAsync(
+    public Task UpdateMcpToolAsync(
         string mcpName,
         McpToolSpec toolSpec,
         string? version = null,
@@ -527,21 +457,7 @@ public class NacosAiService : IAiService
             throw new NacosException(NacosException.InvalidParam, "toolSpec is required");
         }
         ValidateToolName(toolSpec.Name);
-
-        _logger?.LogInformation("Updating MCP tool {ToolName} in {McpName}@{Version}", toolSpec.Name, mcpName, version ?? "latest");
-
-        var parameters = new Dictionary<string, string?>
-        {
-            { "namespaceId", _namespaceId },
-            { "mcpName", mcpName },
-            { "version", version },
-            { "toolSpec", JsonSerializer.Serialize(toolSpec, JsonOptions) }
-        };
-
-        var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PutAsync($"{McpBasePath}/tool", null, body, _options.DefaultTimeout, cancellationToken);
-
-        _logger?.LogInformation("Updated MCP tool {ToolName} in {McpName}@{Version}", toolSpec.Name, mcpName, version ?? "latest");
+        throw McpToolOperationUnavailable(nameof(UpdateMcpToolAsync));
     }
 
     private static void ValidateToolName(string toolName)
@@ -575,15 +491,15 @@ public class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentName", agentName },
             { "version", version },
             { "registrationType", registrationType }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync(A2aBasePath, parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync(A2aBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 return null;
@@ -629,7 +545,6 @@ public class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentName", agentCard.Name },
             { "registrationType", registrationType },
             { "setAsLatest", setAsLatest.ToString().ToLowerInvariant() },
@@ -637,7 +552,8 @@ public class NacosAiService : IAiService
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PostAsync(A2aBasePath, null, body, _options.DefaultTimeout, cancellationToken);
+        var headers = BuildNamespaceHeaders();
+        await _httpClient.PostWithHeadersAsync(A2aBasePath, null, body, headers, _options.DefaultTimeout, cancellationToken);
     }
 
     #endregion
@@ -664,31 +580,19 @@ public class NacosAiService : IAiService
     }
 
     /// <inheritdoc />
-    public async Task RegisterAgentEndpointAsync(string agentName, AgentEndpoint endpoint, CancellationToken cancellationToken = default)
+    public Task RegisterAgentEndpointAsync(string agentName, AgentEndpoint endpoint, CancellationToken cancellationToken = default)
     {
         ValidateAgentName(agentName);
         ValidateAgentEndpoint(endpoint);
-
-        _logger?.LogInformation("Registering Agent endpoint {Address}:{Port} to {AgentName}", endpoint.Address, endpoint.Port, agentName);
-
-        var parameters = new Dictionary<string, string?>
-        {
-            { "namespaceId", _namespaceId },
-            { "agentName", agentName },
-            { "type", "register" },
-            { "endpoint", JsonSerializer.Serialize(endpoint, JsonOptions) }
-        };
-
-        var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PostAsync($"{A2aBasePath}/endpoint", null, body, _options.DefaultTimeout, cancellationToken);
+        throw NoHttpEndpointOperation(nameof(RegisterAgentEndpointAsync));
     }
 
     /// <inheritdoc />
-    public async Task RegisterAgentEndpointsAsync(string agentName, IEnumerable<AgentEndpoint> endpoints, CancellationToken cancellationToken = default)
+    public Task RegisterAgentEndpointsAsync(string agentName, IEnumerable<AgentEndpoint> endpoints, CancellationToken cancellationToken = default)
     {
         ValidateAgentName(agentName);
         var endpointList = endpoints?.ToList() ?? throw new NacosException(NacosException.InvalidParam, "endpoints is required");
-        
+
         if (endpointList.Count == 0)
         {
             throw new NacosException(NacosException.InvalidParam, "endpoints cannot be empty");
@@ -706,17 +610,7 @@ public class NacosAiService : IAiService
             ValidateAgentEndpoint(endpoint);
         }
 
-        _logger?.LogInformation("Batch registering {Count} Agent endpoints to {AgentName}", endpointList.Count, agentName);
-
-        var parameters = new Dictionary<string, string?>
-        {
-            { "namespaceId", _namespaceId },
-            { "agentName", agentName },
-            { "endpoints", JsonSerializer.Serialize(endpointList, JsonOptions) }
-        };
-
-        var body = NacosUtils.BuildQueryString(parameters);
-        await _httpClient.PostAsync($"{A2aBasePath}/endpoints", null, body, _options.DefaultTimeout, cancellationToken);
+        throw NoHttpEndpointOperation(nameof(RegisterAgentEndpointsAsync));
     }
 
     /// <inheritdoc />
@@ -732,22 +626,11 @@ public class NacosAiService : IAiService
     }
 
     /// <inheritdoc />
-    public async Task DeregisterAgentEndpointAsync(string agentName, AgentEndpoint endpoint, CancellationToken cancellationToken = default)
+    public Task DeregisterAgentEndpointAsync(string agentName, AgentEndpoint endpoint, CancellationToken cancellationToken = default)
     {
         ValidateAgentName(agentName);
         ValidateAgentEndpoint(endpoint);
-
-        _logger?.LogInformation("Deregistering Agent endpoint {Address}:{Port} from {AgentName}", endpoint.Address, endpoint.Port, agentName);
-
-        var parameters = new Dictionary<string, string?>
-        {
-            { "namespaceId", _namespaceId },
-            { "agentName", agentName },
-            { "type", "deregister" },
-            { "endpoint", JsonSerializer.Serialize(endpoint, JsonOptions) }
-        };
-
-        await _httpClient.DeleteAsync($"{A2aBasePath}/endpoint", parameters, _options.DefaultTimeout, cancellationToken);
+        throw NoHttpEndpointOperation(nameof(DeregisterAgentEndpointAsync));
     }
 
     #endregion
@@ -832,12 +715,12 @@ public class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentName", agentName },
             { "version", version }
         };
+        var headers = BuildNamespaceHeaders();
 
-        await _httpClient.DeleteAsync(A2aBasePath, parameters, _options.DefaultTimeout, cancellationToken);
+        await _httpClient.DeleteWithHeadersAsync(A2aBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
 
         // Remove from cache
         _cacheHolder.RemoveAgentCard(agentName, version);
@@ -859,16 +742,16 @@ public class NacosAiService : IAiService
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentName", agentName },
             { "search", search },
             { "pageNo", pageNo.ToString() },
             { "pageSize", pageSize.ToString() }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync($"{A2aBasePath}/list", parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync($"{A2aBasePath}/list", parameters, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
                 return PageResult<AgentCardBasicInfo>.Empty(pageNo, pageSize);
@@ -895,28 +778,40 @@ public class NacosAiService : IAiService
     /// <inheritdoc />
     public async Task<List<string>> ListAgentVersionsAsync(string agentName, CancellationToken cancellationToken = default)
     {
+        var infos = await ListAgentVersionInfosAsync(agentName, cancellationToken);
+        return infos
+            .Select(i => i.Version)
+            .Where(v => v is not null)
+            .Select(v => v!)
+            .ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<List<AgentVersionInfo>> ListAgentVersionInfosAsync(string agentName, CancellationToken cancellationToken = default)
+    {
         ValidateAgentName(agentName);
 
         var parameters = new Dictionary<string, string?>
         {
-            { "namespaceId", _namespaceId },
             { "agentName", agentName }
         };
+        var headers = BuildNamespaceHeaders();
 
         try
         {
-            var response = await _httpClient.GetAsync($"{A2aBasePath}/versions", parameters, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync($"{A2aBasePath}/version/list", parameters, headers, _options.DefaultTimeout, cancellationToken);
             if (string.IsNullOrEmpty(response))
             {
-                return new List<string>();
+                return new List<AgentVersionInfo>();
             }
 
-            var result = JsonSerializer.Deserialize<ApiResult<List<string>>>(response, JsonOptions);
-            return result?.Data ?? new List<string>();
+            var result = JsonSerializer.Deserialize<ApiResult<List<AgentVersionInfo>>>(response, JsonOptions);
+            return result?.Data ?? new List<AgentVersionInfo>();
         }
         catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
         {
-            return new List<string>();
+            // Server answers 404 {"code":50100,"message":"Agent not found"} for unknown agents.
+            return new List<AgentVersionInfo>();
         }
     }
 
@@ -937,9 +832,13 @@ public class NacosAiService : IAiService
 
         await _cts.CancelAsync();
         _cts.Dispose();
+        await _promptService.DisposeAsync();
+        await _skillService.DisposeAsync();
+        await _agentSpecService.DisposeAsync();
         _listenerManager.Clear();
         _cacheHolder.Clear();
         _httpClient.Dispose();
+        _legacyHttpClient.Dispose();
         _disposed = true;
     }
 
@@ -1041,6 +940,44 @@ public class NacosAiService : IAiService
             throw new NacosException(NacosException.InvalidParam, "mcpName is required");
         }
     }
+
+    /// <summary>
+    /// Builds the server-error exception reported when an MCP/A2A <em>endpoint</em>
+    /// operation is invoked through this HTTP implementation: Nacos 3.2.4 exposes
+    /// no console route for endpoint operations, but the gRPC channel does register
+    /// handlers for them (<c>McpServerEndpointRequestHandler</c>,
+    /// <c>AgentEndpointRequestHandler</c>, <c>BatchAgentEndpointRequestHandler</c>),
+    /// so callers must use <c>NacosGrpcFactory.CreateAiService</c>.
+    /// </summary>
+    private static NacosException NoHttpEndpointOperation(string opName)
+    {
+        return new NacosException(
+            NacosException.ServerError,
+            $"Operation '{opName}' is not available over the HTTP channel in Nacos 3.2.4; " +
+            "endpoint operations are served by the gRPC channel (NacosGrpcFactory.CreateAiService).");
+    }
+
+    /// <summary>
+    /// Builds the server-error exception reported when an MCP <em>tool</em> operation
+    /// is invoked. Unlike endpoint operations, Nacos 3.2.4 registers neither a
+    /// console route nor a gRPC handler for MCP tool CRUD, so no channel can serve
+    /// these calls — the gRPC channel is not a workaround here.
+    /// </summary>
+    private static NacosException McpToolOperationUnavailable(string opName)
+    {
+        return new NacosException(
+            NacosException.ServerError,
+            $"Operation '{opName}' is not available in Nacos 3.2.4: MCP tool operations have no HTTP console route " +
+            "and no gRPC handler on the server, so neither channel can serve them.");
+    }
+
+    /// <summary>
+    /// Returns an empty header dictionary. Nacos 3.x console controllers ignore
+    /// <c>X-Nacos-Namespace-Id</c> and always operate in the public namespace;
+    /// v3 namespaces are carried as <c>namespaceId</c> query parameters on the
+    /// core API instead.
+    /// </summary>
+    private Dictionary<string, string> BuildNamespaceHeaders() => new();
 
     private static void ValidateAgentName(string agentName)
     {

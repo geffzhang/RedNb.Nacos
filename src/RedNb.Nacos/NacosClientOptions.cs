@@ -42,6 +42,20 @@ public class NacosClientOptions
     public string? Endpoint { get; set; }
 
     /// <summary>
+    /// Nacos **console** server addresses, comma-separated. The console is a
+    /// separate listener (default port 8080) and serves the AI admin/UI API
+    /// (<c>/v3/console/ai/**</c>) plus the readiness/health probes. Distinct
+    /// from <see cref="ServerAddresses"/>, which targets the API/gRPC port
+    /// (default 8848).
+    /// <para>
+    /// When left empty, the SDK derives console addresses from
+    /// <see cref="ServerAddresses"/> by replacing each port with the default
+    /// console port (8080).
+    /// </para>
+    /// </summary>
+    public string ConsoleAddresses { get; set; } = string.Empty;
+
+    /// <summary>
     /// Context path, default is "nacos".
     /// </summary>
     public string ContextPath { get; set; } = "nacos";
@@ -144,6 +158,52 @@ public class NacosClientOptions
     }
 
     /// <summary>
+    /// Gets the console server address list, deriving from
+    /// <see cref="ServerAddresses"/> (port → 8080 substitution) when
+    /// <see cref="ConsoleAddresses"/> is empty.
+    /// </summary>
+    public List<string> GetConsoleAddressList()
+    {
+        if (!string.IsNullOrWhiteSpace(ConsoleAddresses))
+        {
+            // Explicit console addresses win verbatim — the operator already
+            // picked the port (e.g. 8443 behind TLS), so do NOT substitute
+            // 8080 onto them. Only the ServerAddresses fallback path is
+            // port-substituted, since those addresses describe the API port
+            // (8848) and need to be re-targeted at the console port.
+            return ConsoleAddresses
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .Where(s => !string.IsNullOrEmpty(s))
+                .ToList();
+        }
+        return GetServerAddressList()
+            .Select(SubstituteConsolePort)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Gets the base URL for a console server address. Unlike
+    /// <see cref="GetBaseUrl"/>, no <see cref="ContextPath"/> is appended: the
+    /// console listener expects paths under <c>/v3/console/**</c> with no
+    /// <c>/nacos</c> prefix.
+    /// </summary>
+    public string GetConsoleBaseUrl(string serverAddress)
+    {
+        var scheme = EnableTls ? "https" : "http";
+        return $"{scheme}://{serverAddress}";
+    }
+
+    private static string SubstituteConsolePort(string hostPort)
+    {
+        var idx = hostPort.LastIndexOf(':');
+        // IPv6 literal — leave as-is (operator can override via explicit ConsoleAddresses)
+        if (hostPort.Count(c => c == ':') > 1) return hostPort;
+        if (idx < 0) return $"{hostPort}:8080";
+        return $"{hostPort[..idx]}:8080";
+    }
+
+    /// <summary>
     /// Gets the gRPC address for a server address.
     /// </summary>
     public string GetGrpcAddress(string serverAddress)
@@ -161,9 +221,51 @@ public class NacosClientOptions
     /// </summary>
     public void Validate()
     {
-        if (string.IsNullOrWhiteSpace(ServerAddresses) && string.IsNullOrWhiteSpace(Endpoint))
+        var hasCore = !string.IsNullOrWhiteSpace(ServerAddresses);
+        var hasConsole = !string.IsNullOrWhiteSpace(ConsoleAddresses);
+        var hasEndpoint = !string.IsNullOrWhiteSpace(Endpoint);
+        if (!hasCore && !hasConsole && !hasEndpoint)
         {
-            throw new NacosException(NacosException.InvalidParam, "ServerAddresses or Endpoint must be provided");
+            throw new NacosException(
+                NacosException.InvalidParam,
+                "At least one of ServerAddresses, ConsoleAddresses, or Endpoint must be provided");
+        }
+
+        var hasUsernamePassword = !string.IsNullOrWhiteSpace(Username) || !string.IsNullOrWhiteSpace(Password);
+        if (hasUsernamePassword && !hasCore)
+        {
+            throw new NacosException(
+                NacosException.InvalidParam,
+                "Username/Password require ServerAddresses: login is performed against the server API port (8848), so a console-only configuration cannot authenticate");
+        }
+
+        // Symmetric AK/SK guards: SecurityProxy.ResolveLoginStrategy requires
+        // BOTH AccessKey AND SecretKey (AND semantics). Without these guards, a
+        // caller that sets only one of them passes Validate() silently, the
+        // runtime strategy resolves to None, and the configured credential is
+        // dropped without a clear error.
+        var hasAccessKeyOnly = !string.IsNullOrWhiteSpace(AccessKey) && string.IsNullOrWhiteSpace(SecretKey);
+        if (hasAccessKeyOnly)
+        {
+            throw new NacosException(
+                NacosException.InvalidParam,
+                "SecretKey is required when AccessKey is set");
+        }
+
+        var hasSecretKeyOnly = !string.IsNullOrWhiteSpace(SecretKey) && string.IsNullOrWhiteSpace(AccessKey);
+        if (hasSecretKeyOnly)
+        {
+            throw new NacosException(
+                NacosException.InvalidParam,
+                "AccessKey is required when SecretKey is set");
+        }
+
+        var hasAccessKey = !string.IsNullOrWhiteSpace(AccessKey) || !string.IsNullOrWhiteSpace(SecretKey);
+        if (hasAccessKey && !hasCore)
+        {
+            throw new NacosException(
+                NacosException.InvalidParam,
+                "AccessKey/SecretKey require ServerAddresses: AK/SK signing is performed against the server API port (8848), so a console-only configuration cannot authenticate");
         }
     }
 }

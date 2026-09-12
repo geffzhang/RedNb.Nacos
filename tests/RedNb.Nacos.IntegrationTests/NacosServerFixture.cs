@@ -17,41 +17,87 @@ public class NacosIntegrationCollection : ICollectionFixture<NacosServerFixture>
 public class NacosServerFixture : IAsyncLifetime
 {
     public const string ServerAddress = "localhost:8848";
+    public const string ConsoleAddress = "localhost:8080";
     public const string Username = "nacos";
     public const string Password = "nacos";
 
+    // Nacos 3.2.4 boots slower than 3.1.x due to dist module initialization,
+    // so the readiness probe is given a generous start_period budget (matches
+    // the compose healthcheck start_period in deploy/docker-compose/*.yml).
+    // The wait is implemented as a deadline so the actual elapsed time on a
+    // fully unresponsive server is bounded by this value plus one in-flight
+    // probe (the per-attempt HTTP timeout is capped at min(10s, remaining)).
+    private const int StartPeriodSeconds = 90;
+    private const int PollIntervalSeconds = 3;
+    private static readonly TimeSpan MaxProbeTimeout = TimeSpan.FromSeconds(10);
+
     public async Task InitializeAsync()
     {
-        // Check if Nacos server is available
-        using var httpClient = new HttpClient();
-        httpClient.Timeout = TimeSpan.FromSeconds(5);
+        // Deadline-based wait: elapsed time is bounded by StartPeriodSeconds
+        // regardless of per-attempt timeouts.
+        // The readiness endpoint lives on the Nacos Console (port 8080 by
+        // default), not on the API port (8848). It is bound to
+        // com/alibaba/nacos/console/controller/v3/ConsoleHealthController
+        // in nacos-console-3.2.4.jar.
+        // We construct a fresh HttpClient per iteration: HttpClient.Timeout
+        // is immutable after the first request, so reusing a single instance
+        // across iterations throws once the cap is reapplied.
 
-        var maxRetries = 3;
-        for (int i = 0; i < maxRetries; i++)
+        var deadline = DateTime.UtcNow.AddSeconds(StartPeriodSeconds);
+        var attempt = 0;
+
+        while (true)
         {
+            attempt++;
+
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                break;
+            }
+
+            // Cap the per-attempt HTTP timeout so a single probe can never
+            // blow past the deadline by itself.
+            var probeTimeout = remaining < MaxProbeTimeout ? remaining : MaxProbeTimeout;
+
             try
             {
-                // Use the main Nacos page as health check (works with Nacos 3.x)
-                var response = await httpClient.GetAsync($"http://{ServerAddress}/nacos/");
+                using var httpClient = new HttpClient { Timeout = probeTimeout };
+                var response = await httpClient.GetAsync(
+                    $"http://localhost:8080/v3/console/health/readiness");
                 if (response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine("Nacos server is available");
+                    Console.WriteLine($"Nacos server is ready (attempt {attempt})");
                     return;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Attempt {i + 1}: Failed to connect to Nacos - {ex.Message}");
-                if (i < maxRetries - 1)
-                {
-                    await Task.Delay(1000);
-                }
+                Console.WriteLine($"Attempt {attempt}: Failed to connect to Nacos - {ex.Message}");
+            }
+
+            // Bail out before sleeping if we have no budget left, and bound
+            // the sleep so it cannot run past the deadline either.
+            if (DateTime.UtcNow >= deadline)
+            {
+                break;
+            }
+
+            var sleep = TimeSpan.FromSeconds(PollIntervalSeconds);
+            var remainingAfterProbe = deadline - DateTime.UtcNow;
+            if (sleep > remainingAfterProbe)
+            {
+                sleep = remainingAfterProbe;
+            }
+            if (sleep > TimeSpan.Zero)
+            {
+                await Task.Delay(sleep);
             }
         }
 
         throw new InvalidOperationException(
-            $"Nacos server is not available at {ServerAddress}. " +
-            "Please ensure Nacos is running before executing integration tests.");
+            $"Nacos server did not become ready within {StartPeriodSeconds}s at {ServerAddress}. " +
+            "Please ensure Nacos 3.x is running before executing integration tests.");
     }
 
     public Task DisposeAsync()

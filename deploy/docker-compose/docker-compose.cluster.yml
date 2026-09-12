@@ -1,6 +1,6 @@
 # Nacos Docker Compose
 # Cluster mode (3 nodes) with MySQL storage
-# Version: 3.1.1
+# Version: 3.2.4
 # Usage: docker-compose -f docker-compose.cluster.yml up -d
 
 services:
@@ -34,7 +34,7 @@ services:
       - nacos-network
 
   nacos1:
-    image: nacos/nacos-server:v3.1.1
+    image: nacos/nacos-server:v3.2.4
     container_name: nacos-server-1
     hostname: nacos1
     restart: always
@@ -52,7 +52,7 @@ services:
       JVM_XMS: ${JVM_XMS:-1g}
       JVM_XMX: ${JVM_XMX:-1g}
       JVM_XMN: ${JVM_XMN:-512m}
-      NACOS_AUTH_ENABLE: "true"
+      NACOS_AUTH_ENABLE: ${NACOS_AUTH_ENABLE:-false}
       NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:-VGhpc0lzTXlDdXN0b21TZWNyZXRLZXkwMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=}
       NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:-serverIdentity}
       NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:-security}
@@ -69,7 +69,7 @@ services:
       nacos-mysql:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/v1/console/health/readiness"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v3/console/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -78,7 +78,7 @@ services:
       - nacos-network
 
   nacos2:
-    image: nacos/nacos-server:v3.1.1
+    image: nacos/nacos-server:v3.2.4
     container_name: nacos-server-2
     hostname: nacos2
     restart: always
@@ -96,7 +96,7 @@ services:
       JVM_XMS: ${JVM_XMS:-1g}
       JVM_XMX: ${JVM_XMX:-1g}
       JVM_XMN: ${JVM_XMN:-512m}
-      NACOS_AUTH_ENABLE: "true"
+      NACOS_AUTH_ENABLE: ${NACOS_AUTH_ENABLE:-false}
       NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:-VGhpc0lzTXlDdXN0b21TZWNyZXRLZXkwMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=}
       NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:-serverIdentity}
       NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:-security}
@@ -113,7 +113,7 @@ services:
       nacos-mysql:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/v1/console/health/readiness"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v3/console/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -122,7 +122,7 @@ services:
       - nacos-network
 
   nacos3:
-    image: nacos/nacos-server:v3.1.1
+    image: nacos/nacos-server:v3.2.4
     container_name: nacos-server-3
     hostname: nacos3
     restart: always
@@ -140,7 +140,7 @@ services:
       JVM_XMS: ${JVM_XMS:-1g}
       JVM_XMX: ${JVM_XMX:-1g}
       JVM_XMN: ${JVM_XMN:-512m}
-      NACOS_AUTH_ENABLE: "true"
+      NACOS_AUTH_ENABLE: ${NACOS_AUTH_ENABLE:-false}
       NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:-VGhpc0lzTXlDdXN0b21TZWNyZXRLZXkwMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=}
       NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:-serverIdentity}
       NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:-security}
@@ -157,7 +157,7 @@ services:
       nacos-mysql:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/v1/console/health/readiness"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v3/console/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 10

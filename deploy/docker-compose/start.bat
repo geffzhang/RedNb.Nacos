@@ -1,6 +1,6 @@
 @echo off
 REM Nacos Docker Compose 启动脚本 (Windows)
-REM Nacos 版本: 3.1.1
+REM Nacos 版本: 3.2.4
 REM 使用方式: start.bat [standalone|mysql|cluster]
 
 setlocal enabledelayedexpansion
@@ -12,7 +12,7 @@ cd /d "%~dp0"
 
 echo ===================================
 echo   Nacos Docker Compose 部署脚本
-echo   版本: 3.1.1
+echo   版本: 3.2.4
 echo ===================================
 echo.
 

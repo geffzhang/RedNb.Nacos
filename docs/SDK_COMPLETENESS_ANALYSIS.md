@@ -1,320 +1,121 @@
-# RedNb.Nacos .NET SDK Íê³É¶È·ÖÎö±¨¸æ
+# RedNb.Nacos .NET SDK ä»£ç ç°çŠ¶åˆ†æ
 
-## ¸ÅÊö
+## æ¦‚è¿°
 
-±¾±¨¸æ¶Ô±È Nacos Java SDK ºÍ RedNb.Nacos .NET SDK µÄ¹¦ÄÜÊµÏÖÇé¿ö£¬·ÖÎöÍê³É¶ÈºÍ²âÊÔ¸²¸ÇÂÊ¡£
+æœ¬æŠ¥å‘Šåˆ†æ RedNb.Nacos .NET SDK ä»£ç åº“çš„å½“å‰çŠ¶æ€ï¼šå·²åˆ é™¤çš„å†å²é—ç•™ä»£ç ã€å·²é›†æˆçš„åŸºç¡€è®¾æ–½ã€
+ä»¥åŠ Nacos v3 è¿ç§»åçš„åºŸå¼ƒé¢ã€‚å®Œæ•´åº¦ä¸æµ‹è¯•è¦†ç›–ç‡è¯¦è§
+[SDK_COMPLETENESS_REPORT.md](SDK_COMPLETENESS_REPORT.md)ã€‚
 
----
-
-## Ò»¡¢ºËĞÄ·şÎñÍê³É¶È
-
-### 1. Config Service (ÅäÖÃ·şÎñ)
-
-| ¹¦ÄÜ | Java SDK | .NET SDK (HTTP) | .NET SDK (gRPC) | ²âÊÔ¸²¸Ç |
-|-----|---------|-----------------|-----------------|---------|
-| getConfig | ? | ? | ? | ? µ¥Ôª+¼¯³É |
-| getConfigAndSignListener | ? | ? | ? | ? ¼¯³É |
-| addListener | ? | ? | ? | ? µ¥Ôª+¼¯³É |
-| removeListener | ? | ? | ? | ? µ¥Ôª |
-| publishConfig | ? | ? | ? | ? µ¥Ôª+¼¯³É |
-| publishConfigCas | ? | ? | ? | ? ÎŞ²âÊÔ |
-| removeConfig | ? | ? | ? | ? µ¥Ôª+¼¯³É |
-| getServerStatus | ? | ? | ? | ? µ¥Ôª |
-| addConfigFilter | ? | ? | ?? Î´ÊµÏÖ | ? µ¥Ôª |
-| fuzzyWatch (Nacos 3.0) | ? | ? | ?? Î´ÊµÏÖ | ? µ¥Ôª |
-| cancelFuzzyWatch | ? | ? | ?? Î´ÊµÏÖ | ? µ¥Ôª |
-
-**HTTP ÊµÏÖÍê³É¶È: 100%** | **gRPC ÊµÏÖÍê³É¶È: 70%**
-
-### 2. Naming Service (·şÎñ·¢ÏÖ)
-
-| ¹¦ÄÜ | Java SDK | .NET SDK (HTTP) | .NET SDK (gRPC) | ²âÊÔ¸²¸Ç |
-|-----|---------|-----------------|-----------------|---------|
-| registerInstance (¶àÖØÔØ) | ? | ? | ? | ? µ¥Ôª+¼¯³É |
-| deregisterInstance (¶àÖØÔØ) | ? | ? | ? | ? ¼¯³É |
-| batchRegisterInstance | ? | ? | ?? Î´ÊµÏÖ | ? ÎŞ²âÊÔ |
-| batchDeregisterInstance | ? | ? | ?? Î´ÊµÏÖ | ? ÎŞ²âÊÔ |
-| getAllInstances (¶àÖØÔØ) | ? | ? | ? | ? µ¥Ôª+¼¯³É |
-| selectInstances (¶àÖØÔØ) | ? | ? | ? | ? ¼¯³É |
-| selectOneHealthyInstance | ? | ? | ? | ? ¼¯³É |
-| subscribe (Action»Øµ÷) | ? | ? | ? | ? ¼¯³É |
-| subscribe (Selector) | ? | ? | ?? Î´ÊµÏÖ | ? ¼¯³É |
-| unsubscribe | ? | ? | ? | ? ÎŞ²âÊÔ |
-| getServicesOfServer | ? | ? | ? | ? ¼¯³É |
-| getSubscribeServices | ? | ? | ?? Î´ÊµÏÖ | ? ÎŞ²âÊÔ |
-| fuzzyWatch (Nacos 3.0) | ? | ? | ?? Î´ÊµÏÖ | ? µ¥Ôª |
-| ĞÄÌø»úÖÆ (BeatReactor) | ? | ? | ?? Î´ÊµÏÖ | ? ÎŞ²âÊÔ |
-| ·şÎñĞÅÏ¢»º´æ | ? | ? | ?? ²¿·Ö | ? µ¥Ôª |
-
-**HTTP ÊµÏÖÍê³É¶È: 100%** | **gRPC ÊµÏÖÍê³É¶È: 60%**
-
-### 3. AI Service (AI/MCP/A2A ·şÎñ) - Nacos 3.0 ĞÂÌØĞÔ
-
-| ¹¦ÄÜ | Java SDK | .NET SDK (HTTP) | .NET SDK (gRPC) | ²âÊÔ¸²¸Ç |
-|-----|---------|-----------------|-----------------|---------|
-| getMcpServer | ? | ? | ?? Î´ÊµÏÖ | ? µ¥Ôª |
-| releaseMcpServer | ? | ? | ?? Î´ÊµÏÖ | ? ÎŞ²âÊÔ |
-| registerMcpServerEndpoint | ? | ? | ?? Î´ÊµÏÖ | ? ÎŞ²âÊÔ |
-| deregisterMcpServerEndpoint | ? | ? | ?? Î´ÊµÏÖ | ? ÎŞ²âÊÔ |
-| subscribeMcpServer | ? | ? | ?? Î´ÊµÏÖ | ? µ¥Ôª |
-| unsubscribeMcpServer | ? | ? | ?? Î´ÊµÏÖ | ? µ¥Ôª |
-| deleteMcpServer | ? | ? | ?? Î´ÊµÏÖ | ? ÎŞ²âÊÔ |
-| listMcpServers | ? | ? | ?? Î´ÊµÏÖ | ? ÎŞ²âÊÔ |
-| validateImport | ? | ? | ?? Î´ÊµÏÖ | ? ÎŞ²âÊÔ |
-| importMcpServers | ? | ? | ?? Î´ÊµÏÖ | ? ÎŞ²âÊÔ |
-| MCP Tool ²Ù×÷ | ? | ? | ?? Î´ÊµÏÖ | ? ÎŞ²âÊÔ |
-| getAgentCard | ? | ? | ?? Î´ÊµÏÖ | ? ¼¯³É |
-| releaseAgentCard | ? | ? | ?? Î´ÊµÏÖ | ? ÎŞ²âÊÔ |
-| Agent Endpoint ²Ù×÷ | ? | ? | ?? Î´ÊµÏÖ | ? ÎŞ²âÊÔ |
-| Agent Subscription | ? | ? | ?? Î´ÊµÏÖ | ? µ¥Ôª |
-
-**HTTP ÊµÏÖÍê³É¶È: 100%** | **gRPC ÊµÏÖÍê³É¶È: 0%**
-
-### 4. Lock Service (·Ö²¼Ê½Ëø) - Nacos 3.0 ĞÂÌØĞÔ
-
-| ¹¦ÄÜ | Java SDK | .NET SDK (HTTP) | .NET SDK (gRPC) | ²âÊÔ¸²¸Ç |
-|-----|---------|-----------------|-----------------|---------|
-| lock | ? | ? | ? | ? ÎŞ²âÊÔ |
-| unlock | ? | ? | ? | ? ÎŞ²âÊÔ |
-| tryLock (´ø³¬Ê±) | ? | ? | ? | ? ÎŞ²âÊÔ |
-| remoteTryLock | ? | ? | ? | ? ÎŞ²âÊÔ |
-| remoteReleaseLock | ? | ? | ? | ? ÎŞ²âÊÔ |
-
-**HTTP ÊµÏÖÍê³É¶È: 100%** | **gRPC ÊµÏÖÍê³É¶È: 100%**
-
-### 5. Maintainer Service (ÔËÎ¬¹ÜÀí·şÎñ)
-
-| ¹¦ÄÜÄ£¿é | Java SDK | .NET SDK | ²âÊÔ¸²¸Ç |
-|---------|---------|----------|---------|
-| IServiceMaintainer | ? | ? | ? ÎŞ²âÊÔ |
-| IInstanceMaintainer | ? | ? | ? ÎŞ²âÊÔ |
-| INamingMaintainer | ? | ? | ? ÎŞ²âÊÔ |
-| IConfigMaintainer | ? | ? | ? ÎŞ²âÊÔ |
-| IConfigHistoryMaintainer | ? | ? | ? ÎŞ²âÊÔ |
-| IBetaConfigMaintainer | ? | ? | ? ÎŞ²âÊÔ |
-| IConfigOpsMaintainer | ? | ? | ? ÎŞ²âÊÔ |
-| IClientMaintainer | ? | ? | ? ÎŞ²âÊÔ |
-| ICoreMaintainer | ? | ? | ? ÎŞ²âÊÔ |
-
-**ÊµÏÖÍê³É¶È: 100%** | **²âÊÔ¸²¸Ç: 0%**
+**æœ€åæ›´æ–°**: 2026-09-11ï¼ˆNacos v3 è¿ç§»å®Œæˆåï¼›æœ¬æ–‡æ¡£æ­¤å‰ä¸º GBK ç¼–ç ï¼Œæœ¬æ¬¡æ›´æ–°è½¬å­˜ä¸º UTF-8ï¼‰
 
 ---
 
-## ¶ş¡¢Í¨ÓÃ¹¦ÄÜÍê³É¶È
+## ä¸€ã€å·²åˆ é™¤ / åºŸå¼ƒä»£ç 
 
-### 1. ÈÏÖ¤Óë°²È«
+### 1. Redo æœºåˆ¶ï¼ˆæ›¾åˆ é™¤ï¼Œåä¸º gRPC å‘½åæœåŠ¡é‡æ–°å¼•å…¥ï¼‰
 
-| ¹¦ÄÜ | Java SDK | .NET SDK | ²âÊÔ¸²¸Ç |
-|-----|---------|----------|---------|
-| ÓÃ»§Ãû/ÃÜÂëÈÏÖ¤ | ? | ? | ? µ¥Ôª |
-| Token ×Ô¶¯Ë¢ĞÂ | ? | ? | ? ÎŞ²âÊÔ |
-| TLS/SSL Ö§³Ö | ? | ? | ? ÎŞ²âÊÔ |
-| AccessKey/SecretKey | ? | ? (ÅäÖÃ) | ? ÎŞ²âÊÔ |
+å†å²ï¼šä»¥ä¸‹ 4 ä¸ªæ–‡ä»¶æ›¾å› "ä¸º gRPC é‡è¿è®¾è®¡ä½†æœªä½¿ç”¨"è€Œè¢«ç§»é™¤ï¼š
+- `IRedoService.cs` / `AbstractRedoService.cs` / `RedoData.cs` / `RedoType.cs`
 
-### 2. ¿Í»§¶ËÅäÖÃ
+ç°çŠ¶ï¼šgRPC å‘½åæœåŠ¡éœ€è¦é‡åšæœºåˆ¶ï¼ˆé‡è¿åé‡æ–°æ³¨å†ŒçŸ­æš‚å®ä¾‹ï¼‰ï¼Œç°å·²å­˜åœ¨ï¼š
+- `src/RedNb.Nacos/Naming/Redo/RedoScheduledTask.cs` â€” é‡åšè°ƒåº¦ä»»åŠ¡
+- `src/RedNb.Nacos.Grpc/Naming/NamingGrpcRedoService.cs` â€” gRPC å‘½åé‡åšæœåŠ¡
 
-| ¹¦ÄÜ | Java SDK | .NET SDK | ²âÊÔ¸²¸Ç |
-|-----|---------|----------|---------|
-| ¶à·şÎñÆ÷µØÖ· | ? | ? | ? µ¥Ôª |
-| ÃüÃû¿Õ¼ä | ? | ? | ? µ¥Ôª |
-| ³¬Ê±ÅäÖÃ | ? | ? | ? µ¥Ôª |
-| ³¤ÂÖÑ¯³¬Ê± | ? | ? | ? ÎŞ²âÊÔ |
-| gRPC ¶Ë¿ÚÆ«ÒÆ | ? | ? | ? ÎŞ²âÊÔ |
-| ÖØÊÔÅäÖÃ | ? | ? | ? ÎŞ²âÊÔ |
+âš ï¸ **é—ç•™é—®é¢˜**ï¼š`RedoScheduledTask` ç›®å‰æœªè¢«å®ä¾‹åŒ–æ¥çº¿â€”â€”é‡è¿åä¸¢å¤±çš„æœåŠ¡ç«¯çŠ¶æ€å°šæ— é‡åšã€‚
+å·²è®°å½•åœ¨ç»ˆå®¡çš„ä½ä¼˜å…ˆçº§å‘ç°ä¸­ï¼Œä½œä¸ºåç»­è·Ÿè¿›é¡¹ã€‚
 
-### 3. Ñ¡ÔñÆ÷ (Selector)
+### 2. HTTP é…ç½®é•¿è½®è¯¢ï¼ˆv3 è¿ç§»ä¸­åˆ é™¤ï¼‰
 
-| ¹¦ÄÜ | Java SDK | .NET SDK | ²âÊÔ¸²¸Ç |
-|-----|---------|----------|---------|
-| ClusterSelector | ? | ? | ? µ¥Ôª+¼¯³É |
-| LabelSelector | ? | ? | ? µ¥Ôª+¼¯³É |
-| CompositeSelector | ? | ? | ? µ¥Ôª+¼¯³É |
-| ×Ô¶¨Òå Selector | ? | ? | ? ÎŞ²âÊÔ |
+v1 åè®®çš„é•¿è½®è¯¢ç›‘å¬æœºåˆ¶å·²æ•´ä½“ç§»é™¤ï¼š
+- `ListenerApiPath`ï¼ˆ`v1/cs/configs/listener`ï¼‰
+- `StartLongPollingAsync` / `CheckConfigChangesAsync` / `NotifyListenersAsync` åŠ MD5 è½®è¯¢çŠ¶æ€
 
-### 4. ÅäÖÃ¹ıÂËÆ÷ (Config Filter)
+åŸå› ï¼šNacos 3.x æ—  HTTP é…ç½®ç›‘å¬ç«¯ç‚¹ï¼›æœåŠ¡ç«¯æ¨é€ç”± gRPC bi-stream æ‰¿æ‹…ã€‚
+HTTP `AddListenerAsync` ä¿ç•™æœ¬åœ°ç›‘å¬å™¨æ³¨å†Œ + ä¸€æ¬¡æ€§ MD5 ç§å­ï¼ˆå–è‡ª `GetConfigAsync`ï¼‰ï¼Œä¸å†å¯åŠ¨è½®è¯¢å¾ªç¯ã€‚
 
-| ¹¦ÄÜ | Java SDK | .NET SDK | ²âÊÔ¸²¸Ç |
-|-----|---------|----------|---------|
-| IConfigFilter ½Ó¿Ú | ? | ? | ? µ¥Ôª |
-| ConfigFilterChainManager | ? | ? | ? µ¥Ôª |
-| AES ¼ÓÃÜ¹ıÂËÆ÷ | ? | ? | ? µ¥Ôª |
+### 3. v1/v2 åè®®è·¯å¾„ï¼ˆv3 è¿ç§»ä¸­åˆ é™¤ï¼‰
 
-### 5. ÅäÖÃ½âÎöÆ÷
+- HTTP Configï¼š`v1/cs/configs` â†’ `v3/client/cs/config`ï¼ˆGETï¼‰/ `v3/admin/cs/config`ï¼ˆPOST/DELETEï¼‰
+- HTTP Namingï¼š`/v1/ns/**`ã€`/v3/ns/**`ï¼ˆè®¡åˆ’é”™è¯¯è·¯å¾„ï¼‰â†’ `/v3/client/ns/instance[/list]` + `/v3/admin/ns/service/list`
+- å¿ƒè·³ç‹¬ç«‹ç«¯ç‚¹ï¼šæ— ï¼ˆå¿ƒè·³ = æ³¨å†Œç«¯ç‚¹ + `beat=true`ï¼‰
+- gRPCï¼š`RequestService/SendRequest` â†’ `Request/request`ï¼›`RequestBiStream` â†’ `requestBiStream`ï¼ˆå°å†™æ–¹æ³•åï¼‰
+- å‘½åç©ºé—´å¤´ `X-Nacos-Namespace-Id`ï¼šv3 ä¸å†ä½¿ç”¨ï¼Œæ”¹èµ° `namespaceId` æŸ¥è¯¢/è¡¨å•å‚æ•°ï¼ˆå¸¸é‡ä¿ç•™ä»…å›  AI ä»£ç å¼•ç”¨ï¼Œè§ä¸‹ï¼‰
 
-| ¹¦ÄÜ | Java SDK | .NET SDK | ²âÊÔ¸²¸Ç |
-|-----|---------|----------|---------|
-| PropertiesChangeParser | ? | ? | ? ÎŞ²âÊÔ |
-| JsonChangeParser | ? | ? | ? ÎŞ²âÊÔ |
-| YamlChangeParser | ? | ? | ? ÎŞ²âÊÔ |
-| ConfigChangeParserFactory | ? | ? | ? ÎŞ²âÊÔ |
+### 4. åºŸå¼ƒé¢ï¼ˆ`[Obsolete]`ï¼ŒNacos 3.2+ æ— å¯¹åº”ç«¯ç‚¹ï¼‰
+
+| æ¥å£ | çŠ¶æ€ | è¿è¡Œæ—¶è¡Œä¸º |
+|------|------|-----------|
+| `IMaintainerService` + 10 ä¸ªå­æ¥å£ | `[Obsolete]` | HTTP 404ï¼ˆv3 æ— å¯¹åº”ç«¯ç‚¹ï¼‰ |
+| `ILockService` | `[Obsolete]` | ä»å¯ç”¨ï¼ˆ`/v3/lock/**` å­˜æ´»ï¼‰ï¼Œä¸‹ä¸ªå¤§ç‰ˆæœ¬ç§»é™¤ |
+| `PublishConfigCasAsync`ï¼ˆHTTP é‡è½½ï¼‰ | `[Obsolete]` | éç©º casMd5 æŠ› `NotSupportedException`ï¼ˆv3 admin ç«¯ç‚¹å¿½ç•¥ CASï¼‰ |
+| `InstancesChangeNotifier`ï¼ˆHttp å®ç°ï¼‰ | `[Obsolete]` | è®¢é˜…é€šçŸ¥èµ° gRPC |
 
 ---
 
-## Èı¡¢ÒÑÉ¾³ıµÄÎ´Ê¹ÓÃ´úÂë
+## äºŒã€å·²é›†æˆåŸºç¡€è®¾æ–½
 
-ÔÚ´úÂëÇåÀí¹ı³ÌÖĞ£¬ÒÔÏÂÎ´±»Ê¹ÓÃµÄ´úÂëÒÑ±»ÒÆ³ı£º
+### 1. Failover æœºåˆ¶ï¼ˆå·²é›†æˆ âœ…ï¼‰
 
-### 1. Redo ·şÎñ (4 ¸öÎÄ¼ş)
-- `IRedoService.cs` - ÖØ×ö·şÎñ½Ó¿Ú
-- `AbstractRedoService.cs` - ³éÏóÖØ×ö·şÎñ
-- `RedoData.cs` - ÖØ×öÊı¾İÄ£ĞÍ
-- `RedoType.cs` - ÖØ×öÀàĞÍÃ¶¾Ù
+å†å²ï¼š6 ä¸ªæ–‡ä»¶æ›¾å› "æ•…éšœè½¬ç§»æœºåˆ¶æœªé›†æˆåˆ°ä»»ä½•æœåŠ¡ä¸­"è¢«ç§»é™¤ï¼ˆ`FailoverReactor.cs`ã€
+`FailoverSwitch.cs`ã€`FailoverData.cs`ã€`FailoverDataType.cs`ã€`IFailoverDataSource.cs`ã€
+`LocalDiskFailoverDataSource.cs`ï¼‰ã€‚
 
-**Ô­Òò**: ÕâĞ©ÊÇÎª gRPC ¶ÏÏßÖØÁ¬Éè¼ÆµÄ£¬µ«Î´ÔÚÈÎºÎ·şÎñÖĞÊ¹ÓÃ¡£
+ç°çŠ¶ï¼š**å·²é‡æ–°å¼•å…¥å¹¶é›†æˆåˆ° NamingService**ï¼Œæµ‹è¯•è¦†ç›– 100%
+ï¼ˆFailoverSwitchTests / FailoverDataTests / FailoverReactorTestsï¼‰ã€‚
 
-### 2. Failover »úÖÆ (6 ¸öÎÄ¼ş)
-- `FailoverReactor.cs` - ¹ÊÕÏ×ªÒÆ·´Ó¦Æ÷
-- `FailoverSwitch.cs` - ¹ÊÕÏ×ªÒÆ¿ª¹Ø
-- `FailoverData.cs` - ¹ÊÕÏ×ªÒÆÊı¾İ
-- `FailoverDataType.cs` - ¹ÊÕÏ×ªÒÆÊı¾İÀàĞÍ
-- `IFailoverDataSource.cs` - ¹ÊÕÏ×ªÒÆÊı¾İÔ´½Ó¿Ú
-- `LocalDiskFailoverDataSource.cs` - ±¾µØ´ÅÅÌÊı¾İÔ´
+### 2. MetricsMonitor ç›‘æ§ï¼ˆå·²é›†æˆ âœ…ï¼‰
 
-**Ô­Òò**: ¹ÊÕÏ×ªÒÆ»úÖÆÎ´¼¯³Éµ½ÈÎºÎ·şÎñÖĞ¡£
+å†å²ï¼š7 ä¸ªæ–‡ä»¶æ›¾å› "ç›‘æ§åŠŸèƒ½æœªé›†æˆåˆ°ä»»ä½•æœåŠ¡ä¸­"è¢«ç§»é™¤ï¼ˆ`MetricsMonitor.cs`ã€`MetricNames.cs`ã€
+`MetricType.cs`ã€`MetricsSnapshot.cs`ã€`GaugeMetric.cs`ã€`CounterMetric.cs`ã€`HistogramMetric.cs`ï¼‰ã€‚
 
-### 3. Monitor ¼à¿Ø (7 ¸öÎÄ¼ş)
-- `MetricsMonitor.cs` - Ö¸±ê¼à¿ØÆ÷
-- `MetricNames.cs` - Ö¸±êÃû³Æ³£Á¿
-- `MetricType.cs` - Ö¸±êÀàĞÍ
-- `MetricsSnapshot.cs` - Ö¸±ê¿ìÕÕ
-- `GaugeMetric.cs` - Gauge Ö¸±ê
-- `CounterMetric.cs` - Counter Ö¸±ê
-- `HistogramMetric.cs` - Histogram Ö¸±ê
+ç°çŠ¶ï¼š**å·²é‡æ–°å¼•å…¥å¹¶é›†æˆåˆ° NamingService å’Œ ConfigService**ï¼Œæµ‹è¯•è¦†ç›– 100%
+ï¼ˆMetricsMonitorTests / MetricNamesTestsï¼‰ã€‚
 
-**Ô­Òò**: ¼à¿Ø¹¦ÄÜÎ´¼¯³Éµ½·şÎñÖĞ¡£
+### 3. gRPC è¿æ¥ç”Ÿå‘½å‘¨æœŸï¼ˆv3 è¿ç§»æ–°å¢ âœ…ï¼‰
 
-### 4. ÖØ¸´²âÊÔÎÄ¼ş (1 ¸öÎÄ¼ş)
-- `tests\RedNb.Nacos.Tests\Naming\NamingSelectorTests.cs`
+- è¿æ¥å°±ç»ªæ¡æ‰‹ï¼šConnectionSetup æºå¸¦éç©º `AbilityTable` â†’ æœåŠ¡å™¨å› `SetupAckRequest` â†’ æ”¶åˆ°å `_connected = true`
+- å• HTTP/2 è¿æ¥ï¼š`EnableMultipleHttp2Connections = false`ï¼ˆä¸€å…ƒè¯·æ±‚å¿…é¡»èµ°å·²æ³¨å†Œçš„è¿æ¥ï¼‰
+- æ¨¡å—æ ‡ç­¾ï¼šå‘½åæœåŠ¡è¿æ¥ `module=naming`ï¼ˆæœåŠ¡å™¨æ‹’ç»åœ¨ `module=config` è¿æ¥ä¸Šæ³¨å†ŒçŸ­æš‚å®ä¾‹ï¼‰
+- é‡è¿ä»£æ•°éš”ç¦»ï¼šæ¯æ¬¡è¿æ¥æŒæœ‰ç‹¬ç«‹ generationï¼ˆCTS/channel/stream/taskï¼‰ï¼›é‡è¿å‰æ¸…ç†æ—§ä»£ï¼›
+  é™ˆæ—§å¾ªç¯å— `IsCurrent` å®ˆå«ï¼Œä¸ä¼šç¿»è½¬æ–°è¿æ¥çš„ `_connected`
+- `DeadlineExceeded` è§†ä¸ºè¿æ¥å¤±æ•ˆä¿¡å·
 
-**Ô­Òò**: Óë `Naming\Selector\NamingSelectorTests.cs` ¹¦ÄÜÖØ¸´¡£
+### 4. v3 ä¿¡å°å¤„ç†ï¼ˆv3 è¿ç§»æ–°å¢ âœ…ï¼‰
 
----
+`src/RedNb.Nacos.Http/Http/NacosEnvelope.cs` â€” ç»Ÿä¸€çš„ `{code, message, data}` ä¿¡å°è§£æ/æ ¡éªŒï¼Œ
+é…ç½®ä¸å‘½åä¸¤ä¸ªæœåŠ¡å…±ç”¨ï¼ˆå–ä»£æ­¤å‰å„å†™å„çš„è§£æï¼‰ã€‚
 
-## ËÄ¡¢²âÊÔ¸²¸ÇÂÊ·ÖÎö
-
-### 1. µ¥Ôª²âÊÔ (RedNb.Nacos.Tests)
-
-| ²âÊÔÎÄ¼ş | ²âÊÔÄÚÈİ | ²âÊÔÊıÁ¿ |
-|---------|---------|---------|
-| NacosClientOptionsTests.cs | ¿Í»§¶ËÅäÖÃ | 7 |
-| NacosExceptionTests.cs | Òì³£´¦Àí | 3 |
-| NacosUtilsTests.cs | ¹¤¾ßÀà | 8 |
-| InstanceTests.cs | ÊµÀıÄ£ĞÍ | 5 |
-| ConfigTypeTests.cs | ÅäÖÃÀàĞÍ | 3 |
-| ConfigChangeEventTests.cs | ÅäÖÃ±ä¸üÊÂ¼ş | 5 |
-| ConfigFilterChainManagerTests.cs | ¹ıÂËÆ÷Á´ | 5 |
-| AesEncryptionConfigFilterTests.cs | AES ¼ÓÃÜ¹ıÂËÆ÷ | 4 |
-| ConfigFuzzyWatchChangeEventTests.cs | ÅäÖÃÄ£ºı¼àÌı | 3 |
-| ServiceInfoTests.cs | ·şÎñĞÅÏ¢ | 4 |
-| NamingSelectorTests.cs | ÃüÃûÑ¡ÔñÆ÷ | 15 |
-| NamingFuzzyWatchChangeEventTests.cs | ÃüÃûÄ£ºı¼àÌı | 3 |
-| AiModelTests.cs | AI Ä£ĞÍ | 5 |
-
-**×Ü¼Æ: ~70 ¸öµ¥Ôª²âÊÔ**
-
-### 2. HTTP ÊµÏÖ²âÊÔ (RedNb.Nacos.Http.Tests)
-
-| ²âÊÔÎÄ¼ş | ²âÊÔÄÚÈİ | ²âÊÔÊıÁ¿ |
-|---------|---------|---------|
-| NacosFactoryTests.cs | ¹¤³§Àà | 4 |
-| ServerListManagerTests.cs | ·şÎñÆ÷ÁĞ±í¹ÜÀí | 5 |
-| ConfigListenerManagerTests.cs | ÅäÖÃ¼àÌı¹ÜÀí | 10 |
-| ConfigServiceHttpTests.cs | ÅäÖÃ·şÎñ HTTP | 5 |
-| NamingServiceHttpTests.cs | ÃüÃû·şÎñ HTTP | 4 |
-| ServiceInfoHolderTests.cs | ·şÎñĞÅÏ¢»º´æ | 5 |
-| AiListenerManagerTests.cs | AI ¼àÌı¹ÜÀí | 12 |
-| AiCacheHolderTests.cs | AI »º´æ | 4 |
-| NacosAiServiceTests.cs | AI ·şÎñ | 6 |
-
-**×Ü¼Æ: ~55 ¸ö HTTP ²âÊÔ**
-
-### 3. ¼¯³É²âÊÔ (RedNb.Nacos.IntegrationTests)
-
-| ²âÊÔÎÄ¼ş | ²âÊÔÄÚÈİ | ²âÊÔÊıÁ¿ |
-|---------|---------|---------|
-| ConfigServiceIntegrationTests.cs | ÅäÖÃ·şÎñ¼¯³É | 6 |
-| NamingServiceIntegrationTests.cs | ÃüÃû·şÎñ¼¯³É | 8 |
-| NamingSelectorIntegrationTests.cs | Ñ¡ÔñÆ÷¼¯³É | 4 |
-| AiServiceIntegrationTests.cs | AI ·şÎñ¼¯³É | 5 |
-
-**×Ü¼Æ: ~23 ¸ö¼¯³É²âÊÔ**
-
-### ²âÊÔ¸²¸Ç×Ü½á
-
-| Àà±ğ | ²âÊÔÊıÁ¿ | ¸²¸ÇÂÊ¹À¼Æ |
-|-----|---------|-----------|
-| ºËĞÄÄ£ĞÍ | 40+ | 85% |
-| HTTP Config Service | 15+ | 75% |
-| HTTP Naming Service | 12+ | 70% |
-| HTTP AI Service | 10+ | 60% |
-| gRPC ·şÎñ | 0 | 0% |
-| Lock Service | 0 | 0% |
-| Maintainer Service | 0 | 0% |
+é”™è¯¯è¯­ä¹‰ï¼š
+- é…ç½® GETï¼š`code:20004` â†’ `null`ï¼ˆä¸å­˜åœ¨ï¼‰ï¼›å…¶ä»–éé›¶ç  â†’ æŠ› `NacosException`
+- å‘½å register/deregister/listï¼šéé›¶ç  â†’ æŠ› `NacosException`
+- å¿ƒè·³ï¼šéé›¶ç  â†’ è®°æ—¥å¿—å¹¶è¿”å› `false`
+- å…¬å¼€ API è¾¹ç•Œçš„ `catch (Exception)` å·²å®¡è®¡ï¼ˆHttp 94 + gRPC 39 å¤„ï¼‰ï¼Œæ‹’ç»ç±»å“åº”ä¸å†è¢«ä¼ªè£…æˆç©ºç»“æœ
 
 ---
 
-## Îå¡¢´ıÍêÉÆ¹¦ÄÜÁĞ±í
+## ä¸‰ã€å·²çŸ¥é—ç•™é¡¹ï¼ˆç»ˆå®¡ä½ä¼˜å…ˆçº§å‘ç°ï¼Œå‡å·²è®°å½•ï¼‰
 
-### ¸ßÓÅÏÈ¼¶
-
-1. **gRPC ·şÎñÍêÉÆ**
-   - [ ] Config Filter Ö§³Ö
-   - [ ] Fuzzy Watch Ö§³Ö
-   - [ ] ĞÄÌø»úÖÆ
-   - [ ] ÅúÁ¿²Ù×÷
-
-2. **²âÊÔ¸²¸Ç**
-   - [ ] Lock Service ²âÊÔ
-   - [ ] Maintainer Service ²âÊÔ
-   - [ ] publishConfigCas ²âÊÔ
-   - [ ] ÅúÁ¿×¢²á/×¢Ïú²âÊÔ
-   - [ ] Token Ë¢ĞÂ²âÊÔ
-
-3. **gRPC Á¬½ÓÎÈ¶¨ĞÔ**
-   - [ ] ¶ÏÏßÖØÁ¬»úÖÆ
-   - [ ] Á¬½Ó³Ø¹ÜÀí
-   - [ ] ½¡¿µ¼ì²é
-
-### ÖĞÓÅÏÈ¼¶
-
-4. **ÅäÖÃ½âÎöÆ÷²âÊÔ**
-   - [ ] PropertiesChangeParser ²âÊÔ
-   - [ ] JsonChangeParser ²âÊÔ
-   - [ ] YamlChangeParser ²âÊÔ
-
-5. **AI ·şÎñ²âÊÔ**
-   - [ ] MCP Server ·¢²¼²âÊÔ
-   - [ ] MCP Endpoint ²Ù×÷²âÊÔ
-   - [ ] Agent Card ²Ù×÷²âÊÔ
-
-### µÍÓÅÏÈ¼¶
-
-6. **¼à¿ØÓëÖ¸±ê**
-   - [ ] ÖØĞÂÊµÏÖ²¢¼¯³É MetricsMonitor
-   - [ ] OpenTelemetry ¼¯³É
-
-7. **¹ÊÕÏ×ªÒÆ**
-   - [ ] ÖØĞÂÊµÏÖ²¢¼¯³É Failover »úÖÆ
+| # | ä½ç½® | æè¿° |
+|---|------|------|
+| 1 | `NacosNamingService.cs` | è¢«æ‹’ç»çš„å®ä¾‹åˆ—è¡¨æŸ¥è¯¢ä¼šå…ˆè®¡å…¥æˆåŠŸæŒ‡æ ‡å†æŠ›å¼‚å¸¸ï¼ˆé¡ºåºé—®é¢˜ï¼Œå‡€æ•ˆæœæ­£ç¡®ï¼‰ |
+| 2 | `NacosNamingService.cs` | `SubscribeAsync` å¤±è´¥æ—¶æœ¬åœ°ç›‘å¬å™¨ä¿æŒæ³¨å†Œï¼ˆåç»­æ¨é€å¯é‡æ–°å¡«å……ï¼Œå¯è¾©æŠ¤ï¼‰ |
+| 3 | `NacosGrpcClient.cs` | æ¸…ç†æ—§è¿æ¥æ—¶å¯èƒ½åœ¨æŒé”çŠ¶æ€ä¸‹ç­‰å¾… keep-alive å¾ªç¯ï¼Œå— 2s `WaitAsync` è¶…æ—¶çº¦æŸ |
+| 4 | `NacosGrpcClient.cs` | `_current` è¯»å†™éåŸå­ï¼ŒDispose/Connect ç«æ€å¯å¯¼è‡´æ–°ä»£æœªè¢«å‘å¸ƒï¼ˆæ—¢æœ‰å½¢æ€ï¼‰ |
+| 5 | `NacosGrpcClient.cs` | `RedoScheduledTask` æœªå®ä¾‹åŒ–ï¼ˆè§ä¸Šæ–‡ï¼‰ï¼›`DeadlineExceeded` é‡è¿ä¼šä¸¢å¼ƒæœåŠ¡ç«¯çŠ¶æ€ |
+| 6 | `NacosGrpcConfigService.cs` | éæˆåŠŸ `ConfigQueryResponse` ä¸æ£€æŸ¥ `ErrorCode`ï¼ˆJava æ˜ å°„ 300 = not foundï¼Œå¾…éªŒè¯åè·Ÿè¿›ï¼‰ |
+| 7 | `NacosConstants.NamespaceHeader` | ~~å¸¸é‡ä¿ç•™ä»…ä¸ºå·²æç½®çš„ AI ä»£ç å¼•ç”¨~~ï¼ˆ2026-09-11ï¼š`NacosAiService` å·²ä¸å†å‘é€è¯¥ headerï¼›å¸¸é‡æš‚ä¿ç•™â€”â€”`NacosSkillService`/`NacosPromptService`/`NacosAgentSpecService` 3 ä¸ª helper æœåŠ¡ä»è¯»å–å®ƒï¼Œå¾…åç»­æ¸…ç†ï¼‰ |
 
 ---
 
-## Áù¡¢Íê³É¶È×Ü½á
+## å››ã€é‡å¤æ–‡ä»¶æ¸…ç†
 
-| Ä£¿é | HTTP ÊµÏÖ | gRPC ÊµÏÖ | ²âÊÔ¸²¸Ç |
-|-----|----------|----------|---------|
-| Config Service | 100% | 70% | 75% |
-| Naming Service | 100% | 60% | 70% |
-| AI Service | 100% | 0% | 40% |
-| Lock Service | 100% | 100% | 0% |
-| Maintainer Service | 100% | N/A | 0% |
-| **×ÜÌå** | **100%** | **46%** | **45%** |
+- `tests\RedNb.Nacos.Tests\Naming\NamingSelectorTests.cs`ï¼ˆæ—§è·¯å¾„ï¼Œä¸
+  `tests\RedNb.Nacos.Tests\Naming\Selector\NamingSelectorTests.cs` é‡å¤ï¼‰â€” å·²åˆ é™¤ï¼Œä¿æŒåˆ é™¤çŠ¶æ€ã€‚
 
-### ½áÂÛ
+---
 
-.NET SDK µÄ **HTTP ÊµÏÖÒÑ 100% Íê³É**£¬¹¦ÄÜÓë Java SDK ÍêÈ«¶ÔµÈ¡£gRPC ÊµÏÖÍê³ÉÔ¼ 46%£¬Ö÷ÒªÈ±ÉÙ AI ·şÎñºÍÒ»Ğ©¸ß¼¶¹¦ÄÜ¡£²âÊÔ¸²¸ÇÂÊÔ¼ 45%£¬ºËĞÄ¹¦ÄÜÒÑ¸²¸Ç£¬µ« Lock ·şÎñºÍ Maintainer ·şÎñÈ±ÉÙ²âÊÔ¡£
+## äº”ã€ç»“è®º
 
-**½¨ÒéÓÅÏÈ¼¶:**
-1. ²¹³ä Lock Service ºÍ Maintainer Service ²âÊÔ
-2. ÍêÉÆ gRPC Config/Naming ·şÎñµÄ¸ß¼¶¹¦ÄÜ
-3. ÊµÏÖ gRPC AI ·şÎñ
-4. Ìí¼Ó¶ÏÏßÖØÁ¬ºÍ¹ÊÕÏ×ªÒÆ»úÖÆ
+ä»£ç åº“å·²å®Œæˆ Nacos 3.2+ åè®®è¿ç§»ï¼šv1/v2 è·¯å¾„ä¸ HTTP é•¿è½®è¯¢æ¸…é™¤ï¼ŒgRPC ä¼ è¾“å¯¹é½ 3.2.4 å¥‘çº¦ï¼Œ
+Failover / Monitor åŸºç¡€è®¾æ–½å·²é›†æˆå¹¶å…¨é‡æµ‹è¯•ï¼ŒåºŸå¼ƒé¢æŒ‰è®¡åˆ’ `[Obsolete]` + å¤§å£°å¤±è´¥ã€‚
+å‰©ä½™å·¥ä½œé›†ä¸­åœ¨ gRPC æœåŠ¡å±‚æµ‹è¯•è¦†ç›–ï¼ˆErrorCode è¯­ä¹‰ã€Redo æ¥çº¿ã€è¿æ¥å¥å£®æ€§ï¼‰ï¼Œè¯¦è§ REPORT çš„"å¾…å®Œå–„"ç« èŠ‚ã€‚
