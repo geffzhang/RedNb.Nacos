@@ -97,7 +97,7 @@ public class EchoChatClientTests
         client.Dispose(); // must not throw
     }
 
-    // The current Microsoft.Extensions.AI 9.x SDK exposes AITool as abstract
+    // The current Microsoft.Extensions.AI 10.x SDK exposes AITool as abstract
     // with read-only Name/Description and a protected no-arg constructor, so
     // we cannot subclass AITool and set Name the way the brief's TestTool
     // helper does. AIFunctionFactory.Create is the supported entry point

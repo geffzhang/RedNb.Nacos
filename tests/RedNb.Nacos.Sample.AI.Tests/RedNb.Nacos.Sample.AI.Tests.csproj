@@ -14,7 +14,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
     <PackageReference Include="xunit" Version="2.*" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.*" />
-    <PackageReference Include="Microsoft.Extensions.AI" Version="9.*" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.7.0" />
     <!-- Microsoft.Extensions.Configuration.Memory is now folded into the base Microsoft.Extensions.Configuration package (>= 8.0); the Memory provider ships there. -->
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.*" />
   </ItemGroup>
