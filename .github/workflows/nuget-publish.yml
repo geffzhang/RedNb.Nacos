@@ -1,0 +1,54 @@
+name: Publish NuGet 2.0.0
+
+on:
+  workflow_dispatch:
+    inputs:
+      nuget_user:
+        description: NuGet username authorized by the trusted publishing policy
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nuget-publish-2.0.0
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Download the published release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          gh release download v2.0.0 --repo "$REPOSITORY" --pattern '*.nupkg' --dir artifacts/nuget-release
+          gh api "repos/$REPOSITORY/releases/tags/v2.0.0" > artifacts/release.json
+      - name: Verify release hashes and package metadata
+        run: |
+          python scripts/verify-release-assets.py artifacts/release.json artifacts/nuget-release
+          python scripts/verify-packages.py artifacts/nuget-release
+      - name: Obtain short-lived NuGet publishing credentials
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ inputs.nuget_user }}
+      - name: Publish packages in dependency order
+        env:
+          PUBLISH_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          for id in RedNb.Nacos RedNb.Nacos.Http RedNb.Nacos.Grpc RedNb.Nacos.DependencyInjection RedNb.Nacos.AspNetCore RedNb.Nacos.All; do
+            dotnet nuget push "artifacts/nuget-release/$id.2.0.0.nupkg" \
+              --api-key "$PUBLISH_KEY" --source https://api.nuget.org/v3/index.json
+          done
