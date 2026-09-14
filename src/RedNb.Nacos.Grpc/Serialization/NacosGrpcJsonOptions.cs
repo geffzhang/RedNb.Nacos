@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace RedNb.Nacos.Grpc.Serialization;
 
@@ -11,9 +13,11 @@ internal static class NacosGrpcJsonOptions
     private static readonly JsonSerializerOptions Instance = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         PropertyNameCaseInsensitive = true,
-        TypeInfoResolver = NacosGrpcJsonContext.Default
+        TypeInfoResolver = JsonTypeInfoResolver.Combine(
+            NacosGrpcJsonContext.Default,
+            NacosGrpcInternalJsonContext.Default)
     };
 
     public static JsonSerializerOptions Create() => Instance;

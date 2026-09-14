@@ -230,7 +230,7 @@ public class NacosGrpcAiServiceTests
         // trust the server's success flag instead of demanding resultCode 0.
         var fake = new FakeNacosGrpcClient(Options)
         {
-            Response = new NacosGrpcAiService.BatchAgentEndpointResponse
+            Response = new BatchAgentEndpointResponse
             {
                 Success = true,
                 ResultCode = 200,
@@ -252,7 +252,7 @@ public class NacosGrpcAiServiceTests
         // Failure shape: success:false plus the server's message.
         var fake = new FakeNacosGrpcClient(Options)
         {
-            Response = new NacosGrpcAiService.BatchAgentEndpointResponse
+            Response = new BatchAgentEndpointResponse
             {
                 Success = false,
                 ResultCode = 500,
@@ -277,7 +277,7 @@ public class NacosGrpcAiServiceTests
         // servers that omit the "success" field must keep working.
         var fake = new FakeNacosGrpcClient(Options)
         {
-            Response = new NacosGrpcAiService.BatchAgentEndpointResponse
+            Response = new BatchAgentEndpointResponse
             {
                 Success = null,
                 ResultCode = 0
