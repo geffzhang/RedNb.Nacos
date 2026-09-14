@@ -10,6 +10,7 @@ using RedNb.Nacos;
 using RedNb.Nacos.Grpc.Config;
 using RedNb.Nacos.Grpc.Naming;
 using RedNb.Nacos.Grpc.Protos;
+using RedNb.Nacos.Grpc.Serialization;
 using ProtoMetadata = RedNb.Nacos.Grpc.Protos.Metadata;
 
 namespace RedNb.Nacos.Grpc;
@@ -138,12 +139,7 @@ public class NacosGrpcClient : IAsyncDisposable
         _clientId = Guid.NewGuid().ToString("N");
         _lastActiveTime = DateTime.UtcNow;
 
-        _jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            PropertyNameCaseInsensitive = true
-        };
+        _jsonOptions = NacosGrpcJsonOptions.Create();
 
         _securityProxy = new RedNb.Nacos.Http.Transport.SecurityProxy(options, logger);
     }

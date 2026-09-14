@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using RedNb.Nacos.Grpc.Serialization;
 using Microsoft.Extensions.Logging;
 using RedNb.Nacos;
 using RedNb.Nacos.Naming;
@@ -283,7 +284,7 @@ internal class NamingServiceInfoHolder
                 try
                 {
                     var json = File.ReadAllText(file);
-                    var serviceInfo = JsonSerializer.Deserialize<NamingServiceInfo>(json);
+                    var serviceInfo = JsonSerializer.Deserialize<NamingServiceInfo>(json, NacosGrpcJsonOptions.Create());
                     if (serviceInfo != null && serviceInfo.IsValid)
                     {
                         var key = serviceInfo.GetKey();
@@ -311,7 +312,7 @@ internal class NamingServiceInfoHolder
         {
             var fileName = SanitizeFileName(key) + ".json";
             var filePath = Path.Combine(_cacheDir, fileName);
-            var json = JsonSerializer.Serialize(serviceInfo);
+            var json = JsonSerializer.Serialize(serviceInfo, NacosGrpcJsonOptions.Create());
             File.WriteAllText(filePath, json);
         }
         catch (Exception ex)

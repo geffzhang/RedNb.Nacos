@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using RedNb.Nacos;
+using RedNb.Nacos.Grpc.Serialization;
 
 namespace RedNb.Nacos.Grpc.Naming;
 
@@ -37,10 +38,7 @@ internal class NamingRpcTransportClient : IAsyncDisposable
         _grpcClient = grpcClient;
         _options = options;
         _logger = logger;
-        _jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        };
+        _jsonOptions = NacosGrpcJsonOptions.Create();
 
         // Register push handler
         _grpcClient.RegisterPushHandler("naming", HandlePushMessage);

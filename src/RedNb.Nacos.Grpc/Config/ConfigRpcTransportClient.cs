@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using RedNb.Nacos;
+using RedNb.Nacos.Grpc.Serialization;
 
 namespace RedNb.Nacos.Grpc.Config;
 
@@ -32,10 +33,7 @@ internal class ConfigRpcTransportClient : IAsyncDisposable
         _grpcClient = grpcClient;
         _options = options;
         _logger = logger;
-        _jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        };
+        _jsonOptions = NacosGrpcJsonOptions.Create();
 
         // Register push handler
         _grpcClient.RegisterPushHandler("config", HandlePushMessage);

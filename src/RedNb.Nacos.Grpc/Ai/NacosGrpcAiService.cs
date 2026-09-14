@@ -9,6 +9,7 @@ using RedNb.Nacos.Ai.Models.A2a;
 using RedNb.Nacos.Ai.Models.Mcp;
 using RedNb.Nacos.Ai.Models.Mcp.Import;
 using RedNb.Nacos.Ai.Models.Mcp.Validation;
+using RedNb.Nacos.Grpc.Serialization;
 
 namespace RedNb.Nacos.Grpc.Ai;
 
@@ -34,11 +35,7 @@ public partial class NacosGrpcAiService : IAiService
 
     private bool _disposed;
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true
-    };
+    private static readonly JsonSerializerOptions JsonOptions = NacosGrpcJsonOptions.Create();
 
     /// <summary>
     /// Creates a new NacosGrpcAiService.
