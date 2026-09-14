@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using RedNb.Nacos.Serialization;
 
 namespace RedNb.Nacos.Ai.Models.Mcp;
 
@@ -23,5 +24,6 @@ public class EncryptObject
     /// Gets or sets additional metadata.
     /// </summary>
     [JsonPropertyName("metadata")]
+    [JsonConverter(typeof(ObjectDictionaryConverter))]
     public Dictionary<string, object>? Metadata { get; set; }
 }

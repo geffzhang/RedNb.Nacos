@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using RedNb.Nacos.Serialization;
 
 namespace RedNb.Nacos.Lock;
 
@@ -43,6 +44,7 @@ public class LockInstance
     /// Gets or sets additional parameters for lock extensions.
     /// </summary>
     [JsonPropertyName("params")]
+    [JsonConverter(typeof(ObjectDictionaryConverter))]
     public Dictionary<string, object>? Params { get; set; }
 
     /// <summary>

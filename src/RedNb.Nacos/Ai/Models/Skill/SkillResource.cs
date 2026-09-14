@@ -1,3 +1,6 @@
+using System.Text.Json.Serialization;
+using RedNb.Nacos.Serialization;
+
 namespace RedNb.Nacos.Ai.Models.Skill;
 
 /// <summary>
@@ -24,5 +27,6 @@ public class SkillResource
     /// <summary>
     /// Additional metadata of the resource.
     /// </summary>
+    [JsonConverter(typeof(ObjectDictionaryConverter))]
     public Dictionary<string, object>? Metadata { get; set; }
 }

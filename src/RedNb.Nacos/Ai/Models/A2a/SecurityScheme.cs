@@ -1,8 +1,12 @@
+using System.Text.Json.Serialization;
+using RedNb.Nacos.Serialization;
+
 namespace RedNb.Nacos.Ai.Models.A2a;
 
 /// <summary>
 /// Security scheme definition (flexible key-value structure).
 /// </summary>
+[JsonConverter(typeof(SecuritySchemeConverter))]
 public class SecurityScheme : Dictionary<string, object>
 {
     /// <summary>
