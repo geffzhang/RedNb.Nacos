@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using RedNb.Nacos.Naming;
+using RedNb.Nacos.Serialization;
 
 namespace RedNb.Nacos.Failover;
 
@@ -26,11 +27,7 @@ public class DiskNamingFailoverDataSource : IFailoverDataSource<ServiceInfo>
     private Dictionary<string, FailoverData<ServiceInfo>> _serviceMap = new();
     private long _lastModifiedMillis;
 
-    private readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        WriteIndented = true
-    };
+    private readonly JsonSerializerOptions _jsonOptions = NacosJsonOptions.Create(writeIndented: true);
 
     /// <summary>
     /// 构造函数

@@ -2,6 +2,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="RedNb.Nacos.Http" />
     <InternalsVisibleTo Include="RedNb.Nacos.Grpc" />
+    <InternalsVisibleTo Include="RedNb.Nacos.Tests" />
   </ItemGroup>
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>

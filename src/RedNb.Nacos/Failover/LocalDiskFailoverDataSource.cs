@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using RedNb.Nacos.Serialization;
 
 namespace RedNb.Nacos.Failover;
 
@@ -25,11 +26,7 @@ public class LocalDiskFailoverDataSource<T> : IFailoverDataSource<T> where T : c
         _logger = logger;
         _cacheDir = cacheDir;
         _switchFileName = switchFileName;
-        _jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true,
-            WriteIndented = true
-        };
+        _jsonOptions = NacosJsonOptions.Create(writeIndented: true);
 
         EnsureDirectoryExists();
     }
