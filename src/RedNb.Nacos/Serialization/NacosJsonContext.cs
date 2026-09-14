@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using RedNb.Nacos.Administration;
 using RedNb.Nacos.Ai.Models.Mcp;
 using RedNb.Nacos.Config;
 using RedNb.Nacos.Naming;
@@ -19,6 +20,8 @@ namespace RedNb.Nacos.Serialization;
 [JsonSerializable(typeof(NamingSelector))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(McpCapability))]
+[JsonSerializable(typeof(NacosNamespace))]
+[JsonSerializable(typeof(List<NacosNamespace>))]
 public sealed partial class NacosJsonContext : JsonSerializerContext
 {
 }

@@ -7,6 +7,7 @@ using RedNb.Nacos.Ai;
 using RedNb.Nacos.Ai.Models;
 using RedNb.Nacos.Ai.Models.Prompt;
 using PromptModel = RedNb.Nacos.Ai.Models.Prompt.Prompt;
+using RedNb.Nacos.Http.Serialization;
 using RedNb.Nacos.Utils;
 
 namespace RedNb.Nacos.Http.Ai;
@@ -43,11 +44,7 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
     private const string AdminBasePath = "v3/admin/ai/prompt";
     private const int PollingIntervalMs = 10000;
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true
-    };
+    private static readonly JsonSerializerOptions JsonOptions = NacosHttpJsonOptions.CreateAi();
 
     /// <summary>
     /// Creates a prompt service sharing an existing HTTP client.

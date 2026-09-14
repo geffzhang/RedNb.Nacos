@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using RedNb.Nacos;
+using RedNb.Nacos.Http.Serialization;
 
 namespace RedNb.Nacos.Http.Transport;
 
@@ -137,7 +138,7 @@ public class SecurityProxy : IDisposable
 
                 if (response.IsSuccessStatusCode)
                 {
-                    var loginResponse = JsonSerializer.Deserialize<LoginResponse>(responseBody);
+                    var loginResponse = JsonSerializer.Deserialize<LoginResponse>(responseBody, NacosHttpJsonOptions.Create());
                     if (loginResponse != null && !string.IsNullOrEmpty(loginResponse.AccessToken))
                     {
                         _accessToken = loginResponse.AccessToken;
@@ -174,21 +175,6 @@ public class SecurityProxy : IDisposable
     {
         None,
         UsernamePassword
-    }
-
-    private class LoginResponse
-    {
-        [JsonPropertyName("accessToken")]
-        public string? AccessToken { get; set; }
-
-        [JsonPropertyName("tokenTtl")]
-        public long TokenTtl { get; set; }
-
-        [JsonPropertyName("globalAdmin")]
-        public bool GlobalAdmin { get; set; }
-
-        [JsonPropertyName("username")]
-        public string? Username { get; set; }
     }
 }
 

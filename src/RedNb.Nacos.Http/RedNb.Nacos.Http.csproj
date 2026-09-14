@@ -18,5 +18,6 @@
     <PackageReference Include="Microsoft.Extensions.Http" />
   </ItemGroup>
   <ItemGroup>
-    </ItemGroup>
+    <InternalsVisibleTo Include="RedNb.Nacos.Http.Tests" />
+  </ItemGroup>
 </Project>

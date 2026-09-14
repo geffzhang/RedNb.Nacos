@@ -9,6 +9,7 @@ using RedNb.Nacos.Ai.Models.A2a;
 using RedNb.Nacos.Ai.Models.Mcp;
 using RedNb.Nacos.Ai.Models.Mcp.Import;
 using RedNb.Nacos.Ai.Models.Mcp.Validation;
+using RedNb.Nacos.Http.Serialization;
 using RedNb.Nacos.Utils;
 
 namespace RedNb.Nacos.Http.Ai;
@@ -48,11 +49,7 @@ public partial class NacosAiService : IAiService
     // Polling interval for subscriptions (in milliseconds)
     private const int PollingIntervalMs = 10000;
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true
-    };
+    private static readonly JsonSerializerOptions JsonOptions = NacosHttpJsonOptions.CreateAi();
 
     public NacosAiService(NacosClientOptions options, ILogger<NacosAiService>? logger = null)
     {
@@ -1061,7 +1058,7 @@ public partial class NacosAiService : IAiService
     /// <summary>
     /// API result wrapper for Nacos v2 API responses.
     /// </summary>
-    private class ApiResult<T>
+    internal class ApiResult<T>
     {
         public int Code { get; set; }
         public string? Message { get; set; }
@@ -1071,7 +1068,7 @@ public partial class NacosAiService : IAiService
     /// <summary>
     /// Paged data from API response.
     /// </summary>
-    private class PagedData<T>
+    internal class PagedData<T>
     {
         public int TotalCount { get; set; }
         public List<T>? PageItems { get; set; }

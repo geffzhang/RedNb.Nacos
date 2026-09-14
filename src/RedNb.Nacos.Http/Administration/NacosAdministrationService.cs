@@ -1,5 +1,6 @@
 using System.Text.Json;
 using RedNb.Nacos.Administration;
+using RedNb.Nacos.Http.Serialization;
 using RedNb.Nacos.Http.Transport;
 using RedNb.Nacos.Utils;
 
@@ -19,7 +20,7 @@ public sealed class NacosAdministrationService : IAdministrationService
     {
         var response = await _client.GetAsync(Path + "/list", cancellationToken: cancellationToken);
         var root = Read(response);
-        return root.GetProperty("data").Deserialize<List<NacosNamespace>>() ?? [];
+        return root.GetProperty("data").Deserialize<List<NacosNamespace>>(NacosHttpJsonOptions.CreateCaseInsensitive()) ?? [];
     }
     public async Task CreateNamespaceAsync(string namespaceId, string displayName, string? description = null, CancellationToken cancellationToken = default)
         => Read(await _client.PostAsync(Path, body: NacosUtils.BuildQueryString(Parameters(namespaceId, displayName, description)), cancellationToken: cancellationToken));
