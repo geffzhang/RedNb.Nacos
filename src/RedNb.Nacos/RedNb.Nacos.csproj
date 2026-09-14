@@ -6,6 +6,8 @@
   </ItemGroup>
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsTrimmable>true</IsTrimmable>
     <Description>Nacos .NET SDK - Core abstractions, models and interfaces for Nacos client</Description>
     <PackageTags>nacos;service-discovery;config;microservices;abstractions</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>

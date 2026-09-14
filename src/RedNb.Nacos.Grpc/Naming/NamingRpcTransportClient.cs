@@ -371,7 +371,7 @@ internal class NamingRpcTransportClient : IAsyncDisposable
     {
         try
         {
-            var request = JsonSerializer.Deserialize<NotifySubscriberRequest>(body, _jsonOptions);
+            var request = JsonSerializer.Deserialize(body, NacosGrpcJsonContext.Default.NotifySubscriberRequest);
             if (request != null)
             {
                 _logger?.LogDebug("Received service change notify: {Service}@{Group}",
@@ -398,7 +398,7 @@ internal class NamingRpcTransportClient : IAsyncDisposable
                 return;
             }
             if (root.TryGetProperty("serviceKey", out _)) { EmitFuzzy(root, root); return; }
-            var request = JsonSerializer.Deserialize<NamingFuzzyWatchNotifyRequest>(body, _jsonOptions);
+            var request = JsonSerializer.Deserialize(body, NacosGrpcJsonContext.Default.NamingFuzzyWatchNotifyRequest);
             if (request != null)
             {
                 _logger?.LogDebug("Received fuzzy watch notify: {Service}@{Group}, Type={ChangeType}",

@@ -1,5 +1,5 @@
-using YamlDotNet.Serialization;
-using YamlDotNet.Serialization.NamingConventions;
+using YamlDotNet.Core;
+using YamlDotNet.RepresentationModel;
 
 namespace RedNb.Nacos.Config.Parser;
 
@@ -9,14 +9,6 @@ namespace RedNb.Nacos.Config.Parser;
 public class YamlChangeParser : AbstractConfigChangeParser
 {
     private static readonly string[] SupportedTypes = { "yaml", "yml" };
-    private readonly IDeserializer _deserializer;
-
-    public YamlChangeParser()
-    {
-        _deserializer = new DeserializerBuilder()
-            .WithNamingConvention(CamelCaseNamingConvention.Instance)
-            .Build();
-    }
 
     /// <inheritdoc />
     public override bool IsSupport(string configType)
@@ -36,13 +28,18 @@ public class YamlChangeParser : AbstractConfigChangeParser
 
         try
         {
-            var yamlObject = _deserializer.Deserialize<object>(content);
-            if (yamlObject != null)
+            // The RepresentationModel parser is reflection-free (AOT-safe), unlike the
+            // DeserializerBuilder path used in 2.0.0. It resolves anchors/aliases and
+            // flattens to the same dotted key-value map.
+            var stream = new YamlStream();
+            stream.Load(new StringReader(content));
+
+            if (stream.Documents.Count > 0)
             {
-                FlattenYaml(string.Empty, yamlObject, result);
+                FlattenYaml(string.Empty, stream.Documents[0].RootNode, result);
             }
         }
-        catch
+        catch (YamlException)
         {
             // 解析失败时返回空字典
         }
@@ -51,68 +48,61 @@ public class YamlChangeParser : AbstractConfigChangeParser
     }
 
     /// <summary>
-    /// 将 YAML 对象扁平化为点分隔的键值对
+    /// 将 YAML 节点扁平化为点分隔的键值对
     /// </summary>
     /// <param name="prefix">当前前缀</param>
-    /// <param name="obj">YAML 对象</param>
+    /// <param name="node">YAML 节点</param>
     /// <param name="result">结果字典</param>
-    private static void FlattenYaml(string prefix, object obj, Dictionary<string, string> result)
+    private static void FlattenYaml(string prefix, YamlNode node, Dictionary<string, string> result)
     {
-        if (obj is IDictionary<object, object> dict)
+        switch (node)
         {
-            foreach (var kvp in dict)
-            {
-                var key = kvp.Key?.ToString() ?? string.Empty;
-                var newPrefix = string.IsNullOrEmpty(prefix) ? key : $"{prefix}.{key}";
+            case YamlMappingNode mapping:
+                foreach (var kvp in mapping.Children)
+                {
+                    var keyNode = kvp.Key as YamlScalarNode;
+                    if (keyNode is { Value: "<<" })
+                    {
+                        // YAML merge key: flatten the merged mapping into the current prefix,
+                        // matching the Deserializer<object> merge behavior of 2.0.0.
+                        FlattenYaml(prefix, kvp.Value, result);
+                        continue;
+                    }
 
-                if (kvp.Value == null)
-                {
-                    result[newPrefix] = string.Empty;
-                }
-                else if (IsSimpleType(kvp.Value))
-                {
-                    result[newPrefix] = kvp.Value.ToString() ?? string.Empty;
-                }
-                else
-                {
+                    var key = keyNode?.Value ?? kvp.Key.ToString() ?? string.Empty;
+                    var newPrefix = string.IsNullOrEmpty(prefix) ? key : $"{prefix}.{key}";
                     FlattenYaml(newPrefix, kvp.Value, result);
                 }
-            }
-        }
-        else if (obj is IList<object> list)
-        {
-            for (var i = 0; i < list.Count; i++)
-            {
-                var newPrefix = $"{prefix}[{i}]";
-                var item = list[i];
+                break;
 
-                if (item == null)
+            case YamlSequenceNode sequence:
+                for (var i = 0; i < sequence.Children.Count; i++)
                 {
-                    result[newPrefix] = string.Empty;
+                    FlattenYaml($"{prefix}[{i}]", sequence.Children[i], result);
                 }
-                else if (IsSimpleType(item))
-                {
-                    result[newPrefix] = item.ToString() ?? string.Empty;
-                }
-                else
-                {
-                    FlattenYaml(newPrefix, item, result);
-                }
-            }
-        }
-        else
-        {
-            result[prefix] = obj.ToString() ?? string.Empty;
+                break;
+
+            case YamlScalarNode scalar:
+                // A null scalar flattens to an empty string, matching the reflection-based
+                // Deserializer<object> behavior of 2.0.0 (null values became empty strings).
+                result[prefix] = IsNullScalar(scalar) ? string.Empty : scalar.Value ?? string.Empty;
+                break;
         }
     }
 
     /// <summary>
-    /// 判断是否为简单类型
+    /// 判断标量节点是否表示 null(显式 null 标签,或未加引号的 null 写法)
     /// </summary>
-    private static bool IsSimpleType(object obj)
+    private static bool IsNullScalar(YamlScalarNode scalar)
     {
-        var type = obj.GetType();
-        return type.IsPrimitive || type == typeof(string) || type == typeof(decimal) ||
-               type == typeof(DateTime) || type == typeof(DateTimeOffset) || type.IsEnum;
+        if (scalar.Tag.ToString() == "tag:yaml.org,2002:null")
+        {
+            return true;
+        }
+
+        // The RepresentationModel does not reliably resolve plain-scalar tags, so fall
+        // back to style + value inspection for the common null spellings. Quoted
+        // strings like "null" remain literal strings.
+        return scalar.Style == ScalarStyle.Plain && scalar.Value is "" or "null" or "Null" or "NULL" or "~";
     }
 }

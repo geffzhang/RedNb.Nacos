@@ -40,8 +40,9 @@ public sealed partial class NacosAiClient
     private async Task RegisterAgentAsync(string name, List<AgentEndpoint> endpoints, bool batch, CancellationToken ct)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        var options = NacosGrpcJsonOptions.Create();
-        var copy = JsonSerializer.Deserialize<List<AgentEndpoint>>(JsonSerializer.Serialize(endpoints, options), options)!;
+        var copy = JsonSerializer.Deserialize(
+            JsonSerializer.Serialize(endpoints, NacosGrpcJsonContext.Default.ListAgentEndpoint),
+            NacosGrpcJsonContext.Default.ListAgentEndpoint)!;
         await _endpointLock.WaitAsync(ct);
         try
         {

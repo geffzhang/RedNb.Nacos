@@ -45,8 +45,6 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
     private const string AdminBasePath = "v3/admin/ai/agentspecs";
     private const int PollingIntervalMs = 10000;
 
-    private static readonly JsonSerializerOptions JsonOptions = NacosHttpJsonOptions.CreateAi();
-
     /// <summary>
     /// Creates an AgentSpec service sharing an existing HTTP client.
     /// </summary>
@@ -96,7 +94,7 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
         var headers = BuildNamespaceHeaders();
 
         var response = await _httpClient.GetWithHeadersAsync($"{ClientBasePath}/search", parameters, headers, _options.DefaultTimeout, cancellationToken);
-        var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<NacosPromptService.PagedData<AgentSpecSummary>>>(response ?? "{}", JsonOptions);
+        var result = JsonSerializer.Deserialize(response ?? "{}", NacosHttpAiJsonContext.Default.PromptApiResultPagedDataAgentSpecSummary);
         return ToPageResult(result?.Data, pageNo, pageSize);
     }
 
@@ -199,7 +197,7 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
         var headers = BuildNamespaceHeaders();
 
         var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/list", parameters, headers, _options.DefaultTimeout, cancellationToken);
-        var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<NacosPromptService.PagedData<AgentSpecSummary>>>(response ?? "{}", JsonOptions);
+        var result = JsonSerializer.Deserialize(response ?? "{}", NacosHttpAiJsonContext.Default.PromptApiResultPagedDataAgentSpecSummary);
         return ToPageResult(result?.Data, pageNo, pageSize);
     }
 
@@ -217,7 +215,7 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
         try
         {
             var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/version", parameters, headers, _options.DefaultTimeout, cancellationToken);
-            var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<AgentSpecMeta>>(response ?? "{}", JsonOptions);
+            var result = JsonSerializer.Deserialize(response ?? "{}", NacosHttpAiJsonContext.Default.PromptApiResultAgentSpecMeta);
             return result?.Data;
         }
         catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
@@ -241,7 +239,7 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
         try
         {
             var response = await _httpClient.GetWithHeadersAsync(AdminBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
-            var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<AgentSpecModel>>(response ?? "{}", JsonOptions);
+            var result = JsonSerializer.Deserialize(response ?? "{}", NacosHttpAiJsonContext.Default.PromptApiResultAgentSpec);
             return result?.Data;
         }
         catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
@@ -281,7 +279,7 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
         var parameters = new Dictionary<string, string?>
         {
             { "agentSpecName", agentSpec.Name },
-            { "agentSpecCard", JsonSerializer.Serialize(agentSpec, JsonOptions) },
+            { "agentSpecCard", JsonSerializer.Serialize(agentSpec, NacosHttpAiJsonContext.Default.AgentSpec) },
             { "basedOnVersion", basedOnVersion },
             { "targetVersion", targetVersion }
         };
@@ -302,7 +300,7 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
         {
             { "agentSpecName", agentSpec.Name },
             { "version", version },
-            { "agentSpecCard", JsonSerializer.Serialize(agentSpec, JsonOptions) },
+            { "agentSpecCard", JsonSerializer.Serialize(agentSpec, NacosHttpAiJsonContext.Default.AgentSpec) },
             { "setAsLatest", setAsLatest.ToString().ToLowerInvariant() }
         };
 
@@ -388,7 +386,7 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
         var parameters = new Dictionary<string, string?>
         {
             { "agentSpecName", agentSpecName },
-            { "labels", JsonSerializer.Serialize(labels, JsonOptions) }
+            { "labels", JsonSerializer.Serialize(labels.ToDictionary(kvp => kvp.Key, kvp => kvp.Value), NacosHttpAiJsonContext.Default.DictionaryStringString) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
@@ -404,7 +402,7 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
         var parameters = new Dictionary<string, string?>
         {
             { "agentSpecName", agentSpecName },
-            { "bizTags", JsonSerializer.Serialize(bizTags, JsonOptions) }
+            { "bizTags", JsonSerializer.Serialize(bizTags.ToList(), NacosHttpAiJsonContext.Default.ListString) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
@@ -475,7 +473,7 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
                 return null;
             }
 
-            var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<AgentSpecModel>>(response, JsonOptions);
+            var result = JsonSerializer.Deserialize(response, NacosHttpAiJsonContext.Default.PromptApiResultAgentSpec);
             return result?.Data;
         }
         catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
@@ -574,7 +572,7 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
             return;
         }
 
-        var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<AgentSpecModel>>(raw.BodyString, JsonOptions);
+        var result = JsonSerializer.Deserialize(raw.BodyString, NacosHttpAiJsonContext.Default.PromptApiResultAgentSpec);
         var current = result?.Data;
         if (current == null)
         {

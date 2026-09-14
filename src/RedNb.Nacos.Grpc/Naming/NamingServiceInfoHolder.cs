@@ -284,7 +284,7 @@ internal class NamingServiceInfoHolder
                 try
                 {
                     var json = File.ReadAllText(file);
-                    var serviceInfo = JsonSerializer.Deserialize<NamingServiceInfo>(json, NacosGrpcJsonOptions.Create());
+                    var serviceInfo = JsonSerializer.Deserialize(json, NacosGrpcJsonContext.Default.NamingServiceInfo);
                     if (serviceInfo != null && serviceInfo.IsValid)
                     {
                         var key = serviceInfo.GetKey();
@@ -312,7 +312,7 @@ internal class NamingServiceInfoHolder
         {
             var fileName = SanitizeFileName(key) + ".json";
             var filePath = Path.Combine(_cacheDir, fileName);
-            var json = JsonSerializer.Serialize(serviceInfo, NacosGrpcJsonOptions.Create());
+            var json = JsonSerializer.Serialize(serviceInfo, NacosGrpcJsonContext.Default.NamingServiceInfo);
             File.WriteAllText(filePath, json);
         }
         catch (Exception ex)

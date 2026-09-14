@@ -216,7 +216,7 @@ internal class ConfigRpcTransportClient : IAsyncDisposable
     {
         try
         {
-            var request = JsonSerializer.Deserialize<ConfigChangeNotifyRequest>(body, _jsonOptions);
+            var request = JsonSerializer.Deserialize(body, NacosGrpcJsonContext.Default.ConfigChangeNotifyRequest);
             if (request != null)
             {
                 _logger?.LogDebug("Received config change notify: {DataId}@{Group}",
@@ -243,7 +243,7 @@ internal class ConfigRpcTransportClient : IAsyncDisposable
                 return;
             }
             if (root.TryGetProperty("groupKey", out _)) { EmitFuzzy(root, root); return; }
-            var request = JsonSerializer.Deserialize<ConfigFuzzyWatchChangeNotifyRequest>(body, _jsonOptions);
+            var request = JsonSerializer.Deserialize(body, NacosGrpcJsonContext.Default.ConfigFuzzyWatchChangeNotifyRequest);
             if (request != null)
             {
                 _logger?.LogDebug("Received fuzzy watch change notify: {DataId}@{Group}, Type={ChangeType}",

@@ -35,8 +35,6 @@ public partial class NacosGrpcAiService : IAiService
 
     private bool _disposed;
 
-    private static readonly JsonSerializerOptions JsonOptions = NacosGrpcJsonOptions.Create();
-
     /// <summary>
     /// Creates a new NacosGrpcAiService.
     /// </summary>
@@ -708,7 +706,7 @@ public partial class NacosGrpcAiService : IAiService
 
     private void HandleMcpServerPush(string body)
     {
-        var notification = JsonSerializer.Deserialize<McpServerNotification>(body, JsonOptions);
+        var notification = JsonSerializer.Deserialize(body, NacosGrpcInternalJsonContext.Default.McpServerNotification);
         if (notification == null) return;
 
         var key = GetMcpKey(notification.McpName, notification.Version);
@@ -738,7 +736,7 @@ public partial class NacosGrpcAiService : IAiService
 
     private void HandleAgentCardPush(string body)
     {
-        var notification = JsonSerializer.Deserialize<AgentCardNotification>(body, JsonOptions);
+        var notification = JsonSerializer.Deserialize(body, NacosGrpcInternalJsonContext.Default.AgentCardNotification);
         if (notification == null) return;
 
         var key = GetAgentKey(notification.AgentName, notification.Version);

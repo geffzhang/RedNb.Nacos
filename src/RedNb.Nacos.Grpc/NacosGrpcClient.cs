@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using global::Grpc.Core;
@@ -294,7 +295,8 @@ public class NacosGrpcClient : IAsyncDisposable
         var responseJson = await SendUnaryRequestAsync(type, request, timeout, cancellationToken);
         return string.IsNullOrEmpty(responseJson)
             ? null
-            : JsonSerializer.Deserialize<TResponse>(responseJson, _jsonOptions);
+            : JsonSerializer.Deserialize(responseJson,
+                (JsonTypeInfo<TResponse>)_jsonOptions.GetTypeInfo(typeof(TResponse))!);
     }
 
     /// <summary>
@@ -424,7 +426,7 @@ public class NacosGrpcClient : IAsyncDisposable
         if (response.Body != null && !response.Body.Value.IsEmpty)
         {
             var json = response.Body.Value.ToStringUtf8();
-            var checkResponse = JsonSerializer.Deserialize<ServerCheckResponse>(json, _jsonOptions);
+            var checkResponse = JsonSerializer.Deserialize(json, NacosGrpcJsonContext.Default.ServerCheckResponse);
             generation.ConnectionId = checkResponse?.ConnectionId;
         }
     }
@@ -701,7 +703,9 @@ public class NacosGrpcClient : IAsyncDisposable
 
     private async Task<Payload> CreatePayloadAsync(ConnectionGeneration generation, string type, object request, CancellationToken cancellationToken = default)
     {
-        var json = JsonSerializer.Serialize(request, _jsonOptions);
+        var typeInfo = _jsonOptions.GetTypeInfo(request.GetType())
+            ?? throw new NotSupportedException($"No JSON metadata registered for request type {request.GetType().FullName}.");
+        var json = JsonSerializer.Serialize(request, typeInfo);
         var body = ByteString.CopyFromUtf8(json);
 
         var payload = new Payload

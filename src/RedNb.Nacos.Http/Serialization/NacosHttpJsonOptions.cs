@@ -18,6 +18,11 @@ internal static class NacosHttpJsonOptions
         NacosHttpJsonContext.Default,
         NacosHttpInternalJsonContext.Default);
 
+    private static readonly IJsonTypeInfoResolver CombinedAi = JsonTypeInfoResolver.Combine(
+        NacosHttpJsonContext.Default,
+        NacosHttpInternalJsonContext.Default,
+        NacosHttpAiJsonContext.Default);
+
     private static readonly IJsonTypeInfoResolver CombinedWithCore = JsonTypeInfoResolver.Combine(
         NacosHttpJsonContext.Default,
         NacosHttpInternalJsonContext.Default,
@@ -32,7 +37,7 @@ internal static class NacosHttpJsonOptions
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
-        TypeInfoResolver = Combined
+        TypeInfoResolver = CombinedAi
     };
 
     private static readonly JsonSerializerOptions CaseInsensitive = new()

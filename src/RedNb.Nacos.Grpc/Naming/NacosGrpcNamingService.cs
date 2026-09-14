@@ -760,7 +760,7 @@ public class NacosGrpcNamingService : INamingService
         {
             selectorJson = JsonSerializer.Serialize(
                 new NamingSelector { Type = selector.Type, Expression = selector.Expression },
-                NacosGrpcJsonOptions.Create());
+                NacosGrpcJsonContext.Default.NamingSelector);
         }
 
         var response = await _transportClient.ListServicesAsync(

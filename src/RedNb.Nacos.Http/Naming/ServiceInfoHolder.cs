@@ -157,7 +157,7 @@ public class ServiceInfoHolder
 
             var fileName = GetFileName(serviceInfo.Key);
             var filePath = Path.Combine(_cacheDir, fileName);
-            var json = System.Text.Json.JsonSerializer.Serialize(serviceInfo, NacosHttpJsonOptions.Create());
+            var json = System.Text.Json.JsonSerializer.Serialize(serviceInfo, NacosHttpJsonContext.Default.ServiceInfo);
             File.WriteAllText(filePath, json);
         }
         catch
@@ -180,7 +180,7 @@ public class ServiceInfoHolder
                 try
                 {
                     var json = File.ReadAllText(file);
-                    var serviceInfo = System.Text.Json.JsonSerializer.Deserialize<ServiceInfo>(json, NacosHttpJsonOptions.Create());
+                    var serviceInfo = System.Text.Json.JsonSerializer.Deserialize(json, NacosHttpJsonContext.Default.ServiceInfo);
                     if (serviceInfo != null)
                     {
                         _serviceInfoMap[serviceInfo.Key] = serviceInfo;

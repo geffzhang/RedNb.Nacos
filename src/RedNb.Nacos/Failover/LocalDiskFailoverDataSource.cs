@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using RedNb.Nacos.Serialization;
@@ -61,6 +62,13 @@ public class LocalDiskFailoverDataSource<T> : IFailoverDataSource<T> where T : c
     /// <summary>
     /// 获取故障转移数据
     /// </summary>
+    // Safe under trimming/AOT: _jsonOptions carries the source-generated NacosJsonContext
+    // resolver. T is a failover payload type (ServiceInfo/Instance/ConfigInfo) registered
+    // in NacosJsonContext; the strict resolver throws for anything else, so no reflection
+    // fallback occurs. The options path is kept to preserve the indented on-disk cache
+    // format of 2.0.0.
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Resolver is source-generated (NacosJsonContext); unregistered T throws instead of reflecting.")]
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Resolver is source-generated (NacosJsonContext); unregistered T throws instead of reflecting.")]
     public Dictionary<string, FailoverData<T>> GetFailoverData()
     {
         var result = new Dictionary<string, FailoverData<T>>();
@@ -108,6 +116,13 @@ public class LocalDiskFailoverDataSource<T> : IFailoverDataSource<T> where T : c
     /// <summary>
     /// 保存故障转移数据到磁盘
     /// </summary>
+    // Safe under trimming/AOT: _jsonOptions carries the source-generated NacosJsonContext
+    // resolver. T is a failover payload type (ServiceInfo/Instance/ConfigInfo) registered
+    // in NacosJsonContext; the strict resolver throws for anything else, so no reflection
+    // fallback occurs. The options path is kept to preserve the indented on-disk cache
+    // format of 2.0.0.
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Resolver is source-generated (NacosJsonContext); unregistered T throws instead of reflecting.")]
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Resolver is source-generated (NacosJsonContext); unregistered T throws instead of reflecting.")]
     public void SaveFailoverData(string key, T data)
     {
         try

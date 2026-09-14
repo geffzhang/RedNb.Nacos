@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using RedNb.Nacos.Http.Serialization;
 using RedNb.Nacos.Http.Transport;
+using RedNb.Nacos.Serialization;
 using RedNb.Nacos;
 using RedNb.Nacos.Naming;
 using RedNb.Nacos.Naming.FuzzyWatch;
@@ -651,7 +652,7 @@ public class NacosNamingService : INamingService
         {
             parameters["selector"] = JsonSerializer.Serialize(
                 new NamingSelector { Type = selector.Type, Expression = selector.Expression },
-                NacosHttpJsonOptions.Create());
+                NacosHttpJsonContext.Default.NamingSelector);
         }
 
         var response = await _httpClient.GetWithHeadersAsync(ServiceApiPath, parameters, null,
@@ -961,7 +962,7 @@ public class NacosNamingService : INamingService
 
         if (instance.Metadata.Count > 0)
         {
-            parameters["metadata"] = JsonSerializer.Serialize(instance.Metadata, NacosHttpJsonOptions.Create());
+            parameters["metadata"] = JsonSerializer.Serialize(instance.Metadata, NacosHttpJsonContext.Default.DictionaryStringString);
         }
 
         return parameters;
@@ -1028,7 +1029,7 @@ public class NacosNamingService : INamingService
                 return new List<Instance>();
             }
 
-            return data.Deserialize<List<Instance>>(NacosHttpJsonOptions.CreateCaseInsensitive()) ?? new List<Instance>();
+            return data.Deserialize(NacosJsonContext.Default.ListInstance) ?? new List<Instance>();
         }
         catch (JsonException)
         {

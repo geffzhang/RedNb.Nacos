@@ -2,6 +2,7 @@ using System.Text.Json;
 using FluentAssertions;
 using RedNb.Nacos.Ai.Models.AgentSpec;
 using RedNb.Nacos.Ai.Models.Prompt;
+using RedNb.Nacos.Ai.Models.Skill;
 using RedNb.Nacos.Http.Ai;
 using RedNb.Nacos.Http.Serialization;
 using RedNb.Nacos.Naming;
@@ -74,5 +75,32 @@ public class NacosHttpJsonContextTests
     {
         var act = () => JsonSerializer.Serialize(new { x = 1 }, NacosHttpJsonOptions.Create());
         act.Should().Throw<NotSupportedException>();
+    }
+
+    [Fact]
+    public void AiContext_ProducesSameBytesAsCreateAiOptions()
+    {
+        // The AI call sites use NacosHttpAiJsonContext TypeInfo overloads instead of
+        // the runtime-options path; both must be byte-identical (camelCase output).
+        var prompt = new Prompt { PromptKey = "p", Template = "t" };
+        var skill = new Skill { SkillMd = "s" };
+
+        JsonSerializer.Serialize(prompt, NacosHttpAiJsonContext.Default.Prompt)
+            .Should().Be(JsonSerializer.Serialize(prompt, NacosHttpJsonOptions.CreateAi()));
+        JsonSerializer.Serialize(skill, NacosHttpAiJsonContext.Default.Skill)
+            .Should().Be(JsonSerializer.Serialize(skill, NacosHttpJsonOptions.CreateAi()));
+    }
+
+    [Fact]
+    public void AiContext_DeserializesCamelCaseEnvelope()
+    {
+        // NacosAiService's own ApiResult family: read path must accept the server's
+        // camelCase envelope with the case-insensitive AI profile.
+        var json = """{"code":200,"data":"ok"}""";
+
+        var back = JsonSerializer.Deserialize(json, NacosHttpAiJsonContext.Default.AiApiResultString)!;
+
+        back.Code.Should().Be(200);
+        back.Data.Should().Be("ok");
     }
 }

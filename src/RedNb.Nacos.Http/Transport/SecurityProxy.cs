@@ -138,7 +138,7 @@ public class SecurityProxy : IDisposable
 
                 if (response.IsSuccessStatusCode)
                 {
-                    var loginResponse = JsonSerializer.Deserialize<LoginResponse>(responseBody, NacosHttpJsonOptions.Create());
+                    var loginResponse = JsonSerializer.Deserialize(responseBody, NacosHttpInternalJsonContext.Default.LoginResponse);
                     if (loginResponse != null && !string.IsNullOrEmpty(loginResponse.AccessToken))
                     {
                         _accessToken = loginResponse.AccessToken;
