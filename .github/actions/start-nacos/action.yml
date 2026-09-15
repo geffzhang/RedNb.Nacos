@@ -13,46 +13,10 @@ runs:
           -e NACOS_AUTH_IDENTITY_KEY=ci -e NACOS_AUTH_IDENTITY_VALUE="$(openssl rand -hex 24)" \
           -p 127.0.0.1:8080:8080 -p 127.0.0.1:8848:8848 -p 127.0.0.1:9848:9848 \
           nacos/nacos-server:v3.2.4
-    - if: runner.os == 'Windows'
-      uses: actions/setup-java@v4
-      with:
-        distribution: temurin
-        java-version: '17'
-    - if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        New-Item -ItemType Directory -Force artifacts/server | Out-Null
-        Invoke-WebRequest https://github.com/alibaba/nacos/releases/download/3.2.4/nacos-server-3.2.4.zip -OutFile artifacts/server/nacos.zip
-        Expand-Archive artifacts/server/nacos.zip artifacts/server
-        $homePath = (Resolve-Path artifacts/server/nacos).Path
-        $token = [Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
-        Add-Content "$homePath/conf/application.properties" @"
-        nacos.core.auth.enabled=true
-        nacos.core.auth.admin.enabled=true
-        nacos.core.auth.console.enabled=true
-        nacos.core.auth.plugin.nacos.token.secret.key=$token
-        nacos.core.auth.server.identity.key=ci
-        nacos.core.auth.server.identity.value=$([Guid]::NewGuid().ToString('N'))
-        "@
-        $serverProcess = Start-Process java -WindowStyle Hidden -PassThru -WorkingDirectory $homePath -ArgumentList @(
-          '--add-opens=java.base/java.lang=ALL-UNNAMED',
-          '--add-opens=java.base/java.lang.reflect=ALL-UNNAMED',
-          '--add-opens=java.base/java.util=ALL-UNNAMED',
-          '-Xms512m', '-Xmx1g', '-Dnacos.standalone=true', "-Dnacos.home=$homePath",
-          '-Dnacos.deployment.type=merged',
-          "-Dloader.path=$homePath/plugins,$homePath/plugins/health,$homePath/plugins/cmdb,$homePath/plugins/selector",
-          '-jar', 'target/nacos-server.jar', '--spring.config.additional-location=file:./conf/',
-          "--logging.config=$homePath/conf/nacos-logback.xml"
-        ) -RedirectStandardOutput "$homePath/stdout.log" -RedirectStandardError "$homePath/stderr.log"
-        "NACOS_CI_PROCESS_ID=$($serverProcess.Id)" >> $env:GITHUB_ENV
     - shell: pwsh
       run: |
         $ready = $false
         for ($i = 0; $i -lt 90; $i++) {
-          if ($IsWindows -and $env:NACOS_CI_PROCESS_ID -and !(Get-Process -Id $env:NACOS_CI_PROCESS_ID -ErrorAction SilentlyContinue)) {
-            Get-ChildItem artifacts/server/nacos -Recurse -Filter '*.log' | ForEach-Object { Get-Content $_.FullName -Tail 30 }
-            throw 'Nacos exited before readiness; see server logs'
-          }
           try { Invoke-WebRequest http://localhost:8080/v3/console/health/readiness -TimeoutSec 2 | Out-Null; $ready = $true; break }
           catch { Start-Sleep -Seconds 2 }
         }

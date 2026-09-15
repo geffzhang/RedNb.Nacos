@@ -217,24 +217,33 @@ internal static class LiveChecks
         await ai.CreatePromptDraftAsync(prompt, "1.0.0", "Hello {{name}}", variables: [new PromptVariable { Name = "name", DefaultValue = "world" }]);
         try
         {
-            await ai.SubmitPromptReviewAsync(prompt, "1.0.0"); await ai.ForcePublishPromptAsync(prompt, "1.0.0");
+            await ai.SubmitPromptReviewAsync(prompt, "1.0.0");
+            await PublishReviewedAsync(() => ai.ForcePublishPromptAsync(prompt, "1.0.0"),
+                async () => string.Equals((await ai.GetPromptVersionDetailAsync(prompt, "1.0.0"))?.Status, "online", StringComparison.OrdinalIgnoreCase));
             await Until(async () => await ai.GetPromptAsync(prompt) != null, "Prompt read");
+            Require((await ai.ListPromptVersionsAsync(prompt)).Any(v => v.Version == "1.0.0"), "Paged prompt version listing");
             Require((await ai.GetPromptAsync(prompt))!.Render(new Dictionary<string, string> { ["name"] = "AOT" }) == "Hello AOT", "Prompt render");
         }
         finally { try { await ai.OfflinePromptAsync(prompt, "1.0.0"); } finally { await ai.DeletePromptAsync(prompt); } }
         await ai.UploadSkillZipAsync(Zip(new() { ["SKILL.md"] = "---\nname: " + skill + "\ndescription: AOT check\nversion: 1.0.0\n---\n# Skill\n" }), skill + ".zip", targetVersion: "1.0.0");
         try
         {
-            await ai.SubmitSkillReviewAsync(skill, "1.0.0"); await ai.ForcePublishSkillAsync(skill, "1.0.0");
+            await ai.SubmitSkillReviewAsync(skill, "1.0.0");
+            await PublishReviewedAsync(() => ai.ForcePublishSkillAsync(skill, "1.0.0"),
+                async () => (await ai.GetSkillMetaAsync(skill))?.Versions?.Any(v => v.Version == "1.0.0" && string.Equals(v.Status, "online", StringComparison.OrdinalIgnoreCase)) == true);
             await Until(async () => (await ai.DownloadSkillZipByVersionAsync(skill, "1.0.0"))?.ZipContent.Length > 0, "Skill download");
+            Require(await ai.GetSkillDetailAsync(skill, "1.0.0") != null, "Skill admin version detail");
         }
         finally { try { await ai.OfflineSkillAsync(skill, "1.0.0"); } finally { await ai.DeleteSkillAsync(skill); } }
         var manifest = "{\"worker\":{\"suggested_name\":\"" + spec + "\"},\"description\":\"AOT test\"}";
         await ai.UploadAgentSpecAsync(Zip(new() { ["manifest.json"] = manifest, ["AGENTS.md"] = "# AOT instructions\n" }), spec + ".zip");
         try
         {
-            await ai.SubmitAgentSpecReviewAsync(spec, "0.0.1"); await ai.ForcePublishAgentSpecAsync(spec, "0.0.1");
+            await ai.SubmitAgentSpecReviewAsync(spec, "0.0.1");
+            await PublishReviewedAsync(() => ai.ForcePublishAgentSpecAsync(spec, "0.0.1"),
+                async () => (await ai.GetAgentSpecMetaAsync(spec))?.Versions?.Any(v => v.Version == "0.0.1" && string.Equals(v.Status, "online", StringComparison.OrdinalIgnoreCase)) == true);
             await Until(async () => (await ai.GetAgentSpecAsync(spec))?.Resource?.Values.Any(r => r.Name == "AGENTS.md") == true, "AgentSpec resources");
+            Require(await ai.GetAgentSpecDetailAsync(spec, "0.0.1") != null, "AgentSpec admin version detail");
         }
         finally { try { await ai.OfflineAgentSpecAsync(spec, "0.0.1"); } finally { await ai.DeleteAgentSpecAsync(spec); } }
         await ai.ReleaseAgentCardAsync(new AgentCard
@@ -275,6 +284,22 @@ internal static class LiveChecks
         }
         finally { await ai.DeleteAgentAsync(agent); }
         Console.WriteLine("PASS AI HTTP/gRPC and extension payload");
+    }
+
+    private static async Task PublishReviewedAsync(Func<Task> forcePublish, Func<Task<bool>> isOnline)
+    {
+        // A server's configured review pipeline can publish automatically.
+        // Force-publishing an already-online version is correctly rejected.
+        if (!await isOnline())
+        {
+            try { await forcePublish(); }
+            catch (NacosException error) when (error.Message.Contains("Force-publish is not allowed for online or offline version:", StringComparison.Ordinal))
+            {
+                // Resolve only the online race; offline/error states still fail.
+                await Until(isOnline, "Review pipeline did not leave the exact version online", 10);
+            }
+        }
+        await Until(isOnline, "Published version is not online");
     }
 
     private static byte[] Zip(Dictionary<string, string> files)
