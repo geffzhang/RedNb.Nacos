@@ -19,6 +19,9 @@ public class SerializationRegressionTests
         yield return [new byte[] { 1, 2, 255 }];
         yield return [new Dictionary<string, string> { ["key"] = "value" }];
         yield return [new Dictionary<int, string> { [1] = "one" }];
+        IDictionary<string, object?> dynamicMap = new System.Dynamic.ExpandoObject();
+        dynamicMap["count"] = 3;
+        yield return [dynamicMap];
         yield return [new Dictionary<string, object> { ["array"] = new[] { 1, 2 }, ["nested"] = new Dictionary<string, string> { ["x"] = "y" } }];
         yield return [new DateTimeOffset(2026, 9, 15, 10, 0, 0, TimeSpan.Zero)];
         yield return [new DateOnly(2026, 9, 15)];

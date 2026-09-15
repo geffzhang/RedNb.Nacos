@@ -93,6 +93,20 @@ internal static class JsonObjectConverters
     {
         if (writer.CurrentDepth >= (options.MaxDepth == 0 ? 64 : options.MaxDepth))
             throw new JsonException("Maximum JSON depth exceeded.");
+        // Preserve registered collection converters and the standard dictionary
+        // contract (e.g. ExpandoObject). Only structural BCL containers may use
+        // the metadata-free fallback needed for object-valued native arrays.
+        if (value is IEnumerable && value is not string && value is not byte[])
+        {
+            System.Text.Json.Serialization.Metadata.JsonTypeInfo? metadata = null;
+            try { metadata = options.GetTypeInfo(value.GetType()); }
+            catch (NotSupportedException) when (IsStructuralContainer(value)) { }
+            if (metadata != null && (metadata.Kind == System.Text.Json.Serialization.Metadata.JsonTypeInfoKind.None || !IsStructuralContainer(value)))
+            {
+                JsonSerializer.Serialize(writer, value, metadata);
+                return;
+            }
+        }
         switch (value)
         {
             case null:
@@ -142,6 +156,20 @@ internal static class JsonObjectConverters
             case IDictionary:
                 JsonSerializer.Serialize(writer, value, options.GetTypeInfo(value.GetType()));
                 break;
+            case IEnumerable<KeyValuePair<string, object>> pairs when value is IDictionary<string, object> or IReadOnlyDictionary<string, object>:
+                if (!active.Add(value)) throw new JsonException("A JSON reference cycle was detected.");
+                try
+                {
+                    writer.WriteStartObject();
+                    foreach (var pair in pairs)
+                    {
+                        writer.WritePropertyName(pair.Key);
+                        WriteValue(writer, pair.Value, options, active);
+                    }
+                    writer.WriteEndObject();
+                }
+                finally { active.Remove(value); }
+                break;
             case IEnumerable items:
                 if (!active.Add(value)) throw new JsonException("A JSON reference cycle was detected.");
                 try
@@ -162,6 +190,12 @@ internal static class JsonObjectConverters
                 break;
         }
     }
+
+    private static bool IsStructuralContainer(object value)
+        => value is IDictionary or IDictionary<string, object> or IReadOnlyDictionary<string, object>
+           || value.GetType().IsArray
+           || value.GetType().Assembly.GetName().Name is "System.Private.CoreLib" or "System.Collections"
+               or "System.Collections.Concurrent" or "System.Collections.Immutable" or "System.Linq";
 }
 
 [JsonSerializable(typeof(DateOnly))]
