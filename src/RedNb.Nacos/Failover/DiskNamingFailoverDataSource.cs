@@ -1,7 +1,9 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using RedNb.Nacos.Naming;
+using RedNb.Nacos.Serialization;
 
 namespace RedNb.Nacos.Failover;
 
@@ -26,11 +28,7 @@ public class DiskNamingFailoverDataSource : IFailoverDataSource<ServiceInfo>
     private Dictionary<string, FailoverData<ServiceInfo>> _serviceMap = new();
     private long _lastModifiedMillis;
 
-    private readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        WriteIndented = true
-    };
+    private readonly JsonSerializerOptions _jsonOptions = NacosJsonOptions.Create(writeIndented: true);
 
     /// <summary>
     /// 构造函数
@@ -117,6 +115,12 @@ public class DiskNamingFailoverDataSource : IFailoverDataSource<ServiceInfo>
     /// <summary>
     /// 加载故障转移数据
     /// </summary>
+    // Safe under trimming/AOT: _jsonOptions carries the source-generated NacosJsonContext
+    // resolver, where ServiceInfo is registered; unregistered types throw instead of
+    // falling back to reflection. The options path is kept to preserve the indented
+    // on-disk cache format of 2.0.0.
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Resolver is source-generated (NacosJsonContext); ServiceInfo metadata is static.")]
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Resolver is source-generated (NacosJsonContext); ServiceInfo metadata is static.")]
     private void LoadFailoverData()
     {
         var domMap = new Dictionary<string, FailoverData<ServiceInfo>>();
@@ -188,6 +192,12 @@ public class DiskNamingFailoverDataSource : IFailoverDataSource<ServiceInfo>
     /// 保存服务信息到故障转移目录
     /// </summary>
     /// <param name="serviceInfo">服务信息</param>
+    // Safe under trimming/AOT: _jsonOptions carries the source-generated NacosJsonContext
+    // resolver, where ServiceInfo is registered; unregistered types throw instead of
+    // falling back to reflection. The options path is kept to preserve the indented
+    // on-disk cache format of 2.0.0.
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Resolver is source-generated (NacosJsonContext); ServiceInfo metadata is static.")]
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Resolver is source-generated (NacosJsonContext); ServiceInfo metadata is static.")]
     public void SaveServiceInfo(ServiceInfo serviceInfo)
     {
         try

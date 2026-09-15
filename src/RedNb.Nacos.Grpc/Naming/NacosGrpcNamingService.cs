@@ -1,9 +1,12 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using RedNb.Nacos;
+using RedNb.Nacos.Grpc.Serialization;
 using RedNb.Nacos.Naming;
 using RedNb.Nacos.Naming.FuzzyWatch;
+using RedNb.Nacos.Naming.Models;
 using RedNb.Nacos.Naming.Selector;
 using RedNb.Nacos.Utils;
 
@@ -755,11 +758,9 @@ public class NacosGrpcNamingService : INamingService
         string? selectorJson = null;
         if (selector != null)
         {
-            selectorJson = System.Text.Json.JsonSerializer.Serialize(new
-            {
-                type = selector.Type,
-                expression = selector.Expression
-            });
+            selectorJson = JsonSerializer.Serialize(
+                new NamingSelector { Type = selector.Type, Expression = selector.Expression },
+                NacosGrpcJsonContext.Default.NamingSelector);
         }
 
         var response = await _transportClient.ListServicesAsync(

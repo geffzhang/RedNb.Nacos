@@ -6,6 +6,7 @@ using RedNb.Nacos;
 using RedNb.Nacos.Ai;
 using RedNb.Nacos.Ai.Models;
 using RedNb.Nacos.Ai.Models.Skill;
+using RedNb.Nacos.Http.Serialization;
 using RedNb.Nacos.Utils;
 
 namespace RedNb.Nacos.Http.Ai;
@@ -42,12 +43,6 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
     private const string ClientBasePath = "v3/client/ai/skills";
     private const string AdminBasePath = "v3/admin/ai/skills";
     private const int PollingIntervalMs = 10000;
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true
-    };
 
     /// <summary>
     /// Creates a skill service sharing an existing HTTP client.
@@ -100,7 +95,7 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
         var headers = BuildNamespaceHeaders();
 
         var response = await _httpClient.GetWithHeadersAsync($"{ClientBasePath}/search", parameters, headers, _options.DefaultTimeout, cancellationToken);
-        var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<NacosPromptService.PagedData<SkillSummary>>>(response ?? "{}", JsonOptions);
+        var result = JsonSerializer.Deserialize(response ?? "{}", NacosHttpAiJsonContext.Default.PromptApiResultPagedDataSkillSummary);
         return ToPageResult(result?.Data, pageNo, pageSize);
     }
 
@@ -203,7 +198,7 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
         var headers = BuildNamespaceHeaders();
 
         var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/list", parameters, headers, _options.DefaultTimeout, cancellationToken);
-        var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<NacosPromptService.PagedData<SkillSummary>>>(response ?? "{}", JsonOptions);
+        var result = JsonSerializer.Deserialize(response ?? "{}", NacosHttpAiJsonContext.Default.PromptApiResultPagedDataSkillSummary);
         return ToPageResult(result?.Data, pageNo, pageSize);
     }
 
@@ -221,7 +216,7 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
         try
         {
             var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/version", parameters, headers, _options.DefaultTimeout, cancellationToken);
-            var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<SkillMeta>>(response ?? "{}", JsonOptions);
+            var result = JsonSerializer.Deserialize(response ?? "{}", NacosHttpAiJsonContext.Default.PromptApiResultSkillMeta);
             return result?.Data;
         }
         catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
@@ -245,7 +240,7 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
         try
         {
             var response = await _httpClient.GetWithHeadersAsync(AdminBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
-            var result = JsonSerializer.Deserialize<NacosPromptService.ApiResult<Skill>>(response ?? "{}", JsonOptions);
+            var result = JsonSerializer.Deserialize(response ?? "{}", NacosHttpAiJsonContext.Default.PromptApiResultSkill);
             return result?.Data;
         }
         catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
@@ -301,7 +296,7 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
         var parameters = new Dictionary<string, string?>
         {
             { "skillName", skill.Name },
-            { "skillCard", JsonSerializer.Serialize(skill, JsonOptions) },
+            { "skillCard", JsonSerializer.Serialize(skill, NacosHttpAiJsonContext.Default.Skill) },
             { "basedOnVersion", basedOnVersion },
             { "targetVersion", targetVersion },
             { "commitMsg", commitMsg }
@@ -323,7 +318,7 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
         {
             { "skillName", skill.Name },
             { "version", version },
-            { "skillCard", JsonSerializer.Serialize(skill, JsonOptions) },
+            { "skillCard", JsonSerializer.Serialize(skill, NacosHttpAiJsonContext.Default.Skill) },
             { "setAsLatest", setAsLatest.ToString().ToLowerInvariant() },
             { "commitMsg", commitMsg }
         };
@@ -410,7 +405,7 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
         var parameters = new Dictionary<string, string?>
         {
             { "skillName", skillName },
-            { "labels", JsonSerializer.Serialize(labels, JsonOptions) }
+            { "labels", JsonSerializer.Serialize(labels.ToDictionary(kvp => kvp.Key, kvp => kvp.Value), NacosHttpAiJsonContext.Default.DictionaryStringString) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
@@ -426,7 +421,7 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
         var parameters = new Dictionary<string, string?>
         {
             { "skillName", skillName },
-            { "bizTags", JsonSerializer.Serialize(bizTags, JsonOptions) }
+            { "bizTags", JsonSerializer.Serialize(bizTags.ToList(), NacosHttpAiJsonContext.Default.ListString) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);

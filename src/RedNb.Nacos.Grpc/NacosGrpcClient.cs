@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using global::Grpc.Core;
@@ -10,6 +11,7 @@ using RedNb.Nacos;
 using RedNb.Nacos.Grpc.Config;
 using RedNb.Nacos.Grpc.Naming;
 using RedNb.Nacos.Grpc.Protos;
+using RedNb.Nacos.Grpc.Serialization;
 using ProtoMetadata = RedNb.Nacos.Grpc.Protos.Metadata;
 
 namespace RedNb.Nacos.Grpc;
@@ -138,12 +140,7 @@ public class NacosGrpcClient : IAsyncDisposable
         _clientId = Guid.NewGuid().ToString("N");
         _lastActiveTime = DateTime.UtcNow;
 
-        _jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            PropertyNameCaseInsensitive = true
-        };
+        _jsonOptions = NacosGrpcJsonOptions.Create();
 
         _securityProxy = new RedNb.Nacos.Http.Transport.SecurityProxy(options, logger);
     }
@@ -298,7 +295,8 @@ public class NacosGrpcClient : IAsyncDisposable
         var responseJson = await SendUnaryRequestAsync(type, request, timeout, cancellationToken);
         return string.IsNullOrEmpty(responseJson)
             ? null
-            : JsonSerializer.Deserialize<TResponse>(responseJson, _jsonOptions);
+            : JsonSerializer.Deserialize(responseJson,
+                (JsonTypeInfo<TResponse>)_jsonOptions.GetTypeInfo(typeof(TResponse))!);
     }
 
     /// <summary>
@@ -428,7 +426,7 @@ public class NacosGrpcClient : IAsyncDisposable
         if (response.Body != null && !response.Body.Value.IsEmpty)
         {
             var json = response.Body.Value.ToStringUtf8();
-            var checkResponse = JsonSerializer.Deserialize<ServerCheckResponse>(json, _jsonOptions);
+            var checkResponse = JsonSerializer.Deserialize(json, NacosGrpcJsonContext.Default.ServerCheckResponse);
             generation.ConnectionId = checkResponse?.ConnectionId;
         }
     }
@@ -586,11 +584,12 @@ public class NacosGrpcClient : IAsyncDisposable
     /// correlates an ack with its request through that id and logs "Ack receive on a
     /// outdated request" for an ack whose id is missing.
     /// </summary>
-    private static object BuildPushAck(string body)
+    private static PushAckResponse BuildPushAck(string body)
     {
-        return TryGetRequestId(body, out var requestId)
-            ? new { success = true, requestId }
-            : new { success = true };
+        return new PushAckResponse
+        {
+            RequestId = TryGetRequestId(body, out var requestId) ? requestId : null
+        };
     }
 
     private static bool TryGetRequestId(string body, out string? requestId)
@@ -705,7 +704,18 @@ public class NacosGrpcClient : IAsyncDisposable
 
     private async Task<Payload> CreatePayloadAsync(ConnectionGeneration generation, string type, object request, CancellationToken cancellationToken = default)
     {
-        var json = JsonSerializer.Serialize(request, _jsonOptions);
+        // GetTypeInfo throws NotSupportedException for unregistered types, keeping the
+        // 2.0.0 exception contract; rethrow with an SDK-oriented message.
+        JsonTypeInfo typeInfo;
+        try
+        {
+            typeInfo = _jsonOptions.GetTypeInfo(request.GetType());
+        }
+        catch (NotSupportedException)
+        {
+            throw new NotSupportedException($"No JSON metadata registered for request type {request.GetType().FullName}.");
+        }
+        var json = JsonSerializer.Serialize(request, typeInfo);
         var body = ByteString.CopyFromUtf8(json);
 
         var payload = new Payload

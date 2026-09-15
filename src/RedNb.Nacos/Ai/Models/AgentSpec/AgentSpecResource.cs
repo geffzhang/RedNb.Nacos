@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
+using RedNb.Nacos.Serialization;
 
 namespace RedNb.Nacos.Ai.Models.AgentSpec;
 
@@ -26,5 +28,6 @@ public class AgentSpecResource
     /// <summary>
     /// Extra metadata of the resource.
     /// </summary>
+    [JsonConverter(typeof(ObjectDictionaryConverter))]
     public Dictionary<string, object>? Metadata { get; set; }
 }

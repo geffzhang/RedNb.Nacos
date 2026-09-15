@@ -7,6 +7,7 @@ using RedNb.Nacos.Ai;
 using RedNb.Nacos.Ai.Models;
 using RedNb.Nacos.Ai.Models.Prompt;
 using PromptModel = RedNb.Nacos.Ai.Models.Prompt.Prompt;
+using RedNb.Nacos.Http.Serialization;
 using RedNb.Nacos.Utils;
 
 namespace RedNb.Nacos.Http.Ai;
@@ -42,12 +43,6 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
     private const string ClientBasePath = "v3/client/ai/prompt";
     private const string AdminBasePath = "v3/admin/ai/prompt";
     private const int PollingIntervalMs = 10000;
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true
-    };
 
     /// <summary>
     /// Creates a prompt service sharing an existing HTTP client.
@@ -98,7 +93,7 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
         var headers = BuildNamespaceHeaders();
 
         var response = await _httpClient.GetWithHeadersAsync($"{ClientBasePath}/search", parameters, headers, _options.DefaultTimeout, cancellationToken);
-        var result = JsonSerializer.Deserialize<ApiResult<PagedData<PromptMetaSummary>>>(response ?? "{}", JsonOptions);
+        var result = JsonSerializer.Deserialize(response ?? "{}", NacosHttpAiJsonContext.Default.PromptApiResultPagedDataPromptMetaSummary);
         return ToPageResult(result?.Data, pageNo, pageSize);
     }
 
@@ -201,7 +196,7 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
         var headers = BuildNamespaceHeaders();
 
         var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/list", parameters, headers, _options.DefaultTimeout, cancellationToken);
-        var result = JsonSerializer.Deserialize<ApiResult<PagedData<PromptMetaSummary>>>(response ?? "{}", JsonOptions);
+        var result = JsonSerializer.Deserialize(response ?? "{}", NacosHttpAiJsonContext.Default.PromptApiResultPagedDataPromptMetaSummary);
         return ToPageResult(result?.Data, pageNo, pageSize);
     }
 
@@ -219,7 +214,7 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
         try
         {
             var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/metadata", parameters, headers, _options.DefaultTimeout, cancellationToken);
-            var result = JsonSerializer.Deserialize<ApiResult<PromptMetaInfo>>(response ?? "{}", JsonOptions);
+            var result = JsonSerializer.Deserialize(response ?? "{}", NacosHttpAiJsonContext.Default.PromptApiResultPromptMetaInfo);
             return result?.Data;
         }
         catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
@@ -240,7 +235,7 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
         var headers = BuildNamespaceHeaders();
 
         var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/versions", parameters, headers, _options.DefaultTimeout, cancellationToken);
-        var result = JsonSerializer.Deserialize<ApiResult<List<PromptVersionSummary>>>(response ?? "{}", JsonOptions);
+        var result = JsonSerializer.Deserialize(response ?? "{}", NacosHttpAiJsonContext.Default.PromptApiResultListPromptVersionSummary);
         return result?.Data ?? new List<PromptVersionSummary>();
     }
 
@@ -259,7 +254,7 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
         try
         {
             var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/version", parameters, headers, _options.DefaultTimeout, cancellationToken);
-            var result = JsonSerializer.Deserialize<ApiResult<PromptVersionInfo>>(response ?? "{}", JsonOptions);
+            var result = JsonSerializer.Deserialize(response ?? "{}", NacosHttpAiJsonContext.Default.PromptApiResultPromptVersionInfo);
             return result?.Data;
         }
         catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
@@ -284,8 +279,8 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
             { "template", template },
             { "commitMsg", commitMsg },
             { "description", description },
-            { "variables", variables == null ? null : JsonSerializer.Serialize(variables, JsonOptions) },
-            { "bizTags", bizTags == null ? null : JsonSerializer.Serialize(bizTags, JsonOptions) }
+            { "variables", variables == null ? null : JsonSerializer.Serialize(variables.ToList(), NacosHttpAiJsonContext.Default.ListPromptVariable) },
+            { "bizTags", bizTags == null ? null : JsonSerializer.Serialize(bizTags.ToList(), NacosHttpAiJsonContext.Default.ListString) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
@@ -306,7 +301,7 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
             { "version", version },
             { "template", template },
             { "commitMsg", commitMsg },
-            { "variables", variables == null ? null : JsonSerializer.Serialize(variables, JsonOptions) }
+            { "variables", variables == null ? null : JsonSerializer.Serialize(variables.ToList(), NacosHttpAiJsonContext.Default.ListPromptVariable) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
@@ -357,8 +352,8 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
             { "template", template },
             { "commitMsg", commitMsg },
             { "description", description },
-            { "bizTags", bizTags == null ? null : JsonSerializer.Serialize(bizTags, JsonOptions) },
-            { "variables", variables == null ? null : JsonSerializer.Serialize(variables, JsonOptions) }
+            { "bizTags", bizTags == null ? null : JsonSerializer.Serialize(bizTags.ToList(), NacosHttpAiJsonContext.Default.ListString) },
+            { "variables", variables == null ? null : JsonSerializer.Serialize(variables.ToList(), NacosHttpAiJsonContext.Default.ListPromptVariable) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
@@ -399,7 +394,7 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
         var parameters = new Dictionary<string, string?>
         {
             { "promptKey", promptKey },
-            { "labels", JsonSerializer.Serialize(labels, JsonOptions) }
+            { "labels", JsonSerializer.Serialize(labels.ToDictionary(kvp => kvp.Key, kvp => kvp.Value), NacosHttpAiJsonContext.Default.DictionaryStringString) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
@@ -431,7 +426,7 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
         var parameters = new Dictionary<string, string?>
         {
             { "promptKey", promptKey },
-            { "bizTags", JsonSerializer.Serialize(bizTags, JsonOptions) }
+            { "bizTags", JsonSerializer.Serialize(bizTags.ToList(), NacosHttpAiJsonContext.Default.ListString) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
@@ -505,7 +500,7 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
                 return null;
             }
 
-            var result = JsonSerializer.Deserialize<ApiResult<PromptModel>>(response, JsonOptions);
+            var result = JsonSerializer.Deserialize(response, NacosHttpAiJsonContext.Default.PromptApiResultPrompt);
             return result?.Data;
         }
         catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
@@ -604,7 +599,7 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
             return;
         }
 
-        var result = JsonSerializer.Deserialize<ApiResult<PromptModel>>(raw.BodyString, JsonOptions);
+        var result = JsonSerializer.Deserialize(raw.BodyString, NacosHttpAiJsonContext.Default.PromptApiResultPrompt);
         var current = result?.Data;
         if (current == null)
         {

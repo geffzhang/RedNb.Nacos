@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsTrimmable>true</IsTrimmable>
     <Description>Nacos .NET SDK ASP.NET Core Integration - Configuration provider, health checks, service discovery and middleware</Description>
     <PackageTags>nacos;service-discovery;config;microservices;aspnetcore;configuration;health-check</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using RedNb.Nacos;
+using RedNb.Nacos.Grpc.Serialization;
 
 namespace RedNb.Nacos.Grpc.Naming;
 
@@ -37,10 +38,7 @@ internal class NamingRpcTransportClient : IAsyncDisposable
         _grpcClient = grpcClient;
         _options = options;
         _logger = logger;
-        _jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        };
+        _jsonOptions = NacosGrpcJsonOptions.Create();
 
         // Register push handler
         _grpcClient.RegisterPushHandler("naming", HandlePushMessage);
@@ -373,7 +371,7 @@ internal class NamingRpcTransportClient : IAsyncDisposable
     {
         try
         {
-            var request = JsonSerializer.Deserialize<NotifySubscriberRequest>(body, _jsonOptions);
+            var request = JsonSerializer.Deserialize(body, NacosGrpcJsonContext.Default.NotifySubscriberRequest);
             if (request != null)
             {
                 _logger?.LogDebug("Received service change notify: {Service}@{Group}",
@@ -400,7 +398,7 @@ internal class NamingRpcTransportClient : IAsyncDisposable
                 return;
             }
             if (root.TryGetProperty("serviceKey", out _)) { EmitFuzzy(root, root); return; }
-            var request = JsonSerializer.Deserialize<NamingFuzzyWatchNotifyRequest>(body, _jsonOptions);
+            var request = JsonSerializer.Deserialize(body, NacosGrpcJsonContext.Default.NamingFuzzyWatchNotifyRequest);
             if (request != null)
             {
                 _logger?.LogDebug("Received fuzzy watch notify: {Service}@{Group}, Type={ChangeType}",

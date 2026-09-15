@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using RedNb.Nacos.Naming;
+using RedNb.Nacos.Serialization;
 
 namespace RedNb.Nacos.Naming.Cache;
 
@@ -33,7 +34,7 @@ public sealed class InstancesDiffer
         if (oldService == null)
         {
             _logger?.LogInformation("init new ips({IpCount}) service: {Key} -> {Hosts}",
-                newService.IpCount(), newService.Key, JsonSerializer.Serialize(newService.Hosts));
+                newService.IpCount(), newService.Key, JsonSerializer.Serialize(newService.Hosts, NacosJsonContext.Default.ListInstance));
             instancesDiff.SetAddedInstances(newService.Hosts);
             return instancesDiff;
         }
@@ -91,21 +92,21 @@ public sealed class InstancesDiffer
         if (newHosts.Count > 0)
         {
             _logger?.LogInformation("new ips({Count}) service: {Key} -> {Hosts}",
-                newHosts.Count, newService.Key, JsonSerializer.Serialize(newHosts));
+                newHosts.Count, newService.Key, JsonSerializer.Serialize(newHosts.ToList(), NacosJsonContext.Default.ListInstance));
             instancesDiff.SetAddedInstances(newHosts);
         }
 
         if (remvHosts.Count > 0)
         {
             _logger?.LogInformation("removed ips({Count}) service: {Key} -> {Hosts}",
-                remvHosts.Count, newService.Key, JsonSerializer.Serialize(remvHosts));
+                remvHosts.Count, newService.Key, JsonSerializer.Serialize(remvHosts.ToList(), NacosJsonContext.Default.ListInstance));
             instancesDiff.SetRemovedInstances(remvHosts);
         }
 
         if (modHosts.Count > 0)
         {
             _logger?.LogInformation("modified ips({Count}) service: {Key} -> {Hosts}",
-                modHosts.Count, newService.Key, JsonSerializer.Serialize(modHosts));
+                modHosts.Count, newService.Key, JsonSerializer.Serialize(modHosts.ToList(), NacosJsonContext.Default.ListInstance));
             instancesDiff.SetModifiedInstances(modHosts);
         }
 

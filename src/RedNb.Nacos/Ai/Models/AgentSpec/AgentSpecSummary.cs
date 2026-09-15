@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
+using RedNb.Nacos.Serialization;
 
 namespace RedNb.Nacos.Ai.Models.AgentSpec;
 
@@ -103,6 +105,7 @@ public class AgentSpecVersionSummary
     /// <summary>
     /// Publish pipeline information.
     /// </summary>
+    [JsonConverter(typeof(ObjectValueConverter))]
     public object? PublishPipelineInfo { get; set; }
 
     /// <summary>

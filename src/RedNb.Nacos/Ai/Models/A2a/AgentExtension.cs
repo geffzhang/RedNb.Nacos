@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using RedNb.Nacos.Serialization;
 
 namespace RedNb.Nacos.Ai.Models.A2a;
 
@@ -29,5 +30,6 @@ public class AgentExtension
     /// Gets or sets the extension parameters.
     /// </summary>
     [JsonPropertyName("params")]
+    [JsonConverter(typeof(ObjectDictionaryConverter))]
     public Dictionary<string, object>? Params { get; set; }
 }
