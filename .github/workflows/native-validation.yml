@@ -66,3 +66,4 @@ jobs:
             artifacts/packages/
             artifacts/server/nacos/stdout.log
             artifacts/server/nacos/stderr.log
+            artifacts/server/nacos/logs/*.log

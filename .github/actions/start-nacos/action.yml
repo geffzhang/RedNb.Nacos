@@ -34,14 +34,25 @@ runs:
         nacos.core.auth.server.identity.key=ci
         nacos.core.auth.server.identity.value=$([Guid]::NewGuid().ToString('N'))
         "@
-        Start-Process java -WindowStyle Hidden -WorkingDirectory $homePath -ArgumentList @(
+        $serverProcess = Start-Process java -WindowStyle Hidden -PassThru -WorkingDirectory $homePath -ArgumentList @(
+          '--add-opens=java.base/java.lang=ALL-UNNAMED',
+          '--add-opens=java.base/java.lang.reflect=ALL-UNNAMED',
+          '--add-opens=java.base/java.util=ALL-UNNAMED',
           '-Xms512m', '-Xmx1g', '-Dnacos.standalone=true', "-Dnacos.home=$homePath",
-          '-jar', 'target/nacos-server.jar', '--spring.config.additional-location=file:./conf/'
-        ) -RedirectStandardOutput "$homePath/stdout.log" -RedirectStandardError "$homePath/stderr.log" | Out-Null
+          '-Dnacos.deployment.type=merged',
+          "-Dloader.path=$homePath/plugins,$homePath/plugins/health,$homePath/plugins/cmdb,$homePath/plugins/selector",
+          '-jar', 'target/nacos-server.jar', '--spring.config.additional-location=file:./conf/',
+          "--logging.config=$homePath/conf/nacos-logback.xml"
+        ) -RedirectStandardOutput "$homePath/stdout.log" -RedirectStandardError "$homePath/stderr.log"
+        "NACOS_CI_PROCESS_ID=$($serverProcess.Id)" >> $env:GITHUB_ENV
     - shell: pwsh
       run: |
         $ready = $false
         for ($i = 0; $i -lt 90; $i++) {
+          if ($IsWindows -and $env:NACOS_CI_PROCESS_ID -and !(Get-Process -Id $env:NACOS_CI_PROCESS_ID -ErrorAction SilentlyContinue)) {
+            Get-ChildItem artifacts/server/nacos -Recurse -Filter '*.log' | ForEach-Object { Get-Content $_.FullName -Tail 30 }
+            throw 'Nacos exited before readiness; see server logs'
+          }
           try { Invoke-WebRequest http://localhost:8080/v3/console/health/readiness -TimeoutSec 2 | Out-Null; $ready = $true; break }
           catch { Start-Sleep -Seconds 2 }
         }
