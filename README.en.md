@@ -19,19 +19,19 @@ Version 2.0.0 changes public namespaces and defaults Config/Naming to gRPC. Read
 For typical .NET applications:
 
 ```bash
-dotnet add package RedNb.Nacos.DependencyInjection --version 2.0.0
+dotnet add package RedNb.Nacos.DependencyInjection
 ```
 
 For ASP.NET Core configuration reload, health checks and service registration:
 
 ```bash
-dotnet add package RedNb.Nacos.AspNetCore --version 2.0.0
+dotnet add package RedNb.Nacos.AspNetCore
 ```
 
 For all components:
 
 ```bash
-dotnet add package RedNb.Nacos.All --version 2.0.0
+dotnet add package RedNb.Nacos.All
 ```
 
 Required dependencies are installed automatically; you do not need to add all six packages manually.

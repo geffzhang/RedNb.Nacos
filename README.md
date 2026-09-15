@@ -21,33 +21,33 @@
 普通 .NET 应用推荐安装依赖注入包：
 
 ```bash
-dotnet add package RedNb.Nacos.DependencyInjection --version 2.0.0
+dotnet add package RedNb.Nacos.DependencyInjection
 ```
 
 ASP.NET Core 应用需要配置热更新、健康检查和服务注册时，安装：
 
 ```bash
-dotnet add package RedNb.Nacos.AspNetCore --version 2.0.0
+dotnet add package RedNb.Nacos.AspNetCore
 ```
 
 需要全部组件时，可安装聚合包：
 
 ```bash
-dotnet add package RedNb.Nacos.All --version 2.0.0
+dotnet add package RedNb.Nacos.All
 ```
 
 上述包会自动引入所需依赖，无需把六个包全部手动添加。
 
 ## 选择类库
 
-| NuGet 包 | 当前版本 | 用途 |
-| --- | --- | --- |
-| [RedNb.Nacos](https://www.nuget.org/packages/RedNb.Nacos/2.0.0) | 2.0.0 | 接口、模型、选项和公共功能 |
-| [RedNb.Nacos.Http](https://www.nuget.org/packages/RedNb.Nacos.Http/2.0.0) | 2.0.0 | 显式 HTTP 客户端和 v3 管理接口 |
-| [RedNb.Nacos.Grpc](https://www.nuget.org/packages/RedNb.Nacos.Grpc/2.0.0) | 2.0.0 | 配置、服务发现、原生锁和 AI 组合客户端 |
-| [RedNb.Nacos.DependencyInjection](https://www.nuget.org/packages/RedNb.Nacos.DependencyInjection/2.0.0) | 2.0.0 | 推荐的 DI 注册入口、命名客户端 |
-| [RedNb.Nacos.AspNetCore](https://www.nuget.org/packages/RedNb.Nacos.AspNetCore/2.0.0) | 2.0.0 | IConfiguration 热更新、健康检查、服务注册 |
-| [RedNb.Nacos.All](https://www.nuget.org/packages/RedNb.Nacos.All/2.0.0) | 2.0.0 | 纯依赖聚合包，方便体验全部组件 |
+| NuGet 包 | 用途 |
+| --- | --- |
+| [RedNb.Nacos](https://www.nuget.org/packages/RedNb.Nacos) | 接口、模型、选项和公共功能 |
+| [RedNb.Nacos.Http](https://www.nuget.org/packages/RedNb.Nacos.Http) | 显式 HTTP 客户端和 v3 管理接口 |
+| [RedNb.Nacos.Grpc](https://www.nuget.org/packages/RedNb.Nacos.Grpc) | 配置、服务发现、原生锁和 AI 组合客户端 |
+| [RedNb.Nacos.DependencyInjection](https://www.nuget.org/packages/RedNb.Nacos.DependencyInjection) | 推荐的 DI 注册入口、命名客户端 |
+| [RedNb.Nacos.AspNetCore](https://www.nuget.org/packages/RedNb.Nacos.AspNetCore) | IConfiguration 热更新、健康检查、服务注册 |
+| [RedNb.Nacos.All](https://www.nuget.org/packages/RedNb.Nacos.All) | 纯依赖聚合包，方便体验全部组件 |
 
 ## 推荐用法
 
