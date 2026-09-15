@@ -11,6 +11,9 @@ using RedNb.Nacos.Http.Ai;
 using RedNb.Nacos.Http.Serialization;
 using RedNb.Nacos.Naming;
 using RedNb.Nacos.Serialization;
+using RedNb.Nacos.Sample.Aot;
+
+Console.WriteLine($"MODE dynamic={System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported} reflection={JsonSerializer.IsReflectionEnabledByDefault}");
 
 // NativeAOT smoke: every check runs against the SDK's real serializer factories.
 // A NotSupportedException here means a payload type was trimmed or unregistered.
@@ -89,7 +92,7 @@ Check("http McpServerBasicInfo with McpCapability token form", () =>
 // 4. 严格模式负例:未注册类型解析元数据必须失败(序列化时抛 NotSupportedException)
 Check("unregistered type yields no metadata", () =>
 {
-    try { NacosGrpcJsonOptions.Create().GetTypeInfo(typeof(UnregisteredPayload)); }
+    try { NacosGrpcJsonOptions.Create(allowReflectionFallback: false).GetTypeInfo(typeof(UnregisteredPayload)); }
     catch (NotSupportedException) { return; } // strict resolver: metadata refused
     throw new Exception("unregistered type unexpectedly resolved");
 });
@@ -107,6 +110,19 @@ Check("user context combines with SDK context", () =>
     if (!json.Contains("\"id\":7")) throw new Exception($"unexpected: {json}");
 });
 
+Check("numeric/container boundaries and cycle rejection", LiveChecks.CheckValues);
+Check("push ACK with and without requestId", () =>
+{
+    var options = NacosGrpcJsonOptions.Create(allowReflectionFallback: false);
+    var info = Info<RedNb.Nacos.Grpc.PushAckResponse>(options);
+    if (JsonSerializer.Serialize(new RedNb.Nacos.Grpc.PushAckResponse { RequestId = "1" }, info) != """{"success":true,"requestId":"1"}""") throw new Exception("ACK requestId mismatch");
+    if (JsonSerializer.Serialize(new RedNb.Nacos.Grpc.PushAckResponse(), info) != """{"success":true}""") throw new Exception("ACK missing-id mismatch");
+});
+if (args.Contains("--live"))
+{
+    try { await LiveChecks.RunAsync(args.Contains("--recovery")); Console.WriteLine("PASS live SDK contracts"); }
+    catch (Exception ex) { failures++; Console.WriteLine($"FAIL live SDK contracts: {ex}"); }
+}
 Console.WriteLine(failures == 0 ? "AOT SMOKE OK" : $"AOT SMOKE FAILED ({failures})");
 return failures == 0 ? 0 : 1;
 

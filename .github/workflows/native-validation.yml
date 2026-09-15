@@ -1,0 +1,68 @@
+name: Native validation
+on:
+  workflow_call:
+    inputs:
+      app:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        framework: [net8.0, net10.0]
+        platform:
+          - { os: ubuntu-latest, rid: linux-x64 }
+          - { os: windows-latest, rid: win-x64 }
+    runs-on: ${{ matrix.platform.os }}
+    timeout-minutes: 60
+    env:
+      NACOS_TEST_SERVER: localhost:8848
+      NACOS_TEST_CONSOLE: localhost:8080
+      NACOS_TEST_USERNAME: nacos
+      NACOS_TEST_PASSWORD: nacos
+      NACOS_VALIDATION_APP: ${{ inputs.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Linux native toolchain
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+      - uses: ./.github/actions/start-nacos
+      - name: Source native consumer
+        shell: pwsh
+        run: ./scripts/aot/validate.ps1 -Framework ${{ matrix.framework }} -Rid ${{ matrix.platform.rid }} -App $env:NACOS_VALIDATION_APP
+      - name: Idle recovery after local container restart
+        if: runner.os == 'Linux' && inputs.app == 'Aot'
+        shell: pwsh
+        run: |
+          ./scripts/aot/run-recovery.ps1 -Container rednb-nacos-ci -Executable artifacts/aot-validation/native/linux-x64/${{ matrix.framework }}/Aot/RedNb.Nacos.Sample.Aot
+      - name: Pack actual NuGet artifacts
+        shell: pwsh
+        run: |
+          foreach ($project in Get-ChildItem src/*/*.csproj) {
+            dotnet pack $project.FullName -c Release -o artifacts/packages
+            if ($LASTEXITCODE) { throw 'Pack failed' }
+          }
+          python scripts/verify-packages.py artifacts/packages --version 2.1.0
+          if ($LASTEXITCODE) { throw 'Invalid packages' }
+      - name: Installed NuGet native consumer
+        shell: pwsh
+        run: ./scripts/aot/validate.ps1 -Framework ${{ matrix.framework }} -Rid ${{ matrix.platform.rid }} -App $env:NACOS_VALIDATION_APP -PackageDirectory artifacts/packages -Version 2.1.0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ inputs.app }}-${{ matrix.platform.rid }}-${{ matrix.framework }}
+          retention-days: 7
+          path: |
+            artifacts/aot-validation/
+            artifacts/aot-recovery/
+            artifacts/packages/
+            artifacts/server/nacos/stdout.log
+            artifacts/server/nacos/stderr.log

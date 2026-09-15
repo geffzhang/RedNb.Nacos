@@ -1,13 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <PublishAot>true</PublishAot>
     <IsPackable>false</IsPackable>
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
-  <ItemGroup>
+  <ItemGroup Condition="'$(UseNacosPackages)' != 'true'">
+    <Compile Remove="PackageProgram.cs" />
     <ProjectReference Include="..\..\src\RedNb.Nacos.Http\RedNb.Nacos.Http.csproj" />
     <ProjectReference Include="..\..\src\RedNb.Nacos.Grpc\RedNb.Nacos.Grpc.csproj" />
+    <ProjectReference Include="..\..\src\RedNb.Nacos.DependencyInjection\RedNb.Nacos.DependencyInjection.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseNacosPackages)' == 'true'">
+    <Compile Remove="Program.cs" />
+    <PackageReference Include="RedNb.Nacos.DependencyInjection" VersionOverride="$(NacosPackageVersion)" />
   </ItemGroup>
 </Project>

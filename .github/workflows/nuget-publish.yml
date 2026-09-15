@@ -1,8 +1,12 @@
-name: Publish NuGet 2.0.0
+name: Publish reviewed NuGet release
 
 on:
   workflow_dispatch:
     inputs:
+      version:
+        description: Exact package version of the already published GitHub Release (without v)
+        required: true
+        type: string
       nuget_user:
         description: NuGet username authorized by the trusted publishing policy
         required: true
@@ -12,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: nuget-publish-2.0.0
+  group: nuget-publish-${{ inputs.version }}
   cancel-in-progress: false
 
 jobs:
@@ -28,17 +32,24 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - name: Validate requested version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: python -c 'import os,re; assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?", os.environ["VERSION"])'
       - name: Download the published release assets
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
         run: |
-          gh release download v2.0.0 --repo "$REPOSITORY" --pattern '*.nupkg' --dir artifacts/nuget-release
-          gh api "repos/$REPOSITORY/releases/tags/v2.0.0" > artifacts/release.json
+          gh release download "v$VERSION" --repo "$REPOSITORY" --pattern '*.nupkg' --dir artifacts/nuget-release
+          gh api "repos/$REPOSITORY/releases/tags/v$VERSION" > artifacts/release.json
       - name: Verify release hashes and package metadata
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          python scripts/verify-release-assets.py artifacts/release.json artifacts/nuget-release
-          python scripts/verify-packages.py artifacts/nuget-release
+          python scripts/verify-release-assets.py artifacts/release.json artifacts/nuget-release --version "$VERSION"
+          python scripts/verify-packages.py artifacts/nuget-release --version "$VERSION"
       - name: Obtain short-lived NuGet publishing credentials
         uses: NuGet/login@v1
         id: login
@@ -47,8 +58,9 @@ jobs:
       - name: Publish packages in dependency order
         env:
           PUBLISH_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+          VERSION: ${{ inputs.version }}
         run: |
           for id in RedNb.Nacos RedNb.Nacos.Http RedNb.Nacos.Grpc RedNb.Nacos.DependencyInjection RedNb.Nacos.AspNetCore RedNb.Nacos.All; do
-            dotnet nuget push "artifacts/nuget-release/$id.2.0.0.nupkg" \
+            dotnet nuget push "artifacts/nuget-release/$id.$VERSION.nupkg" \
               --api-key "$PUBLISH_KEY" --source https://api.nuget.org/v3/index.json
           done

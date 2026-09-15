@@ -50,7 +50,7 @@ jobs:
       - name: Validate packages
         run: |
           dotnet pack RedNb.Nacos.sln --no-build -c Release -o artifacts/packages
-          python3 scripts/verify-packages.py artifacts/packages
+          python3 scripts/verify-packages.py artifacts/packages --version 2.1.0
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -62,9 +62,18 @@ jobs:
       - name: Stop test container
         if: always()
         run: docker rm -f rednb-nacos-ci
-  aot-smoke:
+  strict-serialization:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        framework: [net8.0, net10.0]
+    env:
+      NACOS_TEST_SERVER: localhost:8848
+      NACOS_TEST_CONSOLE: localhost:8080
+      NACOS_TEST_USERNAME: nacos
+      NACOS_TEST_PASSWORD: nacos
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -72,9 +81,23 @@ jobs:
           dotnet-version: |
             8.0.x
             10.0.x
-      - name: Install AOT toolchain
-        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
-      - name: Publish NativeAOT smoke
-        run: dotnet publish samples/RedNb.Nacos.Sample.Aot/RedNb.Nacos.Sample.Aot.csproj -c Release -r linux-x64 --self-contained
-      - name: Run AOT smoke
-        run: samples/RedNb.Nacos.Sample.Aot/bin/Release/net10.0/linux-x64/publish/RedNb.Nacos.Sample.Aot
+      - uses: ./.github/actions/start-nacos
+      - name: Managed execution with JSON reflection disabled
+        shell: pwsh
+        run: |
+          ./scripts/aot/validate.ps1 -Managed -Framework ${{ matrix.framework }} -Rid linux-x64 -App Aot
+          ./scripts/aot/validate.ps1 -Managed -Framework ${{ matrix.framework }} -Rid linux-x64 -App AotWeb
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strict-${{ matrix.framework }}
+          retention-days: 7
+          path: artifacts/
+  native-sdk:
+    uses: ./.github/workflows/native-validation.yml
+    with:
+      app: Aot
+  native-web:
+    uses: ./.github/workflows/native-validation.yml
+    with:
+      app: AotWeb

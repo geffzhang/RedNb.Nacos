@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <PublishAot>true</PublishAot>
+    <EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/RedNb.Nacos.AspNetCore/RedNb.Nacos.AspNetCore.csproj" Condition="'$(UseNacosPackages)' != 'true'" />
+    <PackageReference Include="RedNb.Nacos.AspNetCore" VersionOverride="$(NacosPackageVersion)" Condition="'$(UseNacosPackages)' == 'true'" />
+    <Compile Include="../RedNb.Nacos.Sample.Aot/LiveChecks.cs" Link="LiveChecks.cs" />
+  </ItemGroup>
+</Project>
