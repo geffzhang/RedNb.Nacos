@@ -2,6 +2,7 @@
 
 [![NuGet](https://img.shields.io/nuget/v/RedNb.Nacos.All.svg)](https://www.nuget.org/packages/RedNb.Nacos.All/)
 [![GitHub Release](https://img.shields.io/github/v/release/yinghongzhen/RedNb.Nacos)](https://github.com/yinghongzhen/RedNb.Nacos/releases/latest)
+[![CI](https://github.com/yinghongzhen/RedNb.Nacos/actions/workflows/ci.yml/badge.svg)](https://github.com/yinghongzhen/RedNb.Nacos/actions/workflows/ci.yml)
 [![.NET](https://img.shields.io/badge/.NET-8%20%7C%2010-512BD4)](docs/CAPABILITIES.md)
 [![Tested Nacos](https://img.shields.io/badge/tested%20Nacos-3.2.4-blue)](docs/TEST_REPORT.md)
 
@@ -10,6 +11,8 @@ English | [简体中文](README.md)
 A .NET 8 / .NET 10 SDK targeting Nacos 3.2.4. Stable SDK version **2.0.0** is available on [NuGet.org](https://www.nuget.org/packages/RedNb.Nacos.All/2.0.0) and [GitHub Releases](https://github.com/yinghongzhen/RedNb.Nacos/releases/tag/v2.0.0). The SDK version and tested Nacos server version are separate.
 
 Version 2.0.0 changes public namespaces and defaults Config/Naming to gRPC. Read the [migration guide](docs/MIGRATION.md) before upgrading from 1.x. Nacos 2.x is not supported; other 3.x releases require explicit validation.
+
+**2.1.0 on master has passed acceptance and is awaiting publication:** 1,500 tests and all 11 CI checks passed. It adds Windows/Linux NativeAOT support and per-client JSON context injection, with fixes for numeric/container serialization, YAML merging and AI management contracts. See the [2.1.0 acceptance report](docs/NATIVEAOT_TEST_REPORT.md). Installation commands below use the currently published stable version.
 
 ## Installation
 
@@ -32,6 +35,14 @@ dotnet add package RedNb.Nacos.All --version 2.0.0
 ```
 
 Required dependencies are installed automatically; you do not need to add all six packages manually.
+
+## NativeAOT (2.1.0)
+
+Validated targets are .NET 8 / .NET 10 on `win-x64` / `linux-x64`, for both the SDK client and a separate ASP.NET Core Minimal API. Validation includes project references, actual NuGet consumers, configuration, naming, AI lifecycles, ACK exchange and local server restart recovery.
+
+SDK protocol models use source-generated JSON metadata. Register application types through `NacosClientOptions.JsonTypeInfoResolver`; custom generic disk caches can receive `JsonTypeInfo<T>`. Regular JIT retains reflection fallback for application types. NativeAOT and JSON-reflection-disabled applications report unregistered types explicitly.
+
+See the [NativeAOT guide](docs/NATIVEAOT.md), [native SDK sample](samples/RedNb.Nacos.Sample.Aot) and [Minimal API sample](samples/RedNb.Nacos.Sample.AotWeb). MVC/Swagger, ARM64, macOS, Linux musl, TLS/proxies, multi-node clusters and external LLMs are outside this acceptance scope.
 
 ## Usage
 

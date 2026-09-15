@@ -2,6 +2,7 @@
 
 [![NuGet](https://img.shields.io/nuget/v/RedNb.Nacos.All.svg)](https://www.nuget.org/packages/RedNb.Nacos.All/)
 [![GitHub Release](https://img.shields.io/github/v/release/yinghongzhen/RedNb.Nacos)](https://github.com/yinghongzhen/RedNb.Nacos/releases/latest)
+[![CI](https://github.com/yinghongzhen/RedNb.Nacos/actions/workflows/ci.yml/badge.svg)](https://github.com/yinghongzhen/RedNb.Nacos/actions/workflows/ci.yml)
 [![.NET](https://img.shields.io/badge/.NET-8%20%7C%2010-512BD4)](docs/CAPABILITIES.md)
 [![Tested Nacos](https://img.shields.io/badge/tested%20Nacos-3.2.4-blue)](docs/TEST_REPORT.md)
 
@@ -9,9 +10,9 @@
 
 面向 Nacos 3.2.4 的 .NET 8 / .NET 10 SDK。配置和服务发现默认使用 gRPC；AI 与管理操作按服务器实际能力选择 HTTP Client、Admin 或 Console 通道。
 
-当前稳定版 **2.0.0** 已发布到 [NuGet.org](https://www.nuget.org/packages/RedNb.Nacos.All/2.0.0) 和 [GitHub Release](https://github.com/yinghongzhen/RedNb.Nacos/releases/tag/v2.0.0)。SDK 版本为 2.0.0，服务端验收版本为 Nacos 3.2.4。
+当前已发布稳定版为 **2.0.0**，可从 [NuGet.org](https://www.nuget.org/packages/RedNb.Nacos.All/2.0.0) 安装。[GitHub Release](https://github.com/yinghongzhen/RedNb.Nacos/releases/tag/v2.0.0) 提供对应发布说明。SDK 版本与 Nacos 服务端版本分别编号。
 
-`master` 正在准备 **2.1.0**：修复 JSON 数值/容器与 YAML 合并行为，新增用户序列化 Context 注入和 NativeAOT 验收应用。2.1.0 尚未发布；使用方法与当前验证边界见 [NativeAOT 指南](docs/NATIVEAOT.md)。
+`master` 的 **2.1.0 已完成验收，等待发布**：1500 项测试通过，CI 11 项检查全部成功。新增 Windows/Linux NativeAOT 支持与客户端级 JSON Context 注入，并修复 JSON 数值/容器、YAML 合并及 AI 管理接口契约。详细证据见 [2.1.0 验收报告](docs/NATIVEAOT_TEST_REPORT.md)。
 
 从 1.x 升级包含命名空间和默认实现的破坏性调整，请先阅读[迁移说明](docs/MIGRATION.md)。**不支持 Nacos 2.x**；其他 3.x 小版本的支持范围见[能力矩阵](docs/CAPABILITIES.md)。
 
@@ -81,8 +82,17 @@ var content = await config.GetConfigAsync("app-config", "DEFAULT_GROUP", 5000);
 - [单机 Docker 部署](deploy/docker-compose/README.md)
 - [构建和集成测试](docs/ENVIRONMENT_BOOTSTRAP.md)
 - [完整改进计划](docs/IMPROVEMENT_PLAN.md)
-- [测试报告](docs/TEST_REPORT.md)
+- [2.1.0 NativeAOT 验收报告](docs/NATIVEAOT_TEST_REPORT.md)
+- [2.0.0 测试报告](docs/TEST_REPORT.md)
 - [文档索引](docs/README.md)
+
+## NativeAOT（2.1.0）
+
+已验证 .NET 8 / .NET 10 × `win-x64` / `linux-x64` 的原生 SDK 客户端和独立 ASP.NET Core Minimal API，包括源码引用与实际 NuGet 包消费者。验证覆盖配置与服务发现、AI 生命周期、ACK 收发，以及本地服务器重启后的配置监听、Naming 和 MCP 后端恢复。
+
+SDK 协议模型使用源生成 JSON 元数据。自定义请求、响应或扩展对象通过 `NacosClientOptions.JsonTypeInfoResolver` 注册应用的 `JsonSerializerContext`；自定义泛型磁盘缓存可传入 `JsonTypeInfo<T>`。普通 JIT 保留用户类型的反射回退；NativeAOT 或禁用 JSON 反射时，未注册类型会明确报错。
+
+使用方法见 [NativeAOT 指南](docs/NATIVEAOT.md)，示例见 [原生 SDK](samples/RedNb.Nacos.Sample.Aot) 与 [原生 Minimal API](samples/RedNb.Nacos.Sample.AotWeb)。现有 MVC/Swagger 示例不属于 NativeAOT 验收范围；ARM64、macOS、Linux musl、TLS/代理、多节点集群及外部 LLM 等范围尚未认证。
 
 ## 能力边界
 
