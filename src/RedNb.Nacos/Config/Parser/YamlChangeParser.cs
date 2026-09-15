@@ -36,12 +36,12 @@ public class YamlChangeParser : AbstractConfigChangeParser
 
             if (stream.Documents.Count > 0)
             {
-                FlattenYaml(string.Empty, stream.Documents[0].RootNode, result);
+                FlattenYaml(string.Empty, stream.Documents[0].RootNode, result, new HashSet<YamlNode>(ReferenceEqualityComparer.Instance), 0);
             }
         }
         catch (YamlException)
         {
-            // 解析失败时返回空字典
+            result.Clear();
         }
 
         return result;
@@ -53,32 +53,25 @@ public class YamlChangeParser : AbstractConfigChangeParser
     /// <param name="prefix">当前前缀</param>
     /// <param name="node">YAML 节点</param>
     /// <param name="result">结果字典</param>
-    private static void FlattenYaml(string prefix, YamlNode node, Dictionary<string, string> result)
+    private static void FlattenYaml(string prefix, YamlNode node, Dictionary<string, string> result, HashSet<YamlNode> active, int depth)
     {
+        if (depth > 128 || !active.Add(node)) throw new YamlException("Cyclic or excessively deep YAML aliases.");
+        try
+        {
         switch (node)
         {
             case YamlMappingNode mapping:
-                foreach (var kvp in mapping.Children)
+                foreach (var kvp in ResolveMapping(mapping, new HashSet<YamlNode>(ReferenceEqualityComparer.Instance), depth))
                 {
-                    var keyNode = kvp.Key as YamlScalarNode;
-                    if (keyNode is { Value: "<<" })
-                    {
-                        // YAML merge key: flatten the merged mapping into the current prefix,
-                        // matching the Deserializer<object> merge behavior of 2.0.0.
-                        FlattenYaml(prefix, kvp.Value, result);
-                        continue;
-                    }
-
-                    var key = keyNode?.Value ?? kvp.Key.ToString() ?? string.Empty;
-                    var newPrefix = string.IsNullOrEmpty(prefix) ? key : $"{prefix}.{key}";
-                    FlattenYaml(newPrefix, kvp.Value, result);
+                    var newPrefix = string.IsNullOrEmpty(prefix) ? kvp.Key : $"{prefix}.{kvp.Key}";
+                    FlattenYaml(newPrefix, kvp.Value, result, active, depth + 1);
                 }
                 break;
 
             case YamlSequenceNode sequence:
                 for (var i = 0; i < sequence.Children.Count; i++)
                 {
-                    FlattenYaml($"{prefix}[{i}]", sequence.Children[i], result);
+                    FlattenYaml($"{prefix}[{i}]", sequence.Children[i], result, active, depth + 1);
                 }
                 break;
 
@@ -88,6 +81,34 @@ public class YamlChangeParser : AbstractConfigChangeParser
                 result[prefix] = IsNullScalar(scalar) ? string.Empty : scalar.Value ?? string.Empty;
                 break;
         }
+        }
+        finally { active.Remove(node); }
+    }
+
+    private static bool IsMergeKey(YamlNode key) => key is YamlScalarNode scalar &&
+        (scalar.Tag.ToString() == "tag:yaml.org,2002:merge" ||
+         scalar.Style == ScalarStyle.Plain && scalar.Value == "<<" && scalar.Tag.ToString() != "tag:yaml.org,2002:str");
+
+    private static Dictionary<string, YamlNode> ResolveMapping(YamlMappingNode mapping, HashSet<YamlNode> active, int depth)
+    {
+        if (depth > 128 || !active.Add(mapping)) throw new YamlException("Cyclic or excessively deep YAML merge.");
+        try
+        {
+            var result = new Dictionary<string, YamlNode>(StringComparer.Ordinal);
+            foreach (var pair in mapping.Children.Where(pair => IsMergeKey(pair.Key)))
+            {
+                IEnumerable<YamlNode> sources = pair.Value is YamlSequenceNode sequence ? sequence.Children : [pair.Value];
+                foreach (var source in sources)
+                {
+                    if (source is not YamlMappingNode inherited) throw new YamlException("A YAML merge requires mappings.");
+                    foreach (var entry in ResolveMapping(inherited, active, depth + 1)) result.TryAdd(entry.Key, entry.Value);
+                }
+            }
+            foreach (var pair in mapping.Children.Where(pair => !IsMergeKey(pair.Key)))
+                result[(pair.Key as YamlScalarNode)?.Value ?? pair.Key.ToString()] = pair.Value;
+            return result;
+        }
+        finally { active.Remove(mapping); }
     }
 
     /// <summary>
@@ -95,6 +116,7 @@ public class YamlChangeParser : AbstractConfigChangeParser
     /// </summary>
     private static bool IsNullScalar(YamlScalarNode scalar)
     {
+        if (scalar.Tag.ToString() == "tag:yaml.org,2002:str") return false;
         if (scalar.Tag.ToString() == "tag:yaml.org,2002:null")
         {
             return true;

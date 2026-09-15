@@ -6,6 +6,46 @@ namespace RedNb.Nacos.Tests.Config;
 
 public class YamlChangeParserTests
 {
+    [Theory]
+    [InlineData("  retries: 5\n  <<: *base\n")]
+    [InlineData("  <<: *base\n  retries: 5\n")]
+    public void ExplicitKeysAlwaysOverrideMergedValues(string mapping)
+    {
+        var values = ParseAsNew("defaults: &base\n  retries: 3\nservice:\n" + mapping);
+        Assert.Equal("5", values["service.retries"]);
+    }
+
+    [Fact]
+    public void MergeSequenceUsesEarlierMappingFirst()
+    {
+        var values = ParseAsNew("a: &a {value: first, a: one}\nb: &b {value: second, b: two}\nservice:\n  <<: [*a, *b]\n");
+        Assert.Equal("first", values["service.value"]);
+        Assert.Equal("one", values["service.a"]);
+        Assert.Equal("two", values["service.b"]);
+        Assert.DoesNotContain(values.Keys, key => key.Contains("[0]"));
+    }
+
+    [Fact]
+    public void QuotedMergeKeyIsAnOrdinaryKey()
+    {
+        var values = ParseAsNew("service:\n  \"<<\": {value: literal}\n");
+        Assert.Equal("literal", values["service.<<.value"]);
+    }
+
+    [Theory]
+    [InlineData("loop: &loop {self: *loop}")]
+    [InlineData("loop: &loop {<<: *loop}")]
+    public void CyclicAliasesReturnNoPartialConfiguration(string yaml)
+        => Assert.Empty(ParseAsNew(yaml));
+
+    [Fact]
+    public void ExplicitNullAndEmptyContainersOverrideMergedSubtrees()
+    {
+        var values = ParseAsNew("base: &base {nested: {x: old}, list: [old]}\nservice:\n  <<: *base\n  nested: null\n  list: []\n");
+        Assert.Equal("", values["service.nested"]);
+        Assert.DoesNotContain("service.nested.x", values.Keys);
+        Assert.DoesNotContain("service.list[0]", values.Keys);
+    }
     private readonly YamlChangeParser _parser = new();
 
     private Dictionary<string, string> ParseAsNew(string content)

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Collections;
 using RedNb.Nacos.Ai.Models.A2a;
 
 namespace RedNb.Nacos.Serialization;
@@ -18,7 +19,7 @@ public sealed class ObjectValueConverter : JsonConverter<object>
     }
 
     public override void Write(Utf8JsonWriter writer, object value, JsonSerializerOptions options)
-        => JsonObjectConverters.WriteValue(writer, value);
+        => JsonObjectConverters.WriteValue(writer, value, options);
 }
 
 /// <summary>
@@ -44,7 +45,7 @@ public sealed class ObjectDictionaryConverter : JsonConverter<Dictionary<string,
         foreach (var pair in value)
         {
             writer.WritePropertyName(pair.Key);
-            JsonObjectConverters.WriteValue(writer, pair.Value);
+            JsonObjectConverters.WriteValue(writer, pair.Value, options);
         }
 
         writer.WriteEndObject();
@@ -75,7 +76,7 @@ public sealed class SecuritySchemeConverter : JsonConverter<SecurityScheme>
         foreach (var pair in value)
         {
             writer.WritePropertyName(pair.Key);
-            JsonObjectConverters.WriteValue(writer, pair.Value);
+            JsonObjectConverters.WriteValue(writer, pair.Value, options);
         }
 
         writer.WriteEndObject();
@@ -85,8 +86,13 @@ public sealed class SecuritySchemeConverter : JsonConverter<SecurityScheme>
 /// <summary>Shared value writer for the AOT-safe object converters.</summary>
 internal static class JsonObjectConverters
 {
-    public static void WriteValue(Utf8JsonWriter writer, object? value)
+    public static void WriteValue(Utf8JsonWriter writer, object? value, JsonSerializerOptions options)
+        => WriteValue(writer, value, options, new HashSet<object>(ReferenceEqualityComparer.Instance));
+
+    private static void WriteValue(Utf8JsonWriter writer, object? value, JsonSerializerOptions options, HashSet<object> active)
     {
+        if (writer.CurrentDepth >= (options.MaxDepth == 0 ? 64 : options.MaxDepth))
+            throw new JsonException("Maximum JSON depth exceeded.");
         switch (value)
         {
             case null:
@@ -101,33 +107,63 @@ internal static class JsonObjectConverters
             case bool flag:
                 writer.WriteBooleanValue(flag);
                 break;
-            case byte or sbyte or short or ushort or int or uint or long or ulong:
-                writer.WriteNumberValue(Convert.ToInt64(value, System.Globalization.CultureInfo.InvariantCulture));
-                break;
-            case float or double or decimal:
-                writer.WriteNumberValue(Convert.ToDecimal(value, System.Globalization.CultureInfo.InvariantCulture));
-                break;
-            case Dictionary<string, object> dictionary:
-                writer.WriteStartObject();
-                foreach (var pair in dictionary)
+            case byte v: writer.WriteNumberValue(v); break;
+            case sbyte v: writer.WriteNumberValue(v); break;
+            case short v: writer.WriteNumberValue(v); break;
+            case ushort v: writer.WriteNumberValue(v); break;
+            case int v: writer.WriteNumberValue(v); break;
+            case uint v: writer.WriteNumberValue(v); break;
+            case long v: writer.WriteNumberValue(v); break;
+            case ulong v: writer.WriteNumberValue(v); break;
+            case float v: writer.WriteNumberValue(v); break;
+            case double v: writer.WriteNumberValue(v); break;
+            case decimal v: writer.WriteNumberValue(v); break;
+            case byte[] bytes: writer.WriteBase64StringValue(bytes); break;
+            case char character: writer.WriteStringValue(character.ToString()); break;
+            case DateTime date: writer.WriteStringValue(date); break;
+            case DateTimeOffset date: writer.WriteStringValue(date); break;
+            case Guid guid: writer.WriteStringValue(guid); break;
+            case DateOnly date: JsonSerializer.Serialize(writer, date, BuiltInValueContext.Default.DateOnly); break;
+            case TimeOnly time: JsonSerializer.Serialize(writer, time, BuiltInValueContext.Default.TimeOnly); break;
+            case IDictionary dictionary when dictionary.Keys.Cast<object>().All(key => key is string):
+                if (!active.Add(value)) throw new JsonException("A JSON reference cycle was detected.");
+                try
                 {
-                    writer.WritePropertyName(pair.Key);
-                    WriteValue(writer, pair.Value);
+                writer.WriteStartObject();
+                foreach (DictionaryEntry pair in dictionary)
+                {
+                    writer.WritePropertyName((string)pair.Key);
+                    WriteValue(writer, pair.Value, options, active);
                 }
-
                 writer.WriteEndObject();
+                }
+                finally { active.Remove(value); }
                 break;
-            case IEnumerable<object> items:
+            case IDictionary:
+                JsonSerializer.Serialize(writer, value, options.GetTypeInfo(value.GetType()));
+                break;
+            case IEnumerable items:
+                if (!active.Add(value)) throw new JsonException("A JSON reference cycle was detected.");
+                try
+                {
                 writer.WriteStartArray();
                 foreach (var item in items)
                 {
-                    WriteValue(writer, item);
+                    WriteValue(writer, item, options, active);
                 }
-
                 writer.WriteEndArray();
+                }
+                finally { active.Remove(value); }
                 break;
             default:
-                throw new JsonException($"Unsupported value type '{value.GetType().FullName}' in AOT-safe converter.");
+                if (value.GetType() == typeof(object)) { writer.WriteStartObject(); writer.WriteEndObject(); break; }
+                var metadata = options.GetTypeInfo(value.GetType());
+                JsonSerializer.Serialize(writer, value, metadata);
+                break;
         }
     }
 }
+
+[JsonSerializable(typeof(DateOnly))]
+[JsonSerializable(typeof(TimeOnly))]
+internal partial class BuiltInValueContext : JsonSerializerContext { }
