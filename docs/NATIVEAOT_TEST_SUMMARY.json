@@ -4,7 +4,7 @@
   "codeCommit": "a2f7a2dea419f70d8a95e0d7d475a65534d8ab4d",
   "server": "Nacos 3.2.4, isolated local Docker",
   "blockedBy": [],
-  "published": false,
+  "published": true,
   "pushed": true,
   "jitRuns": [
     {
@@ -609,5 +609,13 @@
       "skipped": 0
     }
   },
-  "localSnapshotNote": "Local artifact hashes retain their original pre-CI-hardening builds; the final code revision is certified by the CI run above, which repeats the complete native source/package matrix."
+  "localSnapshotNote": "Local artifact hashes retain their original pre-CI-hardening builds; the final code revision is certified by the CI run above, which repeats the complete native source/package matrix.",
+  "release": {
+    "version": "2.1.0",
+    "commit": "2b09b451d9c849674ebba26198a2bfd9278305c2",
+    "url": "https://github.com/yinghongzhen/RedNb.Nacos/releases/tag/v2.1.0",
+    "publishRun": "https://github.com/yinghongzhen/RedNb.Nacos/actions/runs/34953935898",
+    "packagesPubliclyDownloaded": 6,
+    "packageContentMatchesRelease": true
+  }
 }

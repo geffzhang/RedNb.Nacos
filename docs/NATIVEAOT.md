@@ -1,6 +1,6 @@
 # NativeAOT 与自定义 JSON
 
-本文对应 2.1.0 发布准备代码，目标服务器为 Nacos 3.2.4，不支持 Nacos 2.x。约定的 Windows/Linux 原生矩阵与 CI 已通过；实际结果及未认证范围见 [本轮验收报告](NATIVEAOT_TEST_REPORT.md)。
+本文对应已发布的 2.1.0，目标服务器为 Nacos 3.2.4，不支持 Nacos 2.x。约定的 Windows/Linux 原生矩阵与 CI 已通过；实际结果及未认证范围见 [本轮验收报告](NATIVEAOT_TEST_REPORT.md)。
 
 ## 用户类型
 

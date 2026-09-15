@@ -1,6 +1,6 @@
 # 2.1.0 NativeAOT 改进验收报告
 
-**结论：约定任务已完成。Windows/Linux 原生源码与 NuGet 消费者、两个框架的重启恢复均通过，master 已推送，GitHub Actions 11 项检查全部成功。没有创建 Release 或发布 NuGet。**
+**结论：约定验收任务已完成。Windows/Linux 原生源码与 NuGet 消费者、两个框架的重启恢复均通过，master 已推送，GitHub Actions 11 项检查全部成功。验收结束后，经用户另行授权，2.1.0 已完成 Release 与 NuGet 发布，见 [发布记录](RELEASE_2.1.0.md)。**
 
 日期：2026-09-15。基线：master / 7b7b471；最终代码提交：a2f7a2d。最终代码的 [CI 运行 34943737938](https://github.com/yinghongzhen/RedNb.Nacos/actions/runs/34943737938) 全部成功。
 
@@ -105,6 +105,6 @@
 - 六包 2.1.0 已本地生成，校验身份、双 TFM、版本、README、许可证、内部依赖版本；实际包消费者通过。
 - 包校验器要求显式 `--version`。`nuget-publish.yml` 文件名保留，接收版本并核对 v 标签、六个 nupkg、GitHub SHA-256 摘要及包内版本。使用本地合成 Release 元数据验证正常摘要通过、篡改摘要被拒绝；没有调用真实发布。
 - CI 已拆分普通回归、严格序列化、原生 SDK 和原生 Web；最终 11 项检查全部通过，包括 8 项原生框架/平台任务、2 项严格序列化和普通回归。
-- **master 已正常推送，无强推；修复和发布准备完成。创建 Release、发布 NuGet 仍未执行，需另行安排。**
+- **master 已正常推送，无强推；本报告完成时仅准备发布，后续另行授权的 2.1.0 正式发布已完成，详见发布记录。**
 
 ARM64、macOS、Linux musl/其他发行版、TLS/代理、多节点集群、外部 LLM、所有 AI 插件/参数组合及压力测试未认证。Nacos 2.x 不支持，其他 3.x 版本未按本轮矩阵认证。现有 MVC/Swagger 示例不属于 NativeAOT 声明。

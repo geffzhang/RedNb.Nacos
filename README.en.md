@@ -8,30 +8,30 @@
 
 English | [简体中文](README.md)
 
-A .NET 8 / .NET 10 SDK targeting Nacos 3.2.4. This source version is **2.1.0**. The NuGet and GitHub Release badges show published versions; SDK and server versions are numbered independently.
+A .NET 8 / .NET 10 SDK targeting Nacos 3.2.4. Stable version **2.1.0** is available on [NuGet.org](https://www.nuget.org/packages/RedNb.Nacos.All/2.1.0) and [GitHub Releases](https://github.com/yinghongzhen/RedNb.Nacos/releases/tag/v2.1.0). SDK and server versions are numbered independently.
 
 Version 2.0.0 changes public namespaces and defaults Config/Naming to gRPC. Read the [migration guide](docs/MIGRATION.md) before upgrading from 1.x. Nacos 2.x is not supported; other 3.x releases require explicit validation.
 
-**2.1.0 has passed acceptance:** 1,500 tests and all 11 CI checks passed. It adds Windows/Linux NativeAOT support and per-client JSON context injection, with fixes for numeric/container serialization, YAML merging and AI management contracts. See the [2.1.0 acceptance report](docs/NATIVEAOT_TEST_REPORT.md). Installation commands below select the latest published stable version.
+**2.1.0 has passed acceptance:** 1,500 tests and all 11 CI checks passed. It adds Windows/Linux NativeAOT support and per-client JSON context injection, with fixes for numeric/container serialization, YAML merging and AI management contracts. See the [2.1.0 acceptance report](docs/NATIVEAOT_TEST_REPORT.md).
 
 ## Installation
 
 For typical .NET applications:
 
 ```bash
-dotnet add package RedNb.Nacos.DependencyInjection
+dotnet add package RedNb.Nacos.DependencyInjection --version 2.1.0
 ```
 
 For ASP.NET Core configuration reload, health checks and service registration:
 
 ```bash
-dotnet add package RedNb.Nacos.AspNetCore
+dotnet add package RedNb.Nacos.AspNetCore --version 2.1.0
 ```
 
 For all components:
 
 ```bash
-dotnet add package RedNb.Nacos.All
+dotnet add package RedNb.Nacos.All --version 2.1.0
 ```
 
 Required dependencies are installed automatically; you do not need to add all six packages manually.

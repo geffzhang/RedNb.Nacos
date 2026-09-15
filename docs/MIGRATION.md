@@ -31,7 +31,7 @@
 
 完整支持范围与验证状态见 [能力矩阵](CAPABILITIES.md)；历史设计移至 archive，不是当前执行规范。
 
-## 2.1.0：NativeAOT 与 JIT 兼容（发布准备中）
+## 2.1.0：NativeAOT 与 JIT 兼容
 
 - SDK 协议模型使用源生成元数据。用户 Context 不能替换 SDK 协议字段。
 - 新增 `NacosClientOptions.JsonTypeInfoResolver`，直接传入用户源生成 Context；HTTP AI、gRPC 请求和响应使用该客户端的只读 options，无需自行组合 SDK Context。

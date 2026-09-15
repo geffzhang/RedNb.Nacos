@@ -1,5 +1,7 @@
 # 文档索引
 
+- [2.1.0 发布记录](RELEASE_2.1.0.md)：Release、NuGet、构建来源与校验结果。
+
 - [能力矩阵](CAPABILITIES.md)：当前支持边界与验证方法。
 - [NativeAOT 指南](NATIVEAOT.md)：2.1.0 用户 Context、缓存扩展和实际序列化路径。
 - [NativeAOT 验收报告](NATIVEAOT_TEST_REPORT.md)：本轮实测矩阵、失败修复和 Windows 阻塞；[机器可读结果](NATIVEAOT_TEST_SUMMARY.json)。

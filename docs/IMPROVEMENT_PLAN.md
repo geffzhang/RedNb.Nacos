@@ -216,4 +216,4 @@ P0 → P1 → P2 → P3 → P4 → P5 → P6 → P7。P0 的 CI/打包基线尽�
 - [x] .NET 8/10 × win-x64 原生 SDK 与 Web，源码和 NuGet 包消费者；原生重启恢复通过。
 - [x] 六包版本 2.1.0、版本参数校验、保留 nuget-publish.yml 可信发布入口。
 - [x] 当前验收报告与机器可读结果，明确未通过的 Windows 门槛。
-- [x] 全部门槛通过后推送 master，GitHub Actions 11 项全部成功（未发布 Release/NuGet）。
+- [x] 全部门槛通过后推送 master，GitHub Actions 11 项全部成功；后续经用户另行授权，Release/NuGet 发布已完成，见 [发布记录](RELEASE_2.1.0.md)。
