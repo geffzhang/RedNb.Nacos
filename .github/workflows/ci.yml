@@ -62,3 +62,19 @@ jobs:
       - name: Stop test container
         if: always()
         run: docker rm -f rednb-nacos-ci
+  aot-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Install AOT toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+      - name: Publish NativeAOT smoke
+        run: dotnet publish samples/RedNb.Nacos.Sample.Aot/RedNb.Nacos.Sample.Aot.csproj -c Release -r linux-x64 --self-contained
+      - name: Run AOT smoke
+        run: samples/RedNb.Nacos.Sample.Aot/bin/Release/net10.0/linux-x64/publish/RedNb.Nacos.Sample.Aot
