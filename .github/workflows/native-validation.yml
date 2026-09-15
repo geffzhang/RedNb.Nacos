@@ -35,7 +35,18 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
       - uses: ./.github/actions/start-nacos
+        if: runner.os == 'Linux'
+      - uses: actions/setup-java@v4
+        if: runner.os == 'Windows'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Windows server and native consumers
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/aot/validate-windows-ci.ps1 -Framework ${{ matrix.framework }} -App $env:NACOS_VALIDATION_APP
       - name: Source native consumer
+        if: runner.os == 'Linux'
         shell: pwsh
         run: ./scripts/aot/validate.ps1 -Framework ${{ matrix.framework }} -Rid ${{ matrix.platform.rid }} -App $env:NACOS_VALIDATION_APP
       - name: Idle recovery after local container restart
@@ -44,6 +55,7 @@ jobs:
         run: |
           ./scripts/aot/run-recovery.ps1 -Container rednb-nacos-ci -Executable artifacts/aot-validation/native/linux-x64/${{ matrix.framework }}/Aot/RedNb.Nacos.Sample.Aot
       - name: Pack actual NuGet artifacts
+        if: runner.os == 'Linux'
         shell: pwsh
         run: |
           foreach ($project in Get-ChildItem src/*/*.csproj) {
@@ -53,6 +65,7 @@ jobs:
           python scripts/verify-packages.py artifacts/packages --version 2.1.0
           if ($LASTEXITCODE) { throw 'Invalid packages' }
       - name: Installed NuGet native consumer
+        if: runner.os == 'Linux'
         shell: pwsh
         run: ./scripts/aot/validate.ps1 -Framework ${{ matrix.framework }} -Rid ${{ matrix.platform.rid }} -App $env:NACOS_VALIDATION_APP -PackageDirectory artifacts/packages -Version 2.1.0
       - uses: actions/upload-artifact@v4
