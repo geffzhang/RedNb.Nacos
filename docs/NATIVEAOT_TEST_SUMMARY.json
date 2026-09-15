@@ -1,0 +1,502 @@
+{
+  "version": "2.1.0",
+  "status": "blocked",
+  "codeCommit": "2a83133b51ffcbd8249ce2f86491a4cfe007f88c",
+  "server": "Nacos 3.2.4, isolated local Docker",
+  "blockedBy": [
+    "MSVC C++ toolchain is missing; win-x64 NativeAOT matrix has not run"
+  ],
+  "published": false,
+  "pushed": false,
+  "jitRuns": [
+    {
+      "path": "artifacts/aot-210/release-jit/rednb_DESKTOP-VN56ARD_2026-09-15_13_02_58.trx",
+      "counters": {
+        "total": "434",
+        "executed": "434",
+        "passed": "434",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "path": "artifacts/aot-210/release-jit/rednb_DESKTOP-VN56ARD_2026-09-15_13_03_02.trx",
+      "counters": {
+        "total": "434",
+        "executed": "434",
+        "passed": "434",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "path": "artifacts/aot-210/release-jit/rednb_DESKTOP-VN56ARD_2026-09-15_13_03_07.trx",
+      "counters": {
+        "total": "153",
+        "executed": "153",
+        "passed": "153",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "path": "artifacts/aot-210/release-jit/rednb_DESKTOP-VN56ARD_2026-09-15_13_03_13.trx",
+      "counters": {
+        "total": "153",
+        "executed": "153",
+        "passed": "153",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "path": "artifacts/aot-210/release-jit/rednb_DESKTOP-VN56ARD_2026-09-15_13_03_22.trx",
+      "counters": {
+        "total": "56",
+        "executed": "55",
+        "passed": "55",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "path": "artifacts/aot-210/release-jit/rednb_DESKTOP-VN56ARD_2026-09-15_13_05_06.trx",
+      "counters": {
+        "total": "56",
+        "executed": "55",
+        "passed": "55",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "path": "artifacts/aot-210/release-jit/rednb_DESKTOP-VN56ARD_2026-09-15_13_06_57.trx",
+      "counters": {
+        "total": "98",
+        "executed": "98",
+        "passed": "98",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "path": "artifacts/aot-210/release-jit/rednb_DESKTOP-VN56ARD_2026-09-15_13_07_01.trx",
+      "counters": {
+        "total": "98",
+        "executed": "98",
+        "passed": "98",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "path": "artifacts/aot-210/release-jit/rednb_DESKTOP-VN56ARD_2026-09-15_13_07_09.trx",
+      "counters": {
+        "total": "12",
+        "executed": "12",
+        "passed": "12",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "path": "artifacts/aot-210/release-jit-recovery/rednb_DESKTOP-VN56ARD_2026-09-15_13_19_35.trx",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "path": "artifacts/aot-210/release-jit-recovery/rednb_DESKTOP-VN56ARD_2026-09-15_13_20_12.trx",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    }
+  ],
+  "applicationRuns": [
+    {
+      "mode": "managed-no-reflection",
+      "source": "project",
+      "framework": "net8.0",
+      "rid": "win-x64 (managed host)",
+      "app": "Aot",
+      "status": "passed",
+      "log": "artifacts/aot-validation/strict/win-x64/net8.0/Aot/run.log"
+    },
+    {
+      "mode": "managed-no-reflection",
+      "source": "project",
+      "framework": "net8.0",
+      "rid": "win-x64 (managed host)",
+      "app": "AotWeb",
+      "status": "passed",
+      "log": "artifacts/aot-validation/strict/win-x64/net8.0/AotWeb/run.log"
+    },
+    {
+      "mode": "managed-no-reflection",
+      "source": "project",
+      "framework": "net10.0",
+      "rid": "win-x64 (managed host)",
+      "app": "Aot",
+      "status": "passed",
+      "log": "artifacts/aot-validation/strict/win-x64/net10.0/Aot/run.log"
+    },
+    {
+      "mode": "managed-no-reflection",
+      "source": "project",
+      "framework": "net10.0",
+      "rid": "win-x64 (managed host)",
+      "app": "AotWeb",
+      "status": "passed",
+      "log": "artifacts/aot-validation/strict/win-x64/net10.0/AotWeb/run.log"
+    },
+    {
+      "mode": "managed-no-reflection",
+      "source": "package",
+      "framework": "net8.0",
+      "rid": "win-x64 (managed host)",
+      "app": "Aot",
+      "status": "passed",
+      "log": "artifacts/aot-validation/package-strict/win-x64/net8.0/Aot/run.log"
+    },
+    {
+      "mode": "managed-no-reflection",
+      "source": "package",
+      "framework": "net8.0",
+      "rid": "win-x64 (managed host)",
+      "app": "AotWeb",
+      "status": "passed",
+      "log": "artifacts/aot-validation/package-strict/win-x64/net8.0/AotWeb/run.log"
+    },
+    {
+      "mode": "managed-no-reflection",
+      "source": "package",
+      "framework": "net10.0",
+      "rid": "win-x64 (managed host)",
+      "app": "Aot",
+      "status": "passed",
+      "log": "artifacts/aot-validation/package-strict/win-x64/net10.0/Aot/run.log"
+    },
+    {
+      "mode": "managed-no-reflection",
+      "source": "package",
+      "framework": "net10.0",
+      "rid": "win-x64 (managed host)",
+      "app": "AotWeb",
+      "status": "passed",
+      "log": "artifacts/aot-validation/package-strict/win-x64/net10.0/AotWeb/run.log"
+    },
+    {
+      "mode": "native",
+      "source": "project",
+      "framework": "net8.0",
+      "rid": "linux-x64",
+      "app": "Aot",
+      "status": "passed",
+      "log": "artifacts/aot-210/linux-x64/net8.0/Aot/run.log",
+      "sha256": "e8a98111f4bf822d897a051c441a3a15d7143771fccd045390ed7a847a6d8eed"
+    },
+    {
+      "mode": "native",
+      "source": "project",
+      "framework": "net8.0",
+      "rid": "linux-x64",
+      "app": "AotWeb",
+      "status": "passed",
+      "log": "artifacts/aot-210/linux-x64/net8.0/AotWeb/run.log",
+      "sha256": "290160c0b4b9968ee81f49a52097f9ea9b3960c32f8c7adc1c866609756ed194"
+    },
+    {
+      "mode": "native",
+      "source": "project",
+      "framework": "net10.0",
+      "rid": "linux-x64",
+      "app": "Aot",
+      "status": "passed",
+      "log": "artifacts/aot-210/linux-x64/net10.0/Aot/run.log",
+      "sha256": "a642e82be9fc0629d067fd9a9e65a83309961a6946b22cc03235ab0d529218d7"
+    },
+    {
+      "mode": "native",
+      "source": "project",
+      "framework": "net10.0",
+      "rid": "linux-x64",
+      "app": "AotWeb",
+      "status": "passed",
+      "log": "artifacts/aot-210/linux-x64/net10.0/AotWeb/run.log",
+      "sha256": "9e61340adfcbe48190ecd2b9b56d6af6b6a635274f91c1bf380810b8ae243c6d"
+    },
+    {
+      "mode": "native",
+      "source": "package",
+      "framework": "net8.0",
+      "rid": "linux-x64",
+      "app": "Aot",
+      "status": "passed",
+      "log": "artifacts/aot-210/package-validation/package-native/linux-x64/net8.0/Aot/run.log",
+      "sha256": "2a8d7c0724d1ae3983d927068d9b0f833d6722791ec2acfa5db3947df353dfb9"
+    },
+    {
+      "mode": "native",
+      "source": "package",
+      "framework": "net8.0",
+      "rid": "linux-x64",
+      "app": "AotWeb",
+      "status": "passed",
+      "log": "artifacts/aot-210/package-validation/package-native/linux-x64/net8.0/AotWeb/run.log",
+      "sha256": "339950a917944659dd73ae68fcc22ecd31baa40c55711034902514f23e1a9368"
+    },
+    {
+      "mode": "native",
+      "source": "package",
+      "framework": "net10.0",
+      "rid": "linux-x64",
+      "app": "Aot",
+      "status": "passed",
+      "log": "artifacts/aot-210/package-validation/package-native/linux-x64/net10.0/Aot/run.log",
+      "sha256": "4c60a8792d285129f08f6f1978fcea4c1d8a72d2e079db489c66b86d69eb6e2c"
+    },
+    {
+      "mode": "native",
+      "source": "package",
+      "framework": "net10.0",
+      "rid": "linux-x64",
+      "app": "AotWeb",
+      "status": "passed",
+      "log": "artifacts/aot-210/package-validation/package-native/linux-x64/net10.0/AotWeb/run.log",
+      "sha256": "79d9398eb7c1886e4a0c02c0d6b5d41a1b417ead345bb4472abb1bc33bf9099b"
+    },
+    {
+      "mode": "native",
+      "source": "project",
+      "framework": "net8.0",
+      "rid": "win-x64",
+      "app": "Aot",
+      "status": "blocked"
+    },
+    {
+      "mode": "native",
+      "source": "project",
+      "framework": "net8.0",
+      "rid": "win-x64",
+      "app": "AotWeb",
+      "status": "blocked"
+    },
+    {
+      "mode": "native",
+      "source": "package",
+      "framework": "net8.0",
+      "rid": "win-x64",
+      "app": "Aot",
+      "status": "blocked"
+    },
+    {
+      "mode": "native",
+      "source": "package",
+      "framework": "net8.0",
+      "rid": "win-x64",
+      "app": "AotWeb",
+      "status": "blocked"
+    },
+    {
+      "mode": "native",
+      "source": "project",
+      "framework": "net10.0",
+      "rid": "win-x64",
+      "app": "Aot",
+      "status": "blocked"
+    },
+    {
+      "mode": "native",
+      "source": "project",
+      "framework": "net10.0",
+      "rid": "win-x64",
+      "app": "AotWeb",
+      "status": "blocked"
+    },
+    {
+      "mode": "native",
+      "source": "package",
+      "framework": "net10.0",
+      "rid": "win-x64",
+      "app": "Aot",
+      "status": "blocked"
+    },
+    {
+      "mode": "native",
+      "source": "package",
+      "framework": "net10.0",
+      "rid": "win-x64",
+      "app": "AotWeb",
+      "status": "blocked"
+    }
+  ],
+  "nativeRecovery": [
+    {
+      "framework": "net8.0",
+      "rid": "linux-x64",
+      "status": "passed",
+      "log": "artifacts/aot-210/recovery/linux-x64/net8.0/recovery.log"
+    },
+    {
+      "framework": "net10.0",
+      "rid": "linux-x64",
+      "status": "passed",
+      "log": "artifacts/aot-210/recovery/linux-x64/net10.0/recovery.log"
+    }
+  ],
+  "packages": [
+    {
+      "name": "RedNb.Nacos.2.1.0.nupkg",
+      "sha256": "9f5a298151cb9357817f5309fbe6efb9ceae4dee452ae45d1b8b91bba100ed78"
+    },
+    {
+      "name": "RedNb.Nacos.All.2.1.0.nupkg",
+      "sha256": "f605d59c27e504a94afb3eb87756510d2a76ab83fa5e6233abec0c1e29bba936"
+    },
+    {
+      "name": "RedNb.Nacos.AspNetCore.2.1.0.nupkg",
+      "sha256": "90e4e389d35a6b0c58c4b6115d47a2de99675bf1e906d416010cb3e63f6fbf54"
+    },
+    {
+      "name": "RedNb.Nacos.DependencyInjection.2.1.0.nupkg",
+      "sha256": "d4e41433800d862393e4665099c346a2195057688160618550cc04378ddf58eb"
+    },
+    {
+      "name": "RedNb.Nacos.Grpc.2.1.0.nupkg",
+      "sha256": "cc57dcf3767f0c3baa98c97b87f378ca0eb7e6c99df434f12dd7853279063f57"
+    },
+    {
+      "name": "RedNb.Nacos.Http.2.1.0.nupkg",
+      "sha256": "de4767926638cec1aefa82817443d1a6ba06f71883daa894c54573a1612b70f5"
+    }
+  ]
+}

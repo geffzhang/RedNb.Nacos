@@ -202,3 +202,18 @@ P0 → P1 → P2 → P3 → P4 → P5 → P6 → P7。P0 的 CI/打包基线尽�
 | P7 | Debug/Release 构建、本地/云端矩阵、故障注入、包内容及安装验证；结果以 TEST_REPORT.md 为准 |
 
 新包仅在本地生成，未自动发布到 NuGet 或创建 GitHub Release。旧 Maintainer 的全部运维端点未宣称重写完成；本轮明确支持的管理功能为 IAdministrationService 的命名空间生命周期。TLS/代理/集群认证和 AI 全参数组合属于单独验证范围。
+
+## 9. 2.1.0 NativeAOT 改进（2026-09-15）
+
+基线 master / 7b7b471，保留 PR #8，直接追加修复。详细执行结果见 [NativeAOT 测试报告](NATIVEAOT_TEST_REPORT.md)。
+
+- [x] JSON 数值与容器、YAML 合并回归及修复。
+- [x] 用户 Context 实际注入、SDK 元数据优先、JIT 用户类型回退、泛型缓存重载。
+- [x] 修复 .NET 8 嵌套源生成快速路径绕过用户 Context。
+- [x] SDK 与独立 Minimal API 在 .NET 8/10 禁用 JSON 反射的托管运行。
+- [x] .NET 8/10 × linux-x64 原生 SDK 与 Web，源码和实际 NuGet 包消费者。
+- [x] Linux 原生配置/注册/MCP 重启恢复，HTTP/2 对端确认两种 ACK。
+- [ ] .NET 8/10 × win-x64 原生 SDK 与 Web，源码和 NuGet 包消费者（MSVC 缺失）。
+- [x] 六包版本 2.1.0、版本参数校验、保留 nuget-publish.yml 可信发布入口。
+- [x] 当前验收报告与机器可读结果，明确未通过的 Windows 门槛。
+- [ ] 全部门槛通过后推送 master（不自动发布 Release/NuGet）。

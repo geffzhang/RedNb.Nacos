@@ -1,6 +1,15 @@
 # Changelog
 
-## 2.0.0（本地源码，待发布）
+## 2.1.0（发布准备中，完整 NativeAOT 验收尚未完成）
+
+- 保留 JSON 数值精度、无符号边界、值类型集合与 Base64 语义，拒绝循环容器。
+- 修复 YAML 合并优先级、合并序列、引号键和循环别名处理。
+- 新增客户端级 JsonTypeInfoResolver 和泛型缓存 JsonTypeInfo 重载；SDK 元数据优先，保留用户类型 JIT 反射回退。
+- 增加 .NET 8/10 原生 SDK、Minimal API、禁用反射与 NuGet 消费者验收入口。
+- 发布校验接收显式版本，继续使用 nuget-publish.yml 可信发布入口。
+- HTTP/gRPC 客户端标识改为读取程序集版本；Linux 原生源码/包消费者与恢复验收通过，Windows 原生矩阵仍等待 MSVC。
+
+## 2.0.0
 
 - Nacos 3.2.4 / .NET 8、10 验收基线，停止 2.x 兼容。
 - 统一公开命名空间、模型目录、DI 与命名客户端，提供 AI 自动路由 facade。

@@ -35,3 +35,4 @@ Thumbs.db
 # Nacos local cache
 nacos/
 .nacos/
+.claude/

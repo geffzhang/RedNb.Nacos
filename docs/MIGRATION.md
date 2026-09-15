@@ -31,19 +31,12 @@
 
 完整支持范围与验证状态见 [能力矩阵](CAPABILITIES.md)；历史设计移至 archive，不是当前执行规范。
 
-## 2.1.0:NativeAOT 裁剪兼容
+## 2.1.0：NativeAOT 与 JIT 兼容（发布准备中）
 
-- **序列化改为源生成**:gRPC 载荷、HTTP 模型、core 缓存序列化全部走
-  `JsonSerializerContext` 源生成,零反射回退,JIT 与 NativeAOT 行为一致。
-  未注册进 SDK 上下文的类型会抛 `NotSupportedException`(含自定义类型直传
-  `NacosGrpcClient.SendRequestAsync` 的场景);如需序列化自有类型,用
-  `JsonTypeInfoResolver.Combine(NacosGrpcJsonContext.Default, 你的上下文)`
-  自行构建 options。
-- **扩展点**:三个 public 上下文 —— `NacosJsonContext`(core)、
-  `NacosHttpJsonContext`(Http)、`NacosGrpcJsonContext`(Grpc)。
-- **Grpc 本地磁盘缓存格式变更**:`NamingServiceInfoHolder` 的缓存文件改用
-  camelCase 且省略 null 字段。旧缓存文件仍可读取(反序列化不区分大小写),
-  并在下次保存时自动改写为新格式,无需手工处理。
-- **API 不变**:`Dictionary<string, object>` / `object` 成员类型保持原样
-  (内部用 AOT 安全转换器,值仍以 `JsonElement` 呈现,与 2.0.0 一致)。
-- **验证**:`scripts/run-aot-smoke.ps1`(本地)+ CI `aot-smoke` job。
+- SDK 协议模型使用源生成元数据。用户 Context 不能替换 SDK 协议字段。
+- 新增 `NacosClientOptions.JsonTypeInfoResolver`，直接传入用户源生成 Context；HTTP AI、gRPC 请求和响应使用该客户端的只读 options，无需自行组合 SDK Context。
+- 普通 JIT 且 JSON 反射启用时，未注册的用户类型仍可回退反射。禁用反射或 NativeAOT 时必须注册用户类型，否则抛出带类型名和注册方式的异常。SDK 类型不会通过该回退掩盖漏注册。
+- `LocalDiskFailoverDataSource<T>` 保留原构造函数，增加第四个参数 `JsonTypeInfo<T>` 的重载，供泛型自定义缓存使用。原有缓存仍按既有字段规则读取。
+- `object` / `Dictionary<string, object>` 读取继续保留 `JsonElement`；数值不再统一转换为 long/decimal，值类型数组可直接写入，`byte[]` 仍为 Base64。循环和超深容器受控失败。
+- YAML 显式字段始终覆盖合并字段，合并序列前项优先，普通引号键 `"<<"` 保留为键。
+- 新增独立 Minimal API 示例，现有 MVC 示例保持独立。使用方法、序列化路径清单与验收状态见 [NativeAOT 指南](NATIVEAOT.md)。

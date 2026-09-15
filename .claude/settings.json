@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(cd /tmp/rnn-master && grep -n \"var json = JsonSerializer.Serialize\\(request, _jsonOptions\\);\" src/RedNb.Nacos.Grpc/NacosGrpcClient.cs)",
-      "Read(//tmp/**)",
-      "Bash(dotnet test *)"
-    ]
-  }
-}

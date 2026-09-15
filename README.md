@@ -11,6 +11,8 @@
 
 当前稳定版 **2.0.0** 已发布到 [NuGet.org](https://www.nuget.org/packages/RedNb.Nacos.All/2.0.0) 和 [GitHub Release](https://github.com/yinghongzhen/RedNb.Nacos/releases/tag/v2.0.0)。SDK 版本为 2.0.0，服务端验收版本为 Nacos 3.2.4。
 
+`master` 正在准备 **2.1.0**：修复 JSON 数值/容器与 YAML 合并行为，新增用户序列化 Context 注入和 NativeAOT 验收应用。2.1.0 尚未发布；使用方法与当前验证边界见 [NativeAOT 指南](docs/NATIVEAOT.md)。
+
 从 1.x 升级包含命名空间和默认实现的破坏性调整，请先阅读[迁移说明](docs/MIGRATION.md)。**不支持 Nacos 2.x**；其他 3.x 小版本的支持范围见[能力矩阵](docs/CAPABILITIES.md)。
 
 ## 安装
