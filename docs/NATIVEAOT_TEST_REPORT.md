@@ -1,6 +1,6 @@
 # 2.1.0 NativeAOT 改进验收报告
 
-**结论：代码修复、Linux 原生验收和发布准备已落地；完整计划尚未完成。Windows 缺少 MSVC C++ 工具链，win-x64 原生矩阵仍被阻塞。没有推送、创建 Release 或发布 NuGet。**
+**结论：本地约定验收全部通过，包括 Windows/Linux 原生源码与 NuGet 消费者、两个框架的重启恢复。MSVC 安装问题已解决；接下来推送并验证 GitHub Actions。不创建 Release、不发布 NuGet。**
 
 日期：2026-09-15。基线：master / 7b7b471；最终代码提交：2a83133。所有约定门槛通过之前，不将本轮 NativeAOT 改进标记为完成。
 
@@ -10,7 +10,7 @@
 - 已通过管理员安装入口尝试向现有 Visual Studio Enterprise 2026 添加 `Microsoft.VisualStudio.Component.VC.Tools.x86.x64`，没有使用强制关闭或自动重启选项。
 - 安装器内部预检查报告 `VSProcessesRunning`（Visual Studio / DevHub 仍运行），以 Cancel 结束。启动器退出码 0 不代表组件安装成功；`vswhere` 复查仍未找到组件。
 - 已复跑 .NET 10 / win-x64 SDK 发布，C# 编译完成后在原生链接阶段失败：`Platform linker not found`。证据：`artifacts/aot-210/windows-resume-net10-sdk.log`。
-- 当前必须先保存工作并关闭 Visual Studio，然后重新安装组件。Windows 原生矩阵、推送和新增 CI 实跑仍未完成；下文通过结果沿用上一轮证据，并非本次重新运行全部用例。
+- 用户关闭 Visual Studio 后，重新安装成功，MSVC 版本 14.50.35717。Windows 的 8 次原生应用验收和两次原生恢复均通过，之前的安装/链接阻塞已解除。
 
 ## 提交与改动
 
@@ -32,7 +32,7 @@
 - Linux 原生：Ubuntu 24.04 工具链容器，SDK 10.0.401；目标 net8.0 / net10.0，RID linux-x64；实际运行 ELF 二进制。
 - 服务器：本地 Docker Nacos 3.2.4，独立容器 `rednb-nacos-324-test`，启用默认鉴权。
 - 配置/服务使用随机测试标识；AI public 资源使用独立随机名称并清理。故障注入仅重启该本地测试容器，没有重启云端或其他业务容器。
-- Windows 已有 Windows SDK，但 `vswhere` 查询 MSVC x64/x86 C++ 组件无结果；不把托管运行当作 Windows 原生运行。
+- Windows MSVC x64/x86 14.50.35717 已安装；实际运行 PE x64 原生可执行文件，未以托管运行替代。
 
 ## 普通 JIT 结果
 
@@ -54,12 +54,12 @@
 
 | 框架 / 应用 | Windows 托管严格 / 源码 | Windows 托管严格 / NuGet | Linux 原生 / 源码 | Linux 原生 / NuGet | Windows 原生 / 源码和 NuGet |
 |---|---|---|---|---|---|
-| .NET 8 SDK | 通过 | 通过 | 通过 | 通过 | 阻塞：MSVC 缺失 |
-| .NET 8 Minimal API | 通过 | 通过 | 通过 | 通过 | 阻塞：MSVC 缺失 |
-| .NET 10 SDK | 通过 | 通过 | 通过 | 通过 | 阻塞：MSVC 缺失 |
-| .NET 10 Minimal API | 通过 | 通过 | 通过 | 通过 | 阻塞：MSVC 缺失 |
+| .NET 8 SDK | 通过 | 通过 | 通过 | 通过 | 通过 |
+| .NET 8 Minimal API | 通过 | 通过 | 通过 | 通过 | 通过 |
+| .NET 10 SDK | 通过 | 通过 | 通过 | 通过 | 通过 |
+| .NET 10 Minimal API | 通过 | 通过 | 通过 | 通过 | 通过 |
 
-共 16 次应用运行通过，Windows 的 8 次原生运行尚未执行。各次日志、运行模式、原生二进制及包哈希见 [机器可读结果](NATIVEAOT_TEST_SUMMARY.json)。
+共 24 次应用运行通过，其中 16 次为 Windows/Linux 原生源码与包消费者，8 次为托管禁用反射运行。各次日志、运行模式、原生二进制及包哈希见 [机器可读结果](NATIVEAOT_TEST_SUMMARY.json)。
 
 ## 实际验证内容
 
@@ -79,8 +79,10 @@
 |---|---|---|---|
 | .NET 8 / linux-x64 | 通过 | 通过 | 通过 |
 | .NET 10 / linux-x64 | 通过 | 通过 | 通过 |
+| .NET 8 / win-x64 | 通过 | 通过 | 通过 |
+| .NET 10 / win-x64 | 通过 | 通过 | 通过 |
 
-驱动等待原生客户端准备完成，再重启本地 Nacos。恢复检查通过独立观察客户端和独立发布客户端进行，不向原客户端发业务请求来驱动重连。证据：`artifacts/aot-210/recovery/linux-x64/<TFM>/recovery.log`。
+驱动等待原生客户端准备完成，再重启本地 Nacos。恢复检查通过独立观察客户端和独立发布客户端进行，不向原客户端发业务请求来驱动重连。证据：`artifacts/aot-210/recovery/<RID>/<TFM>/recovery.log`。
 
 ## 发现的问题与修复证据
 
@@ -95,6 +97,6 @@
 - 六包 2.1.0 已本地生成，校验身份、双 TFM、版本、README、许可证、内部依赖版本；实际包消费者通过。
 - 包校验器要求显式 `--version`。`nuget-publish.yml` 文件名保留，接收版本并核对 v 标签、六个 nupkg、GitHub SHA-256 摘要及包内版本。使用本地合成 Release 元数据验证正常摘要通过、篡改摘要被拒绝；没有调用真实发布。
 - CI 已拆分普通回归、严格序列化、原生 SDK 和原生 Web；新 YAML / PowerShell 语法已检查。由于尚未推送，新 GitHub Actions 矩阵未实际运行，不能宣称 CI 已通过。
-- **仍需安装 MSVC 并完成 win-x64 的 .NET 8/10 × SDK/Web × 源码/NuGet 原生矩阵。此门槛通过后，核对远端更新并验证，再推送 master；不强推，不自动发布 Release/NuGet。**
+- **Windows 原生门槛已全部通过，远端仍为原基线。下一步推送 master 并确认新增 CI；不强推，不自动发布 Release/NuGet。**
 
 ARM64、macOS、Linux musl/其他发行版、TLS/代理、多节点集群、外部 LLM、所有 AI 插件/参数组合及压力测试未认证。Nacos 2.x 不支持，其他 3.x 版本未按本轮矩阵认证。现有 MVC/Swagger 示例不属于 NativeAOT 声明。

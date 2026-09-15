@@ -213,7 +213,7 @@ P0 → P1 → P2 → P3 → P4 → P5 → P6 → P7。P0 的 CI/打包基线尽�
 - [x] SDK 与独立 Minimal API 在 .NET 8/10 禁用 JSON 反射的托管运行。
 - [x] .NET 8/10 × linux-x64 原生 SDK 与 Web，源码和实际 NuGet 包消费者。
 - [x] Linux 原生配置/注册/MCP 重启恢复，HTTP/2 对端确认两种 ACK。
-- [ ] .NET 8/10 × win-x64 原生 SDK 与 Web，源码和 NuGet 包消费者（MSVC 缺失）。
+- [x] .NET 8/10 × win-x64 原生 SDK 与 Web，源码和 NuGet 包消费者；原生重启恢复通过。
 - [x] 六包版本 2.1.0、版本参数校验、保留 nuget-publish.yml 可信发布入口。
 - [x] 当前验收报告与机器可读结果，明确未通过的 Windows 门槛。
 - [ ] 全部门槛通过后推送 master（不自动发布 Release/NuGet）。

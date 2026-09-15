@@ -1,12 +1,9 @@
 {
   "version": "2.1.0",
-  "status": "blocked",
+  "status": "local_passed_ci_pending",
   "codeCommit": "2a83133b51ffcbd8249ce2f86491a4cfe007f88c",
   "server": "Nacos 3.2.4, isolated local Docker",
-  "blockedBy": [
-    "MSVC installation precheck VSProcessesRunning: save work and close Visual Studio/DevHub before retrying",
-    "win-x64 SDK publish confirmed Platform linker not found; no native Windows executable was validated"
-  ],
+  "blockedBy": [],
   "published": false,
   "pushed": false,
   "jitRuns": [
@@ -401,7 +398,9 @@
       "framework": "net8.0",
       "rid": "win-x64",
       "app": "Aot",
-      "status": "blocked"
+      "status": "passed",
+      "log": "artifacts/aot-validation/native/win-x64/net8.0/Aot/run.log",
+      "sha256": "fce7b25e19b2d0cebee852bccf28d44e1083702accfc83e1b79b8fb26db102be"
     },
     {
       "mode": "native",
@@ -409,7 +408,9 @@
       "framework": "net8.0",
       "rid": "win-x64",
       "app": "AotWeb",
-      "status": "blocked"
+      "status": "passed",
+      "log": "artifacts/aot-validation/native/win-x64/net8.0/AotWeb/run.log",
+      "sha256": "a88f2341705019ba0d1514393e82c0aec2d64a32980ef29c477ea21926bf7a61"
     },
     {
       "mode": "native",
@@ -417,7 +418,9 @@
       "framework": "net8.0",
       "rid": "win-x64",
       "app": "Aot",
-      "status": "blocked"
+      "status": "passed",
+      "log": "artifacts/aot-validation/package-native/win-x64/net8.0/Aot/run.log",
+      "sha256": "795add38f97c964cc80dc02cd9da336221392a5a2086abce4301a3d16a8d7f66"
     },
     {
       "mode": "native",
@@ -425,7 +428,9 @@
       "framework": "net8.0",
       "rid": "win-x64",
       "app": "AotWeb",
-      "status": "blocked"
+      "status": "passed",
+      "log": "artifacts/aot-validation/package-native/win-x64/net8.0/AotWeb/run.log",
+      "sha256": "4c2dde957dfb1871cfb56f589c7ce59430ccd625c3491100fb201869e819d7bd"
     },
     {
       "mode": "native",
@@ -433,7 +438,9 @@
       "framework": "net10.0",
       "rid": "win-x64",
       "app": "Aot",
-      "status": "blocked"
+      "status": "passed",
+      "log": "artifacts/aot-validation/native/win-x64/net10.0/Aot/run.log",
+      "sha256": "80774828f76b215632d950a4daa2858d785b466842c82c1c2370e0b61e0cd3c2"
     },
     {
       "mode": "native",
@@ -441,7 +448,9 @@
       "framework": "net10.0",
       "rid": "win-x64",
       "app": "AotWeb",
-      "status": "blocked"
+      "status": "passed",
+      "log": "artifacts/aot-validation/native/win-x64/net10.0/AotWeb/run.log",
+      "sha256": "a01777e7e541932f893c36ab691978c7a9bd0e24d032a570c434be17d0c7644d"
     },
     {
       "mode": "native",
@@ -449,7 +458,9 @@
       "framework": "net10.0",
       "rid": "win-x64",
       "app": "Aot",
-      "status": "blocked"
+      "status": "passed",
+      "log": "artifacts/aot-validation/package-native/win-x64/net10.0/Aot/run.log",
+      "sha256": "31dc2387000a81e7cb236cbf3e1b8cf970e466f28775611f1490ecf551f34e41"
     },
     {
       "mode": "native",
@@ -457,7 +468,9 @@
       "framework": "net10.0",
       "rid": "win-x64",
       "app": "AotWeb",
-      "status": "blocked"
+      "status": "passed",
+      "log": "artifacts/aot-validation/package-native/win-x64/net10.0/AotWeb/run.log",
+      "sha256": "90bd4d7f61c6d4e03651a38bcba07c4b6834483faf9f35f20746f2416994678e"
     }
   ],
   "nativeRecovery": [
@@ -472,6 +485,18 @@
       "rid": "linux-x64",
       "status": "passed",
       "log": "artifacts/aot-210/recovery/linux-x64/net10.0/recovery.log"
+    },
+    {
+      "framework": "net8.0",
+      "rid": "win-x64",
+      "status": "passed",
+      "log": "artifacts/aot-210/recovery/win-x64/net8.0/recovery.log"
+    },
+    {
+      "framework": "net10.0",
+      "rid": "win-x64",
+      "status": "passed",
+      "log": "artifacts/aot-210/recovery/win-x64/net10.0/recovery.log"
     }
   ],
   "packages": [
@@ -506,6 +531,12 @@
     "installerPrecheck": "VSProcessesRunning",
     "compilerResult": "Platform linker not found",
     "log": "artifacts/aot-210/windows-resume-net10-sdk.log",
-    "pushed": false
+    "pushed": false,
+    "resolution": "After the user closed Visual Studio, installation and all eight native Windows application runs passed; both native recovery runs passed."
+  },
+  "windowsToolchain": {
+    "MSVC": "14.50.35717",
+    "installation": "Visual Studio Enterprise 2026",
+    "status": "installed and verified"
   }
 }
