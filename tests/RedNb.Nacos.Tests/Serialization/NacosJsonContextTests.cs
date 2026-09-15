@@ -60,7 +60,7 @@ public class NacosJsonContextTests
     [Fact]
     public void UnregisteredType_ThrowsNotSupported()
     {
-        var options = NacosJsonOptions.Create();
+        var options = NacosJsonOptions.Create(allowReflectionFallback: false);
         var act = () => JsonSerializer.Serialize(new { x = 1 }, options);
         act.Should().Throw<NotSupportedException>();
     }

@@ -60,7 +60,7 @@ public class NacosGrpcJsonContextTests
     [Fact]
     public void UnregisteredType_ThrowsNotSupported()
     {
-        var act = () => JsonSerializer.Serialize(new { x = 1 }, NacosGrpcJsonOptions.Create());
+        var act = () => JsonSerializer.Serialize(new { x = 1 }, NacosGrpcJsonOptions.Create(allowReflectionFallback: false));
         act.Should().Throw<NotSupportedException>();
     }
 
@@ -69,7 +69,7 @@ public class NacosGrpcJsonContextTests
     {
         // JIT parity with the AOT smoke: metadata resolution itself refuses
         // unregistered types instead of falling back to reflection.
-        var act = () => NacosGrpcJsonOptions.Create().GetTypeInfo(typeof(UnregisteredType));
+        var act = () => NacosGrpcJsonOptions.Create(allowReflectionFallback: false).GetTypeInfo(typeof(UnregisteredType));
         act.Should().Throw<NotSupportedException>();
     }
 

@@ -28,27 +28,24 @@ internal static class NacosHttpJsonOptions
         NacosHttpInternalJsonContext.Default,
         NacosJsonContext.Default);
 
-    private static readonly JsonSerializerOptions Instance = new()
+    public static JsonSerializerOptions Create(IJsonTypeInfoResolver? user = null, bool allowReflectionFallback = true)
+        => Build(Combined, user, false, false, allowReflectionFallback);
+
+    public static JsonSerializerOptions CreateAi(IJsonTypeInfoResolver? user = null)
+        => Build(CombinedAi, user, true, true);
+
+    public static JsonSerializerOptions CreateCaseInsensitive(IJsonTypeInfoResolver? user = null)
+        => Build(CombinedWithCore, user, false, true);
+
+    private static JsonSerializerOptions Build(IJsonTypeInfoResolver sdk, IJsonTypeInfoResolver? user, bool camelCase, bool caseInsensitive, bool allowReflectionFallback = true)
     {
-        TypeInfoResolver = Combined
-    };
-
-    private static readonly JsonSerializerOptions Ai = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-        TypeInfoResolver = CombinedAi
-    };
-
-    private static readonly JsonSerializerOptions CaseInsensitive = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        TypeInfoResolver = CombinedWithCore
-    };
-
-    public static JsonSerializerOptions Create() => Instance;
-
-    public static JsonSerializerOptions CreateAi() => Ai;
-
-    public static JsonSerializerOptions CreateCaseInsensitive() => CaseInsensitive;
+        var options = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = camelCase ? JsonNamingPolicy.CamelCase : null,
+            PropertyNameCaseInsensitive = caseInsensitive,
+            TypeInfoResolver = NacosJsonResolver.Create(sdk, user, allowReflectionFallback)
+        };
+        options.MakeReadOnly();
+        return options;
+    }
 }

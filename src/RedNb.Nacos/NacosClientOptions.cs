@@ -6,6 +6,12 @@ namespace RedNb.Nacos;
 public class NacosClientOptions
 {
     /// <summary>
+    /// Optional source-generated metadata for application-owned JSON types.
+    /// SDK wire contracts take precedence. Required for custom types in NativeAOT.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver? JsonTypeInfoResolver { get; set; }
+    /// <summary>
     /// Nacos server addresses, separated by comma.
     /// Example: "localhost:8848" or "192.168.1.1:8848,192.168.1.2:8848"
     /// </summary>

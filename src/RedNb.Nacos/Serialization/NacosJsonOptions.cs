@@ -9,15 +9,15 @@ namespace RedNb.Nacos.Serialization;
 /// </summary>
 internal static class NacosJsonOptions
 {
-    private static readonly JsonSerializerOptions Plain = CreateCore(false);
-    private static readonly JsonSerializerOptions Indented = CreateCore(true);
-
-    public static JsonSerializerOptions Create(bool writeIndented = false) => writeIndented ? Indented : Plain;
-
-    private static JsonSerializerOptions CreateCore(bool writeIndented) => new()
+    public static JsonSerializerOptions Create(bool writeIndented = false, System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver? user = null, bool allowReflectionFallback = true)
     {
-        TypeInfoResolver = NacosJsonContext.Default,
-        PropertyNameCaseInsensitive = true,
-        WriteIndented = writeIndented
-    };
+        var options = new JsonSerializerOptions
+        {
+            TypeInfoResolver = NacosJsonResolver.Create(NacosJsonContext.Default, user, allowReflectionFallback),
+            PropertyNameCaseInsensitive = true,
+            WriteIndented = writeIndented
+        };
+        options.MakeReadOnly();
+        return options;
+    }
 }

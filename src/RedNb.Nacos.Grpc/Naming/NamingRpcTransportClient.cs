@@ -38,7 +38,7 @@ internal class NamingRpcTransportClient : IAsyncDisposable
         _grpcClient = grpcClient;
         _options = options;
         _logger = logger;
-        _jsonOptions = NacosGrpcJsonOptions.Create();
+        _jsonOptions = NacosGrpcJsonOptions.Create(options.JsonTypeInfoResolver);
 
         // Register push handler
         _grpcClient.RegisterPushHandler("naming", HandlePushMessage);

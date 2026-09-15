@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization.Metadata;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using RedNb.Nacos.Http.Transport;
@@ -21,6 +22,10 @@ namespace RedNb.Nacos.Http.Ai;
 public partial class NacosAiService : IAiService
 {
     private readonly NacosClientOptions _options;
+    private readonly JsonSerializerOptions _serializationOptions;
+    private JsonTypeInfo<T> Info<T>(JsonTypeInfo<T> contract)
+        => (JsonTypeInfo<T>)_serializationOptions.GetTypeInfo(typeof(T));
+
     private readonly NacosConsoleHttpClient _httpClient;
     private readonly NacosHttpClient _legacyHttpClient;
     private readonly ILogger<NacosAiService>? _logger;
@@ -52,6 +57,7 @@ public partial class NacosAiService : IAiService
     public NacosAiService(NacosClientOptions options, ILogger<NacosAiService>? logger = null)
     {
         _options = options;
+        _serializationOptions = NacosHttpJsonOptions.CreateAi(options.JsonTypeInfoResolver);
         _logger = logger;
         // MCP/A2A HTTP ops target the console port (8080 by default) with no
         // /nacos context path. Prompt/Skill/AgentSpec target the core API
@@ -98,7 +104,7 @@ public partial class NacosAiService : IAiService
                 return null;
             }
 
-            var result = JsonSerializer.Deserialize(response, NacosHttpAiJsonContext.Default.AiApiResultMcpServerDetailInfo);
+            var result = JsonSerializer.Deserialize(response, Info(NacosHttpAiJsonContext.Default.AiApiResultMcpServerDetailInfo));
             return result?.Data;
         }
         catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
@@ -133,13 +139,13 @@ public partial class NacosAiService : IAiService
 
         var existing = await GetMcpServerAsync(serverSpecification.Name!, cancellationToken);
         var wireSpec = JsonSerializer.Deserialize(
-            JsonSerializer.Serialize(serverSpecification, NacosHttpAiJsonContext.Default.McpServerBasicInfo),
-            NacosHttpAiJsonContext.Default.McpServerBasicInfo)!;
+            JsonSerializer.Serialize(serverSpecification, Info(NacosHttpAiJsonContext.Default.McpServerBasicInfo)),
+            Info(NacosHttpAiJsonContext.Default.McpServerBasicInfo))!;
         wireSpec.Id ??= existing?.Id;
         var parameters = new Dictionary<string, string?>
         {
             { "mcpName", wireSpec.Name },
-            { "serverSpecification", JsonSerializer.Serialize(wireSpec, NacosHttpAiJsonContext.Default.McpServerBasicInfo) }
+            { "serverSpecification", JsonSerializer.Serialize(wireSpec, Info(NacosHttpAiJsonContext.Default.McpServerBasicInfo)) }
         };
 
         // The console release controller binds McpDetailForm fields named
@@ -151,12 +157,12 @@ public partial class NacosAiService : IAiService
         // "endpointSpecification is required" when the field is omitted.
         if (toolSpecification != null)
         {
-            parameters["toolSpecification"] = JsonSerializer.Serialize(toolSpecification, NacosHttpAiJsonContext.Default.McpToolSpecification);
+            parameters["toolSpecification"] = JsonSerializer.Serialize(toolSpecification, Info(NacosHttpAiJsonContext.Default.McpToolSpecification));
         }
 
         if (endpointSpecification != null)
         {
-            parameters["endpointSpecification"] = JsonSerializer.Serialize(endpointSpecification, NacosHttpAiJsonContext.Default.McpEndpointSpec);
+            parameters["endpointSpecification"] = JsonSerializer.Serialize(endpointSpecification, Info(NacosHttpAiJsonContext.Default.McpEndpointSpec));
         }
 
         var body = NacosUtils.BuildQueryString(parameters);
@@ -165,7 +171,7 @@ public partial class NacosAiService : IAiService
             ? await _httpClient.PostWithHeadersAsync(McpBasePath, null, body, headers, _options.DefaultTimeout, cancellationToken)
             : await _httpClient.PutWithHeadersAsync(McpBasePath, null, body, headers, _options.DefaultTimeout, cancellationToken);
 
-        var result = JsonSerializer.Deserialize(response ?? "{}", NacosHttpAiJsonContext.Default.AiApiResultString);
+        var result = JsonSerializer.Deserialize(response ?? "{}", Info(NacosHttpAiJsonContext.Default.AiApiResultString));
         return existing?.Id ?? result?.Data ?? string.Empty;
     }
 
@@ -312,7 +318,7 @@ public partial class NacosAiService : IAiService
                 return PageResult<McpServerBasicInfo>.Empty(pageNo, pageSize);
             }
 
-            var result = JsonSerializer.Deserialize(response, NacosHttpAiJsonContext.Default.AiApiResultPagedDataMcpServerBasicInfo);
+            var result = JsonSerializer.Deserialize(response, Info(NacosHttpAiJsonContext.Default.AiApiResultPagedDataMcpServerBasicInfo));
             if (result?.Data == null)
             {
                 return PageResult<McpServerBasicInfo>.Empty(pageNo, pageSize);
@@ -362,7 +368,7 @@ public partial class NacosAiService : IAiService
                 return McpServerImportValidationResult.Failed(new List<string> { "Failed to get validation response from server" });
             }
 
-            var result = JsonSerializer.Deserialize(response, NacosHttpAiJsonContext.Default.AiApiResultMcpServerImportValidationResult);
+            var result = JsonSerializer.Deserialize(response, Info(NacosHttpAiJsonContext.Default.AiApiResultMcpServerImportValidationResult));
             return result?.Data ?? McpServerImportValidationResult.Failed(new List<string> { "Invalid response from server" });
         }
         catch (Exception ex)
@@ -393,7 +399,7 @@ public partial class NacosAiService : IAiService
 
         if (request.SelectedServers != null && request.SelectedServers.Length > 0)
         {
-            parameters["selectedServers"] = JsonSerializer.Serialize(request.SelectedServers, NacosHttpAiJsonContext.Default.StringArray);
+            parameters["selectedServers"] = JsonSerializer.Serialize(request.SelectedServers, Info(NacosHttpAiJsonContext.Default.StringArray));
         }
 
         var body = NacosUtils.BuildQueryString(parameters);
@@ -407,7 +413,7 @@ public partial class NacosAiService : IAiService
                 return McpServerImportResponse.Error("Failed to get import response from server");
             }
 
-            var result = JsonSerializer.Deserialize(response, NacosHttpAiJsonContext.Default.AiApiResultMcpServerImportResponse);
+            var result = JsonSerializer.Deserialize(response, Info(NacosHttpAiJsonContext.Default.AiApiResultMcpServerImportResponse));
             return result?.Data ?? McpServerImportResponse.Error("Invalid response from server");
         }
         catch (Exception ex)
@@ -518,7 +524,7 @@ public partial class NacosAiService : IAiService
                 return null;
             }
 
-            var result = JsonSerializer.Deserialize(response, NacosHttpAiJsonContext.Default.AiApiResultAgentCardDetailInfo);
+            var result = JsonSerializer.Deserialize(response, Info(NacosHttpAiJsonContext.Default.AiApiResultAgentCardDetailInfo));
             return result?.Data;
         }
         catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
@@ -561,7 +567,7 @@ public partial class NacosAiService : IAiService
             { "agentName", agentCard.Name },
             { "registrationType", registrationType },
             { "setAsLatest", setAsLatest.ToString().ToLowerInvariant() },
-            { "agentCard", JsonSerializer.Serialize(agentCard, NacosHttpAiJsonContext.Default.AgentCard) }
+            { "agentCard", JsonSerializer.Serialize(agentCard, Info(NacosHttpAiJsonContext.Default.AgentCard)) }
         };
 
         var body = NacosUtils.BuildQueryString(parameters);
@@ -775,7 +781,7 @@ public partial class NacosAiService : IAiService
                 return PageResult<AgentCardBasicInfo>.Empty(pageNo, pageSize);
             }
 
-            var result = JsonSerializer.Deserialize(response, NacosHttpAiJsonContext.Default.AiApiResultPagedDataAgentCardBasicInfo);
+            var result = JsonSerializer.Deserialize(response, Info(NacosHttpAiJsonContext.Default.AiApiResultPagedDataAgentCardBasicInfo));
             if (result?.Data == null)
             {
                 return PageResult<AgentCardBasicInfo>.Empty(pageNo, pageSize);
@@ -823,7 +829,7 @@ public partial class NacosAiService : IAiService
                 return new List<AgentVersionInfo>();
             }
 
-            var result = JsonSerializer.Deserialize(response, NacosHttpAiJsonContext.Default.AiApiResultListAgentVersionInfo);
+            var result = JsonSerializer.Deserialize(response, Info(NacosHttpAiJsonContext.Default.AiApiResultListAgentVersionInfo));
             return result?.Data ?? new List<AgentVersionInfo>();
         }
         catch (NacosException ex) when (ex.ErrorCode == NacosException.NotFound)
@@ -921,8 +927,8 @@ public partial class NacosAiService : IAiService
         var cachedVersion = cached?.VersionDetail?.Version;
 
         if (currentVersion != cachedVersion || !string.Equals(
-            JsonSerializer.Serialize(current!, NacosHttpAiJsonContext.Default.McpServerDetailInfo),
-            JsonSerializer.Serialize(cached!, NacosHttpAiJsonContext.Default.McpServerDetailInfo)))
+            JsonSerializer.Serialize(current!, Info(NacosHttpAiJsonContext.Default.McpServerDetailInfo)),
+            JsonSerializer.Serialize(cached!, Info(NacosHttpAiJsonContext.Default.McpServerDetailInfo))))
         {
             _cacheHolder.UpdateMcpServer(mcpName, version, current);
             if (current != null)
@@ -942,8 +948,8 @@ public partial class NacosAiService : IAiService
         var cachedVersion = cached?.LatestVersion;
 
         if (currentVersion != cachedVersion || !string.Equals(
-            JsonSerializer.Serialize(current!, NacosHttpAiJsonContext.Default.AgentCardDetailInfo),
-            JsonSerializer.Serialize(cached!, NacosHttpAiJsonContext.Default.AgentCardDetailInfo)))
+            JsonSerializer.Serialize(current!, Info(NacosHttpAiJsonContext.Default.AgentCardDetailInfo)),
+            JsonSerializer.Serialize(cached!, Info(NacosHttpAiJsonContext.Default.AgentCardDetailInfo))))
         {
             _cacheHolder.UpdateAgentCard(agentName, version, current);
             if (current != null)

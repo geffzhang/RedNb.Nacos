@@ -1,5 +1,5 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.Extensions.Logging;
 using RedNb.Nacos.Serialization;
 
@@ -14,7 +14,7 @@ public class LocalDiskFailoverDataSource<T> : IFailoverDataSource<T> where T : c
     private readonly ILogger _logger;
     private readonly string _cacheDir;
     private readonly string _switchFileName;
-    private readonly JsonSerializerOptions _jsonOptions;
+    private readonly JsonTypeInfo<T> _typeInfo;
 
     /// <summary>
     /// 构造函数
@@ -23,11 +23,17 @@ public class LocalDiskFailoverDataSource<T> : IFailoverDataSource<T> where T : c
     /// <param name="cacheDir">缓存目录</param>
     /// <param name="switchFileName">开关文件名</param>
     public LocalDiskFailoverDataSource(ILogger logger, string cacheDir, string switchFileName = "failover-switch")
+        : this(logger, cacheDir, switchFileName, (JsonTypeInfo<T>)NacosJsonOptions.Create(writeIndented: true).GetTypeInfo(typeof(T)))
+    {
+    }
+
+    /// <summary>Creates a cache with explicit metadata, including custom NativeAOT payload types.</summary>
+    public LocalDiskFailoverDataSource(ILogger logger, string cacheDir, string switchFileName, JsonTypeInfo<T> jsonTypeInfo)
     {
         _logger = logger;
         _cacheDir = cacheDir;
         _switchFileName = switchFileName;
-        _jsonOptions = NacosJsonOptions.Create(writeIndented: true);
+        _typeInfo = jsonTypeInfo ?? throw new ArgumentNullException(nameof(jsonTypeInfo));
 
         EnsureDirectoryExists();
     }
@@ -62,13 +68,6 @@ public class LocalDiskFailoverDataSource<T> : IFailoverDataSource<T> where T : c
     /// <summary>
     /// 获取故障转移数据
     /// </summary>
-    // Safe under trimming/AOT: _jsonOptions carries the source-generated NacosJsonContext
-    // resolver. T is a failover payload type (ServiceInfo/Instance/ConfigInfo) registered
-    // in NacosJsonContext; the strict resolver throws for anything else, so no reflection
-    // fallback occurs. The options path is kept to preserve the indented on-disk cache
-    // format of 2.0.0.
-    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Resolver is source-generated (NacosJsonContext); unregistered T throws instead of reflecting.")]
-    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Resolver is source-generated (NacosJsonContext); unregistered T throws instead of reflecting.")]
     public Dictionary<string, FailoverData<T>> GetFailoverData()
     {
         var result = new Dictionary<string, FailoverData<T>>();
@@ -92,7 +91,7 @@ public class LocalDiskFailoverDataSource<T> : IFailoverDataSource<T> where T : c
                     }
 
                     var content = File.ReadAllText(file);
-                    var data = JsonSerializer.Deserialize<T>(content, _jsonOptions);
+                    var data = JsonSerializer.Deserialize(content, _typeInfo);
                     if (data != null)
                     {
                         var key = DecodeKey(fileName);
@@ -116,13 +115,6 @@ public class LocalDiskFailoverDataSource<T> : IFailoverDataSource<T> where T : c
     /// <summary>
     /// 保存故障转移数据到磁盘
     /// </summary>
-    // Safe under trimming/AOT: _jsonOptions carries the source-generated NacosJsonContext
-    // resolver. T is a failover payload type (ServiceInfo/Instance/ConfigInfo) registered
-    // in NacosJsonContext; the strict resolver throws for anything else, so no reflection
-    // fallback occurs. The options path is kept to preserve the indented on-disk cache
-    // format of 2.0.0.
-    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Resolver is source-generated (NacosJsonContext); unregistered T throws instead of reflecting.")]
-    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Resolver is source-generated (NacosJsonContext); unregistered T throws instead of reflecting.")]
     public void SaveFailoverData(string key, T data)
     {
         try
@@ -130,7 +122,7 @@ public class LocalDiskFailoverDataSource<T> : IFailoverDataSource<T> where T : c
             EnsureDirectoryExists();
             var fileName = EncodeKey(key) + ".json";
             var filePath = Path.Combine(_cacheDir, fileName);
-            var content = JsonSerializer.Serialize(data, _jsonOptions);
+            var content = JsonSerializer.Serialize(data, _typeInfo);
             File.WriteAllText(filePath, content);
             _logger.LogDebug("Saved failover data to: {File}", filePath);
         }

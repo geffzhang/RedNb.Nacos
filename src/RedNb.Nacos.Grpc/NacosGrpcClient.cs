@@ -140,7 +140,7 @@ public class NacosGrpcClient : IAsyncDisposable
         _clientId = Guid.NewGuid().ToString("N");
         _lastActiveTime = DateTime.UtcNow;
 
-        _jsonOptions = NacosGrpcJsonOptions.Create();
+        _jsonOptions = NacosGrpcJsonOptions.Create(options.JsonTypeInfoResolver);
 
         _securityProxy = new RedNb.Nacos.Http.Transport.SecurityProxy(options, logger);
     }
@@ -711,9 +711,9 @@ public class NacosGrpcClient : IAsyncDisposable
         {
             typeInfo = _jsonOptions.GetTypeInfo(request.GetType());
         }
-        catch (NotSupportedException)
+        catch (NotSupportedException ex)
         {
-            throw new NotSupportedException($"No JSON metadata registered for request type {request.GetType().FullName}.");
+            throw new NotSupportedException($"Cannot serialize request type '{request.GetType().FullName}'. Register its source-generated context with NacosClientOptions.JsonTypeInfoResolver. {ex.Message}", ex);
         }
         var json = JsonSerializer.Serialize(request, typeInfo);
         var body = ByteString.CopyFromUtf8(json);

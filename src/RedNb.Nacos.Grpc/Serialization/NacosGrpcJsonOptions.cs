@@ -10,15 +10,18 @@ namespace RedNb.Nacos.Grpc.Serialization;
 /// </summary>
 internal static class NacosGrpcJsonOptions
 {
-    private static readonly JsonSerializerOptions Instance = new()
+    public static JsonSerializerOptions Create(System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver? user = null, bool allowReflectionFallback = true)
     {
+        var options = new JsonSerializerOptions
+        {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         PropertyNameCaseInsensitive = true,
-        TypeInfoResolver = JsonTypeInfoResolver.Combine(
+        TypeInfoResolver = RedNb.Nacos.Serialization.NacosJsonResolver.Create(JsonTypeInfoResolver.Combine(
             NacosGrpcJsonContext.Default,
-            NacosGrpcInternalJsonContext.Default)
-    };
-
-    public static JsonSerializerOptions Create() => Instance;
+            NacosGrpcInternalJsonContext.Default), user, allowReflectionFallback)
+        };
+        options.MakeReadOnly();
+        return options;
+    }
 }
