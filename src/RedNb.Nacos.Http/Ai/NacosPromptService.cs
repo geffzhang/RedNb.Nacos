@@ -240,9 +240,17 @@ public class NacosPromptService : IPromptService, IAsyncDisposable
         };
         var headers = BuildNamespaceHeaders();
 
-        var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/versions", parameters, headers, _options.DefaultTimeout, cancellationToken);
-        var result = JsonSerializer.Deserialize(response ?? "{}", Info(NacosHttpAiJsonContext.Default.PromptApiResultListPromptVersionSummary));
-        return result?.Data ?? new List<PromptVersionSummary>();
+        var versions = new List<PromptVersionSummary>();
+        parameters["pageSize"] = "100";
+        for (var pageNo = 1; ; pageNo++)
+        {
+            parameters["pageNo"] = pageNo.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/versions", parameters, headers, _options.DefaultTimeout, cancellationToken);
+            var page = JsonSerializer.Deserialize(response ?? "{}", Info(NacosHttpAiJsonContext.Default.PromptApiResultPagedPromptVersions))?.Data;
+            if (page?.PageItems == null || page.PageItems.Count == 0) return versions;
+            versions.AddRange(page.PageItems);
+            if (versions.Count >= page.TotalCount) return versions;
+        }
     }
 
     /// <inheritdoc />

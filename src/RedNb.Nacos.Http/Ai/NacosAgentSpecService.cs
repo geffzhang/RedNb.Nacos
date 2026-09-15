@@ -220,7 +220,7 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
 
         try
         {
-            var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/version", parameters, headers, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync(AdminBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
             var result = JsonSerializer.Deserialize(response ?? "{}", Info(NacosHttpAiJsonContext.Default.PromptApiResultAgentSpecMeta));
             return result?.Data;
         }
@@ -234,6 +234,11 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
     public async Task<AgentSpecModel?> GetAgentSpecDetailAsync(string agentSpecName, string? version = null, CancellationToken cancellationToken = default)
     {
         ValidateAgentSpecName(agentSpecName);
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            var meta = await GetAgentSpecMetaAsync(agentSpecName, cancellationToken);
+            if (meta?.Labels?.TryGetValue("latest", out version) != true || string.IsNullOrWhiteSpace(version)) return null;
+        }
 
         var parameters = new Dictionary<string, string?>
         {
@@ -244,7 +249,7 @@ public class NacosAgentSpecService : IAgentSpecService, IAsyncDisposable
 
         try
         {
-            var response = await _httpClient.GetWithHeadersAsync(AdminBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/version", parameters, headers, _options.DefaultTimeout, cancellationToken);
             var result = JsonSerializer.Deserialize(response ?? "{}", Info(NacosHttpAiJsonContext.Default.PromptApiResultAgentSpec));
             return result?.Data;
         }

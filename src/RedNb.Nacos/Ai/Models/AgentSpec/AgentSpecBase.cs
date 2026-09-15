@@ -29,7 +29,8 @@ public class AgentSpecBase
 public class AgentSpecBasicInfo : AgentSpecBase
 {
     /// <summary>
-    /// Last update time (formatted string).
+    /// Last update time as text; numeric epoch timestamps are accepted on read.
     /// </summary>
+    [System.Text.Json.Serialization.JsonConverter(typeof(RedNb.Nacos.Serialization.TimestampStringConverter))]
     public string? UpdateTime { get; set; }
 }

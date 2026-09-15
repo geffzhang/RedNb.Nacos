@@ -95,11 +95,13 @@ public class AgentSpecVersionSummary
     /// <summary>
     /// Create time (formatted string).
     /// </summary>
+    [JsonConverter(typeof(TimestampStringConverter))]
     public string? CreateTime { get; set; }
 
     /// <summary>
     /// Update time (formatted string).
     /// </summary>
+    [JsonConverter(typeof(TimestampStringConverter))]
     public string? UpdateTime { get; set; }
 
     /// <summary>

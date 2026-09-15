@@ -25,6 +25,7 @@ namespace RedNb.Nacos.Http.Serialization;
 [JsonSerializable(typeof(NacosPromptService.ApiResult<NacosPromptService.PagedData<PromptMetaSummary>>), TypeInfoPropertyName = "PromptApiResultPagedDataPromptMetaSummary")]
 [JsonSerializable(typeof(NacosPromptService.ApiResult<PromptMetaInfo>), TypeInfoPropertyName = "PromptApiResultPromptMetaInfo")]
 [JsonSerializable(typeof(NacosPromptService.ApiResult<List<PromptVersionSummary>>), TypeInfoPropertyName = "PromptApiResultListPromptVersionSummary")]
+[JsonSerializable(typeof(NacosPromptService.ApiResult<NacosPromptService.PagedData<PromptVersionSummary>>), TypeInfoPropertyName = "PromptApiResultPagedPromptVersions")]
 [JsonSerializable(typeof(NacosPromptService.ApiResult<PromptVersionInfo>), TypeInfoPropertyName = "PromptApiResultPromptVersionInfo")]
 [JsonSerializable(typeof(NacosPromptService.ApiResult<Prompt>), TypeInfoPropertyName = "PromptApiResultPrompt")]
 [JsonSerializable(typeof(NacosPromptService.ApiResult<NacosPromptService.PagedData<SkillSummary>>), TypeInfoPropertyName = "PromptApiResultPagedDataSkillSummary")]

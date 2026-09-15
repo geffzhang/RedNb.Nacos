@@ -221,7 +221,7 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
 
         try
         {
-            var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/version", parameters, headers, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync(AdminBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
             var result = JsonSerializer.Deserialize(response ?? "{}", Info(NacosHttpAiJsonContext.Default.PromptApiResultSkillMeta));
             return result?.Data;
         }
@@ -235,6 +235,11 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
     public async Task<Skill?> GetSkillDetailAsync(string skillName, string? version = null, CancellationToken cancellationToken = default)
     {
         ValidateSkillName(skillName);
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            var meta = await GetSkillMetaAsync(skillName, cancellationToken);
+            if (meta?.Labels?.TryGetValue("latest", out version) != true || string.IsNullOrWhiteSpace(version)) return null;
+        }
 
         var parameters = new Dictionary<string, string?>
         {
@@ -245,7 +250,7 @@ public class NacosSkillService : ISkillService, IAsyncDisposable
 
         try
         {
-            var response = await _httpClient.GetWithHeadersAsync(AdminBasePath, parameters, headers, _options.DefaultTimeout, cancellationToken);
+            var response = await _httpClient.GetWithHeadersAsync($"{AdminBasePath}/version", parameters, headers, _options.DefaultTimeout, cancellationToken);
             var result = JsonSerializer.Deserialize(response ?? "{}", Info(NacosHttpAiJsonContext.Default.PromptApiResultSkill));
             return result?.Data;
         }
