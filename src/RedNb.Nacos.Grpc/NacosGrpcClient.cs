@@ -703,8 +703,17 @@ public class NacosGrpcClient : IAsyncDisposable
 
     private async Task<Payload> CreatePayloadAsync(ConnectionGeneration generation, string type, object request, CancellationToken cancellationToken = default)
     {
-        var typeInfo = _jsonOptions.GetTypeInfo(request.GetType())
-            ?? throw new NotSupportedException($"No JSON metadata registered for request type {request.GetType().FullName}.");
+        // GetTypeInfo throws NotSupportedException for unregistered types, keeping the
+        // 2.0.0 exception contract; rethrow with an SDK-oriented message.
+        JsonTypeInfo typeInfo;
+        try
+        {
+            typeInfo = _jsonOptions.GetTypeInfo(request.GetType());
+        }
+        catch (NotSupportedException)
+        {
+            throw new NotSupportedException($"No JSON metadata registered for request type {request.GetType().FullName}.");
+        }
         var json = JsonSerializer.Serialize(request, typeInfo);
         var body = ByteString.CopyFromUtf8(json);
 

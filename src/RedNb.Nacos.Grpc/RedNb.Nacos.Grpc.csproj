@@ -24,5 +24,6 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="RedNb.Nacos.Grpc.Tests" />
+    <InternalsVisibleTo Include="RedNb.Nacos.Sample.Aot" />
   </ItemGroup>
 </Project>
