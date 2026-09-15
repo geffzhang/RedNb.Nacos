@@ -4,6 +4,14 @@
 
 日期：2026-09-15。基线：master / 7b7b471；最终代码提交：2a83133。所有约定门槛通过之前，不将本轮 NativeAOT 改进标记为完成。
 
+## 继续执行记录（2026-09-15）
+
+- 再次检查：工作区干净，远端 master 仍为 7b7b471，MSVC C++ 组件仍缺失。
+- 已通过管理员安装入口尝试向现有 Visual Studio Enterprise 2026 添加 `Microsoft.VisualStudio.Component.VC.Tools.x86.x64`，没有使用强制关闭或自动重启选项。
+- 安装器内部预检查报告 `VSProcessesRunning`（Visual Studio / DevHub 仍运行），以 Cancel 结束。启动器退出码 0 不代表组件安装成功；`vswhere` 复查仍未找到组件。
+- 已复跑 .NET 10 / win-x64 SDK 发布，C# 编译完成后在原生链接阶段失败：`Platform linker not found`。证据：`artifacts/aot-210/windows-resume-net10-sdk.log`。
+- 当前必须先保存工作并关闭 Visual Studio，然后重新安装组件。Windows 原生矩阵、推送和新增 CI 实跑仍未完成；下文通过结果沿用上一轮证据，并非本次重新运行全部用例。
+
 ## 提交与改动
 
 | 提交 | 内容 |

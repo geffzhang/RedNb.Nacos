@@ -4,7 +4,8 @@
   "codeCommit": "2a83133b51ffcbd8249ce2f86491a4cfe007f88c",
   "server": "Nacos 3.2.4, isolated local Docker",
   "blockedBy": [
-    "MSVC C++ toolchain is missing; win-x64 NativeAOT matrix has not run"
+    "MSVC installation precheck VSProcessesRunning: save work and close Visual Studio/DevHub before retrying",
+    "win-x64 SDK publish confirmed Platform linker not found; no native Windows executable was validated"
   ],
   "published": false,
   "pushed": false,
@@ -498,5 +499,13 @@
       "name": "RedNb.Nacos.Http.2.1.0.nupkg",
       "sha256": "de4767926638cec1aefa82817443d1a6ba06f71883daa894c54573a1612b70f5"
     }
-  ]
+  ],
+  "resumeAttempt": {
+    "date": "2026-09-15",
+    "installerComponent": "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+    "installerPrecheck": "VSProcessesRunning",
+    "compilerResult": "Platform linker not found",
+    "log": "artifacts/aot-210/windows-resume-net10-sdk.log",
+    "pushed": false
+  }
 }
