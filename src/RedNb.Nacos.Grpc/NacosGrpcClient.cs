@@ -584,11 +584,12 @@ public class NacosGrpcClient : IAsyncDisposable
     /// correlates an ack with its request through that id and logs "Ack receive on a
     /// outdated request" for an ack whose id is missing.
     /// </summary>
-    private static object BuildPushAck(string body)
+    private static PushAckResponse BuildPushAck(string body)
     {
-        return TryGetRequestId(body, out var requestId)
-            ? new { success = true, requestId }
-            : new { success = true };
+        return new PushAckResponse
+        {
+            RequestId = TryGetRequestId(body, out var requestId) ? requestId : null
+        };
     }
 
     private static bool TryGetRequestId(string body, out string? requestId)

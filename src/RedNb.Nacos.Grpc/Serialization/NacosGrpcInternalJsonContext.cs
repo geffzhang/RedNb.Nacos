@@ -1,10 +1,12 @@
 using System.Text.Json.Serialization;
 using RedNb.Nacos.Grpc.Ai;
+using RedNb.Nacos.Grpc.Lock;
 
 namespace RedNb.Nacos.Grpc.Serialization;
 
 /// <summary>
-/// Source-generated metadata for gRPC AI wire models that stay internal to the SDK.
+/// Source-generated metadata for gRPC wire models that stay internal to the SDK
+/// (AI wire models, the native-mutex payloads and the bi-stream push ack).
 /// Same options as <see cref="NacosGrpcJsonContext"/>.
 /// </summary>
 [JsonSourceGenerationOptions(
@@ -25,6 +27,10 @@ namespace RedNb.Nacos.Grpc.Serialization;
 [JsonSerializable(typeof(BatchAgentEndpointResponse))]
 [JsonSerializable(typeof(AgentCardNotification))]
 [JsonSerializable(typeof(OperationResponse))]
+[JsonSerializable(typeof(PushAckResponse))]
+[JsonSerializable(typeof(LockOperationRequest))]
+[JsonSerializable(typeof(LockOperationInstance))]
+[JsonSerializable(typeof(LockOperationResponse))]
 internal sealed partial class NacosGrpcInternalJsonContext : JsonSerializerContext
 {
 }

@@ -70,11 +70,19 @@ public sealed class NacosGrpcLockService : ILockService
         => (string.IsNullOrWhiteSpace(instance.NamespaceId ?? _options.Namespace) ? "public" : instance.NamespaceId ?? _options.Namespace) + "@@" + instance.Key;
     private async Task<bool> Execute(LockInstance instance, string operation, long ttl, CancellationToken ct)
     {
-        var response = await _client.RequestAsync<LockResponse>("LockOperationRequest", new
+        var request = new LockOperationRequest
         {
-            lockOperationEnum = operation,
-            lockInstance = new { key = Key(instance), expiredTime = ttl, lockType = instance.LockType == "nacos" ? "NACOS_LOCK" : instance.LockType, @params = instance.Params }
-        }, ct);
+            LockOperationEnum = operation,
+            LockInstance = new LockOperationInstance
+            {
+                Key = Key(instance),
+                ExpiredTime = ttl,
+                LockType = instance.LockType == "nacos" ? "NACOS_LOCK" : instance.LockType,
+                Params = instance.Params
+            }
+        };
+
+        var response = await _client.RequestAsync<LockOperationResponse>("LockOperationRequest", request, ct);
         if (response?.ResultCode != 200)
             throw new NacosException(response?.ErrorCode ?? NacosException.ServerError, response?.Message ?? "Lock operation failed");
         return response.Result;
@@ -83,11 +91,4 @@ public sealed class NacosGrpcLockService : ILockService
     public async Task ShutdownAsync(CancellationToken cancellationToken = default) => await DisposeAsync();
     public async ValueTask DisposeAsync()
     { if (_disposed) return; _disposed = true; await _client.DisposeAsync(); _leases.Clear(); }
-    private sealed class LockResponse
-    {
-        public int ResultCode { get; set; }
-        public int ErrorCode { get; set; }
-        public string? Message { get; set; }
-        public bool Result { get; set; }
-    }
 }
