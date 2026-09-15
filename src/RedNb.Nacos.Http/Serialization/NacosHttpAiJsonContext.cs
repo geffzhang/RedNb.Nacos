@@ -19,6 +19,7 @@ namespace RedNb.Nacos.Http.Serialization;
 /// here on a dedicated context instead of shared attributes.
 /// </summary>
 [JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Metadata,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     PropertyNameCaseInsensitive = true)]
 [JsonSerializable(typeof(NacosPromptService.ApiResult<NacosPromptService.PagedData<PromptMetaSummary>>), TypeInfoPropertyName = "PromptApiResultPagedDataPromptMetaSummary")]

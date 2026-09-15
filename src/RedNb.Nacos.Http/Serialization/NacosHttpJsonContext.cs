@@ -16,6 +16,7 @@ namespace RedNb.Nacos.Http.Serialization;
 /// reflection-based <c>JsonOptions = new()</c> of 2.0.0 (PascalCase output,
 /// case-sensitive reads).
 /// </summary>
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(AgentSpec))]
 [JsonSerializable(typeof(AgentSpecMeta))]
 [JsonSerializable(typeof(AgentSpecSummary))]

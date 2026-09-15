@@ -12,7 +12,7 @@ namespace RedNb.Nacos.Serialization;
 /// their C# casing on the wire (matching the reflection-based behavior of 2.0.0);
 /// deserialization is case-insensitive, as the failover disk cache requires.
 /// </summary>
-[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(ServiceInfo))]
 [JsonSerializable(typeof(Instance))]
 [JsonSerializable(typeof(List<Instance>))]

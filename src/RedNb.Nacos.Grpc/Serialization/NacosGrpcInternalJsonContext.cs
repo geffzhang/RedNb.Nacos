@@ -10,6 +10,7 @@ namespace RedNb.Nacos.Grpc.Serialization;
 /// Same options as <see cref="NacosGrpcJsonContext"/>.
 /// </summary>
 [JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Metadata,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     PropertyNameCaseInsensitive = true)]
