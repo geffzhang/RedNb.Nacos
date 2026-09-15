@@ -8,11 +8,11 @@
 
 English | [简体中文](README.md)
 
-A .NET 8 / .NET 10 SDK targeting Nacos 3.2.4. Stable SDK version **2.0.0** is available on [NuGet.org](https://www.nuget.org/packages/RedNb.Nacos.All/2.0.0) and [GitHub Releases](https://github.com/yinghongzhen/RedNb.Nacos/releases/tag/v2.0.0). The SDK version and tested Nacos server version are separate.
+A .NET 8 / .NET 10 SDK targeting Nacos 3.2.4. This source version is **2.1.0**. The NuGet and GitHub Release badges show published versions; SDK and server versions are numbered independently.
 
 Version 2.0.0 changes public namespaces and defaults Config/Naming to gRPC. Read the [migration guide](docs/MIGRATION.md) before upgrading from 1.x. Nacos 2.x is not supported; other 3.x releases require explicit validation.
 
-**2.1.0 on master has passed acceptance and is awaiting publication:** 1,500 tests and all 11 CI checks passed. It adds Windows/Linux NativeAOT support and per-client JSON context injection, with fixes for numeric/container serialization, YAML merging and AI management contracts. See the [2.1.0 acceptance report](docs/NATIVEAOT_TEST_REPORT.md). Installation commands below use the currently published stable version.
+**2.1.0 has passed acceptance:** 1,500 tests and all 11 CI checks passed. It adds Windows/Linux NativeAOT support and per-client JSON context injection, with fixes for numeric/container serialization, YAML merging and AI management contracts. See the [2.1.0 acceptance report](docs/NATIVEAOT_TEST_REPORT.md). Installation commands below select the latest published stable version.
 
 ## Installation
 

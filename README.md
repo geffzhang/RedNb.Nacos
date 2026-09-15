@@ -10,9 +10,9 @@
 
 面向 Nacos 3.2.4 的 .NET 8 / .NET 10 SDK。配置和服务发现默认使用 gRPC；AI 与管理操作按服务器实际能力选择 HTTP Client、Admin 或 Console 通道。
 
-当前已发布稳定版为 **2.0.0**，可从 [NuGet.org](https://www.nuget.org/packages/RedNb.Nacos.All/2.0.0) 安装。[GitHub Release](https://github.com/yinghongzhen/RedNb.Nacos/releases/tag/v2.0.0) 提供对应发布说明。SDK 版本与 Nacos 服务端版本分别编号。
+本源码版本为 **2.1.0**，SDK 版本与 Nacos 服务端版本分别编号。已发布版本以页面顶部的 NuGet / GitHub Release 徽章为准。
 
-`master` 的 **2.1.0 已完成验收，等待发布**：1500 项测试通过，CI 11 项检查全部成功。新增 Windows/Linux NativeAOT 支持与客户端级 JSON Context 注入，并修复 JSON 数值/容器、YAML 合并及 AI 管理接口契约。详细证据见 [2.1.0 验收报告](docs/NATIVEAOT_TEST_REPORT.md)。
+**2.1.0 已完成验收**：1500 项测试通过，CI 11 项检查全部成功。新增 Windows/Linux NativeAOT 支持与客户端级 JSON Context 注入，并修复 JSON 数值/容器、YAML 合并及 AI 管理接口契约。详细证据见 [2.1.0 验收报告](docs/NATIVEAOT_TEST_REPORT.md)。
 
 从 1.x 升级包含命名空间和默认实现的破坏性调整，请先阅读[迁移说明](docs/MIGRATION.md)。**不支持 Nacos 2.x**；其他 3.x 小版本的支持范围见[能力矩阵](docs/CAPABILITIES.md)。
 
