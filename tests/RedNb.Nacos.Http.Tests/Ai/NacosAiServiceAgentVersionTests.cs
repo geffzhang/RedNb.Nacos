@@ -18,7 +18,7 @@ public class NacosAiServiceAgentVersionTests : IDisposable
 
     public NacosAiServiceAgentVersionTests()
     {
-        _server = WireMockServer.Start();
+        _server = TestHttpServer.Start();
         var options = new NacosClientOptions
         {
             ServerAddresses = "",

@@ -445,7 +445,7 @@ public class NacosGrpcClient : IAsyncDisposable
         // is rejected ("Invalid connection Id ... is unregistered").
         var setupRequest = new ConnectionSetupRequest
         {
-            ClientVersion = "RedNb.Nacos/2.0.0",
+            ClientVersion = NacosConstants.ClientVersion,
             Tenant = _options.Namespace,
             Labels = new Dictionary<string, string>
             {

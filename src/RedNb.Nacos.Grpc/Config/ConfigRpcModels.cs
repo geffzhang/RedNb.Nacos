@@ -398,7 +398,7 @@ public class ConnectionSetupRequest
     public const string TYPE = "ConnectionSetupRequest";
 
     [JsonPropertyName("clientVersion")]
-    public string ClientVersion { get; set; } = "RedNb.Nacos/2.0.0";
+    public string ClientVersion { get; set; } = NacosConstants.ClientVersion;
 
     [JsonPropertyName("abilities")]
     public ClientAbilities? Abilities { get; set; }

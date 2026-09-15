@@ -20,7 +20,7 @@ public class ConfigServiceHttpTests : IDisposable
 
     public ConfigServiceHttpTests()
     {
-        _server = WireMockServer.Start();
+        _server = TestHttpServer.Start();
         _options = new NacosClientOptions
         {
             ServerAddresses = $"localhost:{_server.Port}",

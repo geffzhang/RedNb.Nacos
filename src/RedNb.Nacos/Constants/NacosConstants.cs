@@ -5,6 +5,9 @@ namespace RedNb.Nacos;
 /// </summary>
 public static class NacosConstants
 {
+    /// <summary>Wire client identity, derived from the SDK assembly version.</summary>
+    public static string ClientVersion { get; } = "RedNb.Nacos/" + (typeof(NacosConstants).Assembly.GetName().Version?.ToString(3) ?? "unknown");
+
     /// <summary>
     /// Default group name.
     /// </summary>

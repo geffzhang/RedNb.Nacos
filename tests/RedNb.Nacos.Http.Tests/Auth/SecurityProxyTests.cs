@@ -24,7 +24,7 @@ public class SecurityProxyTests : IDisposable
 
     public SecurityProxyTests()
     {
-        _server = WireMockServer.Start();
+        _server = TestHttpServer.Start();
     }
 
     public void Dispose()

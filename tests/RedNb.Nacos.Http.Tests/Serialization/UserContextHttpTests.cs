@@ -15,7 +15,7 @@ public class UserContextHttpTests
     [Fact]
     public async Task ClientOptionsResolverIsUsedForNestedApplicationPayload()
     {
-        using var server = WireMockServer.Start();
+        using var server = TestHttpServer.Start();
         server.Given(Request.Create().WithPath("/v3/console/ai/a2a").UsingGet())
             .RespondWith(Response.Create().WithStatusCode(404));
         server.Given(Request.Create().WithPath("/v3/console/ai/a2a").UsingPost())
@@ -37,6 +37,8 @@ public class UserContextHttpTests
         });
         var entry = Assert.Single(server.LogEntries, e => e.RequestMessage?.Method == "POST");
         var body = Assert.IsType<string>(entry.RequestMessage!.Body);
+        Assert.Equal(NacosConstants.ClientVersion, Assert.Single(entry.RequestMessage.Headers!
+            .First(header => header.Key.Equals("Client-Version", StringComparison.OrdinalIgnoreCase)).Value!));
         var card = body.Split('&').Single(p => p.StartsWith("agentCard="))["agentCard=".Length..];
         using var json = JsonDocument.Parse(Uri.UnescapeDataString(card.Replace("+", " ")));
         Assert.Equal(23, json.RootElement.GetProperty("capabilities").GetProperty("extensions")[0]

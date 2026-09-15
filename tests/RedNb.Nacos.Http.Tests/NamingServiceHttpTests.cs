@@ -21,7 +21,7 @@ public class NamingServiceHttpTests : IDisposable
 
     public NamingServiceHttpTests()
     {
-        _server = WireMockServer.Start();
+        _server = TestHttpServer.Start();
         _options = new NacosClientOptions
         {
             ServerAddresses = $"localhost:{_server.Port}",

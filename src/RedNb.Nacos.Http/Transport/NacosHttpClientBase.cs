@@ -61,7 +61,7 @@ public abstract class NacosHttpClientBase : IDisposable
             Timeout = Timeout.InfiniteTimeSpan
         };
 
-        _httpClient.DefaultRequestHeaders.Add("Client-Version", "RedNb.Nacos/1.0.0");
+        _httpClient.DefaultRequestHeaders.Add("Client-Version", NacosConstants.ClientVersion);
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "RedNb.Nacos.Http");
     }
 

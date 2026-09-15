@@ -21,7 +21,7 @@ public class NacosPromptServiceTests : IDisposable
 
     public NacosPromptServiceTests()
     {
-        _server = WireMockServer.Start();
+        _server = TestHttpServer.Start();
         _options = new NacosClientOptions
         {
             ServerAddresses = $"localhost:{_server.Port}",
