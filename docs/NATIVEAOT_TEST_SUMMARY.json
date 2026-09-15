@@ -1,11 +1,11 @@
 {
   "version": "2.1.0",
-  "status": "local_passed_ci_pending",
-  "codeCommit": "2a83133b51ffcbd8249ce2f86491a4cfe007f88c",
+  "status": "complete",
+  "codeCommit": "a2f7a2dea419f70d8a95e0d7d475a65534d8ab4d",
   "server": "Nacos 3.2.4, isolated local Docker",
   "blockedBy": [],
   "published": false,
-  "pushed": false,
+  "pushed": true,
   "jitRuns": [
     {
       "path": "artifacts/aot-210/release-jit/rednb_DESKTOP-VN56ARD_2026-09-15_13_02_58.trx",
@@ -538,5 +538,76 @@
     "MSVC": "14.50.35717",
     "installation": "Visual Studio Enterprise 2026",
     "status": "installed and verified"
-  }
+  },
+  "ci": {
+    "runId": 34943737938,
+    "url": "https://github.com/yinghongzhen/RedNb.Nacos/actions/runs/34943737938",
+    "commit": "a2f7a2dea419f70d8a95e0d7d475a65534d8ab4d",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "test",
+        "id": 104298165160,
+        "conclusion": "success"
+      },
+      {
+        "name": "strict-serialization (net8.0)",
+        "id": 104298165424,
+        "conclusion": "success"
+      },
+      {
+        "name": "native-web / native (net8.0, windows-latest, win-x64)",
+        "id": 104298165450,
+        "conclusion": "success"
+      },
+      {
+        "name": "strict-serialization (net10.0)",
+        "id": 104298165502,
+        "conclusion": "success"
+      },
+      {
+        "name": "native-web / native (net10.0, windows-latest, win-x64)",
+        "id": 104298165560,
+        "conclusion": "success"
+      },
+      {
+        "name": "native-web / native (net8.0, ubuntu-latest, linux-x64)",
+        "id": 104298165594,
+        "conclusion": "success"
+      },
+      {
+        "name": "native-sdk / native (net8.0, ubuntu-latest, linux-x64)",
+        "id": 104298165603,
+        "conclusion": "success"
+      },
+      {
+        "name": "native-sdk / native (net10.0, windows-latest, win-x64)",
+        "id": 104298165618,
+        "conclusion": "success"
+      },
+      {
+        "name": "native-sdk / native (net8.0, windows-latest, win-x64)",
+        "id": 104298165637,
+        "conclusion": "success"
+      },
+      {
+        "name": "native-web / native (net10.0, ubuntu-latest, linux-x64)",
+        "id": 104298165671,
+        "conclusion": "success"
+      },
+      {
+        "name": "native-sdk / native (net10.0, ubuntu-latest, linux-x64)",
+        "id": 104298165685,
+        "conclusion": "success"
+      }
+    ],
+    "jit": {
+      "runs": 9,
+      "total": 1500,
+      "passed": 1500,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "localSnapshotNote": "Local artifact hashes retain their original pre-CI-hardening builds; the final code revision is certified by the CI run above, which repeats the complete native source/package matrix."
 }
