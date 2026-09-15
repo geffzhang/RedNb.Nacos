@@ -30,3 +30,20 @@
 - 删除核心包中未接入运行链的旧 Redo 类型，保留并修复 gRPC 内部恢复实现。
 
 完整支持范围与验证状态见 [能力矩阵](CAPABILITIES.md)；历史设计移至 archive，不是当前执行规范。
+
+## 2.1.0:NativeAOT 裁剪兼容
+
+- **序列化改为源生成**:gRPC 载荷、HTTP 模型、core 缓存序列化全部走
+  `JsonSerializerContext` 源生成,零反射回退,JIT 与 NativeAOT 行为一致。
+  未注册进 SDK 上下文的类型会抛 `NotSupportedException`(含自定义类型直传
+  `NacosGrpcClient.SendRequestAsync` 的场景);如需序列化自有类型,用
+  `JsonTypeInfoResolver.Combine(NacosGrpcJsonContext.Default, 你的上下文)`
+  自行构建 options。
+- **扩展点**:三个 public 上下文 —— `NacosJsonContext`(core)、
+  `NacosHttpJsonContext`(Http)、`NacosGrpcJsonContext`(Grpc)。
+- **Grpc 本地磁盘缓存格式变更**:`NamingServiceInfoHolder` 的缓存文件改用
+  camelCase 且省略 null 字段。旧缓存文件仍可读取(反序列化不区分大小写),
+  并在下次保存时自动改写为新格式,无需手工处理。
+- **API 不变**:`Dictionary<string, object>` / `object` 成员类型保持原样
+  (内部用 AOT 安全转换器,值仍以 `JsonElement` 呈现,与 2.0.0 一致)。
+- **验证**:`scripts/run-aot-smoke.ps1`(本地)+ CI `aot-smoke` job。
