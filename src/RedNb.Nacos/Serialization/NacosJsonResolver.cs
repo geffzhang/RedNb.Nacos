@@ -18,9 +18,17 @@ internal sealed class NacosJsonResolver(
     [UnconditionalSuppressMessage("AOT", "IL3050", Justification = ".NET 8 analyzer cannot infer the runtime gate; NativeAOT sets IsDynamicCodeSupported=false, so this JIT-only branch is unreachable.")]
 #endif
     public static IJsonTypeInfoResolver Create(IJsonTypeInfoResolver sdk, IJsonTypeInfoResolver? user = null, bool allowReflectionFallback = true)
-        => new NacosJsonResolver(sdk, user,
-            JsonSerializer.IsReflectionEnabledByDefault && System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported && allowReflectionFallback
-                ? JsonSerializerOptions.Default.TypeInfoResolver : null);
+    {
+        IJsonTypeInfoResolver? fallback = null;
+        // Keep the feature guard as a distinct branch: NativeAOT's IL scanner
+        // does not infer the guard through a compound boolean/ternary expression.
+        if (System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
+        {
+            if (JsonSerializer.IsReflectionEnabledByDefault && allowReflectionFallback)
+                fallback = JsonSerializerOptions.Default.TypeInfoResolver;
+        }
+        return new NacosJsonResolver(sdk, user, fallback);
+    }
 
     public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
     {

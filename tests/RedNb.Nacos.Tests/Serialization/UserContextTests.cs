@@ -38,6 +38,7 @@ public class UserContextTests
         Assert.True(second.IsReadOnly);
         Assert.Contains("\"first\":7", JsonSerializer.Serialize(new UserValue { Value = 7 }, first.GetTypeInfo(typeof(UserValue))));
         Assert.Contains("\"second\":7", JsonSerializer.Serialize(new UserValue { Value = 7 }, second.GetTypeInfo(typeof(UserValue))));
+        Assert.Contains("\"first\":8", JsonSerializer.Serialize(new UserValue { Value = 8 }, first.GetTypeInfo(typeof(UserValue))));
         Assert.Contains("\"DataId\":", JsonSerializer.Serialize(new ConfigInfo { DataId = "d" }, first.GetTypeInfo(typeof(ConfigInfo))));
     }
 

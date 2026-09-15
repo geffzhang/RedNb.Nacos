@@ -8,7 +8,7 @@ namespace RedNb.Nacos.Serialization;
 /// <summary>
 /// AOT-safe converter for <c>object</c> members. Mirrors reflection-based STJ:
 /// unknown JSON values are kept as <see cref="JsonElement"/>; user-set primitives
-/// are written as-is. Never uses reflection.
+/// are written as-is. User types use the supplied options' metadata policy.
 /// </summary>
 public sealed class ObjectValueConverter : JsonConverter<object>
 {

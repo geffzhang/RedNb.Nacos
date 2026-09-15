@@ -16,6 +16,7 @@ namespace RedNb.Nacos.Http.Serialization;
 /// (<see cref="NacosPromptService.ApiResult{T}"/>/<c>PagedData&lt;T&gt;</c>) and
 /// the login response.
 /// </summary>
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(NacosPromptService.ApiResult<NacosPromptService.PagedData<AgentSpecSummary>>))]
 [JsonSerializable(typeof(NacosPromptService.ApiResult<AgentSpecMeta>))]
 [JsonSerializable(typeof(NacosPromptService.ApiResult<AgentSpec>))]
